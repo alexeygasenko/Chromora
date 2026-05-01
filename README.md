@@ -1,6 +1,16 @@
 # Blue Marble Enhanced
 
-![Blue Marble 0.96.0 UI showcase](./docs/assets/blue-marble.png)
+![Blue Marble 0.96.0 Color Filter horizontal mode](./docs/assets/blue-marble-1.png)
+
+Color Filter now has a horizontal layout for faster scanning across large color sets.
+
+![Blue Marble 0.96.0 Color Filter vertical mode](./docs/assets/blue-marble-2.png)
+
+The vertical windowed layout keeps the full list compact, clear, and easy to browse.
+
+![Blue Marble 0.96.0 Color Filter expanded mode](./docs/assets/blue-marble-3.png)
+
+The expanded view turns Color Filter into a full overview with larger cards and richer stats.
 
 Blue Marble Enhanced is a practical fork of [SwingTheVine/Wplace-BlueMarble](https://github.com/SwingTheVine/Wplace-BlueMarble) for [wplace.live](https://wplace.live/).
 

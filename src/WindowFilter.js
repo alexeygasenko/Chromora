@@ -45,6 +45,8 @@ export default class WindowFilter extends Overlay {
     this.windowHorizontalWheelHandler = null; // Wheel handler for horizontal color layout scrolling
     this.windowHorizontalWheelElement = null; // Scrollable element using the horizontal wheel handler
     this.windowSaveTimeout = null; // Debounce timer for resize persistence
+    this.sortDropdownPointerHandler = null; // Outside-click handler for custom sort dropdowns
+    this.sortDropdownKeyHandler = null; // Keyboard handler for custom sort dropdowns
     this.colorRefreshInterval = null; // Auto-refresh timer for live color statistics
     this.colorRefreshIntervalMS = 10000; // Refresh Color Filter statistics every 10 seconds
     this.windowMinWidth = 360; // Minimum width for the windowed filter
@@ -174,8 +176,8 @@ export default class WindowFilter extends Overlay {
             .addForm({'class': 'bm-container bm-filter-sort-panel'})
               .addFieldset()
                 .addLegend({'textContent': 'Sort Options:', 'style': 'font-weight: 700;'}).buildElement()
-                .addDiv({'class': 'bm-container'})
-                  .addSelect({'id': 'bm-filter-sort-primary', 'name': 'sortPrimary', 'textContent': 'I want to view '})
+                .addDiv({'class': 'bm-container bm-filter-sort-row'})
+                  .addSelect({'id': 'bm-filter-sort-primary', 'class': 'bm-filter-sort-select', 'name': 'sortPrimary', 'textContent': 'I want to view '})
                     .addOption({'value': 'id', 'textContent': 'color IDs'}).buildElement()
                     .addOption({'value': 'name', 'textContent': 'color names'}).buildElement()
                     .addOption({'value': 'premium', 'textContent': 'premium colors'}).buildElement()
@@ -184,11 +186,11 @@ export default class WindowFilter extends Overlay {
                     .addOption({'value': 'incorrect', 'textContent': 'incorrect pixels'}).buildElement()
                     .addOption({'value': 'total', 'textContent': 'total pixels'}).buildElement()
                   .buildElement()
-                  .addSelect({'id': 'bm-filter-sort-secondary', 'name': 'sortSecondary', 'textContent': ' in '})
+                  .addSelect({'id': 'bm-filter-sort-secondary', 'class': 'bm-filter-sort-select', 'name': 'sortSecondary', 'textContent': ' in '})
                     .addOption({'value': 'ascending', 'textContent': 'ascending'}).buildElement()
                     .addOption({'value': 'descending', 'textContent': 'descending'}).buildElement()
                   .buildElement()
-                  .addSpan({'textContent': ' order.'}).buildElement()
+                  .addSpan({'class': 'bm-filter-sort-suffix', 'textContent': ' order.'}).buildElement()
                 .buildElement()
                 .addDiv({'class': 'bm-container'})
                   .addCheckbox({'id': 'bm-filter-show-unused', 'name': 'showUnused', 'textContent': 'Show unused colors'}).buildElement()
@@ -225,6 +227,7 @@ export default class WindowFilter extends Overlay {
     // Obtains the scrollable container to put the color filter in
     const scrollableContainer = document.querySelector(`#${this.windowID} .bm-container.bm-scrollable`);
     this.#initializeHorizontalScrollWheel(scrollableContainer);
+    this.#initializeCustomSortDropdowns();
     
     // These run when the user opens the Color Filter window
     this.#buildColorList(scrollableContainer);
@@ -550,12 +553,206 @@ export default class WindowFilter extends Overlay {
 
     if (sortPrimaryInput instanceof HTMLSelectElement) {
       sortPrimaryInput.value = this.sortPrimary;
+      sortPrimaryInput.dispatchEvent(new Event('change', {'bubbles': true}));
     }
     if (sortSecondaryInput instanceof HTMLSelectElement) {
       sortSecondaryInput.value = this.sortSecondary;
+      sortSecondaryInput.dispatchEvent(new Event('change', {'bubbles': true}));
     }
     if (showUnusedInput instanceof HTMLInputElement) {
       showUnusedInput.checked = this.showUnused;
+    }
+  }
+
+  /** Enhances native sort selects into custom dropdowns while preserving form values.
+   * @since 0.96.0
+   */
+  #initializeCustomSortDropdowns() {
+    const sortSelects = Array.from(document.querySelectorAll(`#${this.windowID} .bm-filter-sort-select`));
+    if (!sortSelects.length) {return;}
+
+    for (const select of sortSelects) {
+      if (!(select instanceof HTMLSelectElement) || (select.dataset['customized'] == 'true')) {continue;}
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bm-filter-sort-dropdown';
+      wrapper.dataset['inputId'] = select.id;
+
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'bm-filter-sort-dropdown-trigger';
+      trigger.setAttribute('aria-haspopup', 'listbox');
+      trigger.setAttribute('aria-expanded', 'false');
+      trigger.setAttribute('aria-controls', `${select.id}-menu`);
+
+      const triggerText = document.createElement('span');
+      triggerText.className = 'bm-filter-sort-dropdown-text';
+      trigger.appendChild(triggerText);
+
+      const menu = document.createElement('div');
+      menu.id = `${select.id}-menu`;
+      menu.className = 'bm-filter-sort-dropdown-menu';
+      menu.setAttribute('role', 'listbox');
+
+      const updateDropdownState = () => {
+        const selectedValue = select.value;
+        const selectedOption = Array.from(select.options).find((option) => option.value == selectedValue) ?? select.options[0];
+        triggerText.textContent = selectedOption?.textContent ?? '';
+
+        for (const optionButton of menu.querySelectorAll('.bm-filter-sort-dropdown-option')) {
+          const isSelected = optionButton.dataset['value'] == selectedValue;
+          optionButton.classList.toggle('is-selected', isSelected);
+          optionButton.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        }
+      };
+
+      const focusDropdownOption = (direction = 'selected') => {
+        const optionButtons = Array.from(menu.querySelectorAll('.bm-filter-sort-dropdown-option'));
+        if (!optionButtons.length) {return;}
+
+        let targetIndex = optionButtons.findIndex((button) => button.classList.contains('is-selected'));
+        if (targetIndex < 0) {targetIndex = 0;}
+
+        if (direction === 'first') {targetIndex = 0;}
+        else if (direction === 'last') {targetIndex = optionButtons.length - 1;}
+        else if (typeof direction == 'number') {
+          const activeIndex = optionButtons.findIndex((button) => button === document.activeElement);
+          const baseIndex = activeIndex >= 0 ? activeIndex : targetIndex;
+          targetIndex = (baseIndex + direction + optionButtons.length) % optionButtons.length;
+        }
+
+        optionButtons[targetIndex]?.focus();
+      };
+
+      const setOpenState = (shouldOpen) => {
+        wrapper.classList.toggle('is-open', shouldOpen);
+        trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        if (shouldOpen) {
+          focusDropdownOption('selected');
+        }
+      };
+
+      trigger.onclick = () => {
+        const shouldOpen = !wrapper.classList.contains('is-open');
+        this.#closeCustomSortDropdowns(shouldOpen ? wrapper : null);
+        setOpenState(shouldOpen);
+      };
+
+      trigger.onkeydown = (event) => {
+        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+          event.preventDefault();
+          if (!wrapper.classList.contains('is-open')) {
+            this.#closeCustomSortDropdowns(wrapper);
+            setOpenState(true);
+          }
+          focusDropdownOption(event.key == 'ArrowUp' ? 'last' : 'selected');
+        } else if (event.key == 'Escape') {
+          setOpenState(false);
+        }
+      };
+
+      for (const option of Array.from(select.options)) {
+        const optionButton = document.createElement('button');
+        optionButton.type = 'button';
+        optionButton.className = 'bm-filter-sort-dropdown-option';
+        optionButton.dataset['value'] = option.value;
+        optionButton.textContent = option.textContent;
+        optionButton.setAttribute('role', 'option');
+        optionButton.onclick = () => {
+          select.value = option.value;
+          select.dispatchEvent(new Event('change', {'bubbles': true}));
+          setOpenState(false);
+          trigger.focus();
+        };
+        optionButton.onkeydown = (event) => {
+          if (event.key == 'ArrowDown') {
+            event.preventDefault();
+            focusDropdownOption(1);
+          } else if (event.key == 'ArrowUp') {
+            event.preventDefault();
+            focusDropdownOption(-1);
+          } else if (event.key == 'Home') {
+            event.preventDefault();
+            focusDropdownOption('first');
+          } else if (event.key == 'End') {
+            event.preventDefault();
+            focusDropdownOption('last');
+          } else if (event.key == 'Escape') {
+            event.preventDefault();
+            setOpenState(false);
+            trigger.focus();
+          } else if ((event.key == 'Enter') || (event.key == ' ')) {
+            event.preventDefault();
+            optionButton.click();
+          }
+        };
+        menu.appendChild(optionButton);
+      }
+
+      select.classList.add('bm-filter-sort-native');
+      select.tabIndex = -1;
+      select.setAttribute('aria-hidden', 'true');
+      select.dataset['customized'] = 'true';
+      select.addEventListener('change', updateDropdownState);
+
+      select.parentElement?.insertBefore(wrapper, select);
+      wrapper.appendChild(select);
+      wrapper.appendChild(trigger);
+      wrapper.appendChild(menu);
+      updateDropdownState();
+    }
+
+    if (!this.sortDropdownPointerHandler) {
+      this.sortDropdownPointerHandler = (event) => {
+        if (!(event.target instanceof Element)) {
+          this.#closeCustomSortDropdowns();
+          return;
+        }
+        if (!event.target.closest(`#${this.windowID} .bm-filter-sort-dropdown`)) {
+          this.#closeCustomSortDropdowns();
+        }
+      };
+      document.addEventListener('pointerdown', this.sortDropdownPointerHandler);
+    }
+
+    if (!this.sortDropdownKeyHandler) {
+      this.sortDropdownKeyHandler = (event) => {
+        if (event.key == 'Escape') {
+          this.#closeCustomSortDropdowns();
+        }
+      };
+      document.addEventListener('keydown', this.sortDropdownKeyHandler);
+    }
+  }
+
+  /** Closes custom sort dropdowns, optionally leaving one open.
+   * @param {HTMLElement | null} [exceptDropdown=null]
+   * @since 0.96.0
+   */
+  #closeCustomSortDropdowns(exceptDropdown = null) {
+    const dropdowns = document.querySelectorAll(`#${this.windowID} .bm-filter-sort-dropdown`);
+    for (const dropdown of dropdowns) {
+      const shouldStayOpen = !!exceptDropdown && (dropdown === exceptDropdown);
+      dropdown.classList.toggle('is-open', shouldStayOpen);
+
+      const trigger = dropdown.querySelector('.bm-filter-sort-dropdown-trigger');
+      if (trigger instanceof HTMLButtonElement) {
+        trigger.setAttribute('aria-expanded', shouldStayOpen ? 'true' : 'false');
+      }
+    }
+  }
+
+  /** Removes global handlers used by custom sort dropdowns.
+   * @since 0.96.0
+   */
+  #cleanupCustomSortDropdowns() {
+    if (this.sortDropdownPointerHandler) {
+      document.removeEventListener('pointerdown', this.sortDropdownPointerHandler);
+      this.sortDropdownPointerHandler = null;
+    }
+    if (this.sortDropdownKeyHandler) {
+      document.removeEventListener('keydown', this.sortDropdownKeyHandler);
+      this.sortDropdownKeyHandler = null;
     }
   }
 
@@ -569,6 +766,7 @@ export default class WindowFilter extends Overlay {
     }
     this.#stopAutoRefresh();
     this.#cleanupWindowPersistence();
+    this.#cleanupCustomSortDropdowns();
     windowElement?.remove();
   }
 

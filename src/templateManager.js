@@ -114,6 +114,8 @@ export default class TemplateManager {
     this.templatePixelsCorrect = null; // An object where the keys are the tile coords, and the values are Maps (BM palette color IDs) containing the amount of correctly placed pixels for that tile in this template
     /** Will contain all color ID's to filter @type {Map<number, boolean>} */
     this.shouldFilterColor = new Map();
+    this.highlightIncorrectColorID = null; // Restricts incorrect-pixel highlighting to one template color when set
+    this.highlightIncorrectMode = 'incorrect'; // Either "incorrect" or "missing" when color-specific highlighting is active
   }
 
   /** Updates the stored instance of the main window.
@@ -179,6 +181,66 @@ export default class TemplateManager {
     }
 
     this.#persistFilteredColors();
+  }
+
+  /** Returns the color currently used to restrict incorrect-pixel highlighting.
+   * @returns {number | null}
+   * @since 0.97.0
+   */
+  getIncorrectHighlightColorID() {
+    return this.highlightIncorrectColorID;
+  }
+
+  /** Returns the active color-specific highlight mode.
+   * @returns {'incorrect' | 'missing'}
+   * @since 0.97.0
+   */
+  getIncorrectHighlightMode() {
+    return this.highlightIncorrectMode;
+  }
+
+  /** Restricts incorrect-pixel highlighting to one template color, or clears the restriction.
+   * @param {number | null} colorID
+   * @param {'incorrect' | 'missing'} [mode='incorrect']
+   * @returns {number | null}
+   * @since 0.97.0
+   */
+  setIncorrectHighlightColor(colorID, mode = 'incorrect') {
+    if ((colorID === null) || (typeof colorID == 'undefined')) {
+      this.highlightIncorrectColorID = null;
+      this.highlightIncorrectMode = 'incorrect';
+      return this.highlightIncorrectColorID;
+    }
+
+    const parsedColorID = Number(colorID);
+    if (!Number.isFinite(parsedColorID) || (parsedColorID == 0)) {return this.highlightIncorrectColorID;}
+
+    this.highlightIncorrectColorID = parsedColorID;
+    this.highlightIncorrectMode = mode == 'missing' ? 'missing' : 'incorrect';
+    return this.highlightIncorrectColorID;
+  }
+
+  /** Cycles the color currently used to restrict incorrect-pixel highlighting.
+   * The cycle is: off -> all incorrect pixels -> missing transparent pixels -> off.
+   * @param {number} colorID
+   * @returns {{colorID: number | null, mode: 'incorrect' | 'missing'}}
+   * @since 0.97.0
+   */
+  toggleIncorrectHighlightColor(colorID) {
+    const parsedColorID = Number(colorID);
+    if (!Number.isFinite(parsedColorID) || (parsedColorID == 0)) {
+      return {colorID: this.highlightIncorrectColorID, mode: this.highlightIncorrectMode};
+    }
+
+    if (this.highlightIncorrectColorID != parsedColorID) {
+      this.setIncorrectHighlightColor(parsedColorID, 'incorrect');
+    } else if (this.highlightIncorrectMode == 'incorrect') {
+      this.setIncorrectHighlightColor(parsedColorID, 'missing');
+    } else {
+      this.setIncorrectHighlightColor(null);
+    }
+
+    return {colorID: this.highlightIncorrectColorID, mode: this.highlightIncorrectMode};
   }
 
   /** Creates the JSON object to store templates in
@@ -621,6 +683,11 @@ export default class TemplateManager {
       && (highlightPatternIndexZero?.[1] == 0)
       && (highlightPatternIndexZero?.[2] == 0)
     )
+    const incorrectHighlightColorID = this.getIncorrectHighlightColorID();
+    const hasIncorrectHighlightColor = Number.isFinite(incorrectHighlightColorID);
+    const incorrectHighlightMode = this.getIncorrectHighlightMode();
+    const fallbackHighlightPattern = [[1, 0, 1], [2, 0, 0], [1, -1, 0], [1, 1, 0], [1, 0, -1]];
+    const effectiveHighlightPattern = (highlightDisabled && hasIncorrectHighlightColor) ? fallbackHighlightPattern : highlightPattern;
     
     // For each template in this tile, draw them.
     for (const template of templatesToDraw) {
@@ -656,8 +723,10 @@ export default class TemplateManager {
         tile: tileBeforeTemplates32,
         template: templateBeforeFilter32,
         templateInfo: [coordXtoDrawAt, coordYtoDrawAt, template.bitmap.width, template.bitmap.height],
-        highlightPattern: highlightPattern,
-        highlightDisabled: highlightDisabled
+        highlightPattern: effectiveHighlightPattern,
+        highlightDisabled: highlightDisabled && !hasIncorrectHighlightColor,
+        highlightColorID: incorrectHighlightColorID,
+        highlightMode: incorrectHighlightMode
       });
 
       let pixelsCorrectTotal = 0;
@@ -674,7 +743,7 @@ export default class TemplateManager {
       // If there are colors to filter, then we draw the filtered template on the canvas
       // Or, if there are Erased (#deface) pixels, then we draw the modified template on the canvas
       // Or, if the user has enabled highlighting, then we draw the modified template on the canvas
-      if ((this.shouldFilterColor.size != 0) || templateHasErased || !highlightDisabled) {
+      if ((this.shouldFilterColor.size != 0) || templateHasErased || !highlightDisabled || hasIncorrectHighlightColor) {
         console.log('Colors to filter: ', this.shouldFilterColor);
         //context.putImageData(new ImageData(new Uint8ClampedArray(templateAfterFilter.buffer), template.bitmap.width, template.bitmap.height), coordXtoDrawAt, coordYtoDrawAt);
         context.drawImage(await createImageBitmap(new ImageData(new Uint8ClampedArray(templateAfterFilter.buffer), template.bitmap.width, template.bitmap.height)), coordXtoDrawAt, coordYtoDrawAt);
@@ -866,6 +935,8 @@ export default class TemplateManager {
    * @param {Array<Number, Number, Number, Number>} params.templateInfo - Information about template location and size
    * @param {Array<number[]>} params.highlightPattern - The highlight pattern selected by the user
    * @param {boolean} params.highlightDisabled - Should highlighting be disabled?
+   * @param {number | null} params.highlightColorID - Restricts highlighting to one template color when set
+   * @param {'incorrect' | 'missing'} params.highlightMode - Which color-specific highlight mode to use
    * @returns {{correctPixels: Map<number, number>, filteredTemplate: Uint32Array}} A Map containing the color IDs (keys) and how many correct pixels there are for that color (values)
    */
   #calculateCorrectPixelsOnTile_And_FilterTile({
@@ -873,7 +944,9 @@ export default class TemplateManager {
     template: template32, 
     templateInfo: templateInformation,
     highlightPattern: highlightPattern,
-    highlightDisabled: highlightDisabled
+    highlightDisabled: highlightDisabled,
+    highlightColorID: highlightColorID = null,
+    highlightMode: highlightMode = 'incorrect'
   }) {
 
     // Size of a pixel in actuality
@@ -897,11 +970,21 @@ export default class TemplateManager {
     // Obtains if the user wants to highlight tile pixels that are transparent, but the template pixel is not
     const shouldTransparentTilePixelsBeHighlighted = !this.settingsManager?.userSettings?.flags?.includes('hl-noTrans');
     // The actual logic of this boolean is "should all pixels be highlighted"
+    const hasHighlightColorFilter = Number.isFinite(highlightColorID);
 
     const { palette: _, LUT: lookupTable } = this.paletteBM; // Obtains the palette and LUT
 
     // Makes a copy of the color palette Blue Marble uses, turns it into a Map, and adds data to count the amount of each color
     const _colorpalette = new Map(); // Temp color palette
+    const incorrectHighlightColors = {
+      cyan: 0xFFFFE774,
+      blue: 0xFFFFB681,
+      yellow: 0xFF5CFFFF,
+      coral: 0xFF5252FF,
+      white: 0xFFFFFFFF
+    };
+    const incorrectHighlightPhase = Math.floor(Date.now() / 150);
+    const incorrectHighlights = [];
 
     // For each center pixel...
     for (let templateRow = 1; templateRow < templateHeight; templateRow += pixelSize) {
@@ -976,15 +1059,42 @@ export default class TemplateManager {
 
         // -----     HIGHLIGHTING      -----
 
-        // If highlighting is enabled, AND the template pixel is NOT transparent AND the template pixel does NOT match the tile pixel
-        if (!highlightDisabled && (templatePixelAlpha > tolerance) && (bestTileColorID != bestTemplateColorID)) {
+        const shouldHighlightSelectedColorMismatch = hasHighlightColorFilter
+          && (tilePixelAlpha > tolerance)
+          && (highlightMode == 'incorrect')
+          && (
+            ((bestTemplateColorID == highlightColorID) && (bestTileColorID != bestTemplateColorID))
+            || ((bestTileColorID == highlightColorID) && (bestTemplateColorID != highlightColorID))
+          );
+        const shouldHighlightSelectedColorMissing = hasHighlightColorFilter
+          && (highlightMode == 'missing')
+          && (bestTemplateColorID == highlightColorID)
+          && (templatePixelAlpha > tolerance)
+          && (tilePixelAlpha <= tolerance);
+        const shouldHighlightGeneralMismatch = !hasHighlightColorFilter
+          && (templatePixelAlpha > tolerance)
+          && (bestTileColorID != bestTemplateColorID);
+
+        // If highlighting is enabled, AND the template pixel does not match the tile pixel
+        if (!highlightDisabled && (shouldHighlightSelectedColorMismatch || shouldHighlightSelectedColorMissing || shouldHighlightGeneralMismatch)) {
 
           // If the tile pixel is NOT transparent, OR the user wants to highlight transparent pixels
-          if (shouldTransparentTilePixelsBeHighlighted || (tilePixelAlpha > tolerance)) {
+          if ((hasHighlightColorFilter && (shouldHighlightSelectedColorMissing || (tilePixelAlpha > tolerance))) || (!hasHighlightColorFilter && (shouldTransparentTilePixelsBeHighlighted || (tilePixelAlpha > tolerance)))) {
 
             // Obtains the template color of this pixel
-            const templatePixelColor = template32[(templateRow * templateWidth) + templateColumn];
+            const templatePixelColor = (templatePixelAlpha > tolerance)
+              ? template32[(templateRow * templateWidth) + templateColumn]
+              : tilePixelAbove;
             // This will retrieve the tile background instead if the color is filtered!
+
+            if (hasHighlightColorFilter) {
+              incorrectHighlights.push({
+                row: templateRow,
+                column: templateColumn,
+                color: templatePixelColor
+              });
+              continue;
+            }
 
             // For each of the 9 subpixels inside the pixel...
             for (const subpixelPattern of highlightPattern) {
@@ -1037,8 +1147,104 @@ export default class TemplateManager {
       }
     }
 
+    for (const highlight of incorrectHighlights) {
+      this.#drawIncorrectHighlightMarker({
+        template: template32,
+        templateWidth: templateWidth,
+        templateHeight: templateHeight,
+        row: highlight.row,
+        column: highlight.column,
+        centerColor: highlight.color,
+        colors: incorrectHighlightColors,
+        phase: incorrectHighlightPhase
+      });
+    }
+
     console.log(`List of template pixels that match the tile:`);
     console.log(_colorpalette);
     return { correctPixels: _colorpalette, filteredTemplate: template32 };
+  }
+
+  /** Draws a loud marker around one incorrect pixel for color-specific highlighting.
+   * @param {Object} params
+   * @param {Uint32Array} params.template
+   * @param {number} params.templateWidth
+   * @param {number} params.templateHeight
+   * @param {number} params.row
+   * @param {number} params.column
+   * @param {number} params.centerColor
+   * @param {Object} params.colors
+   * @param {number} params.phase
+   * @since 0.97.0
+   */
+  #drawIncorrectHighlightMarker({
+    template: template32,
+    templateWidth: templateWidth,
+    templateHeight: templateHeight,
+    row: templateRow,
+    column: templateColumn,
+    centerColor: centerColor,
+    colors: colors,
+    phase: phase
+  }) {
+    const setSubpixel = (rowDelta, columnDelta, color) => {
+      const row = templateRow + rowDelta;
+      const column = templateColumn + columnDelta;
+      if ((row < 0) || (row >= templateHeight) || (column < 0) || (column >= templateWidth)) {return;}
+      template32[(row * templateWidth) + column] = color;
+    };
+
+    const pixelSize = this.drawMult;
+    const radiusPixels = 10 + (phase % 4);
+    const waveRadius = radiusPixels * pixelSize;
+    const innerRadius = Math.max(pixelSize * 3, waveRadius - (pixelSize * 4));
+    const midRadius = Math.max(pixelSize * 2, waveRadius - (pixelSize * 2));
+    const outerRingThickness = pixelSize * 1.25;
+    const midRingThickness = pixelSize * 1.05;
+    const innerRingThickness = pixelSize * 0.9;
+    const phaseIsEven = (phase & 1) == 0;
+    const phaseModThree = phase % 3;
+
+    for (let rowDelta = -1; rowDelta <= 1; rowDelta++) {
+      for (let columnDelta = -1; columnDelta <= 1; columnDelta++) {
+        const isCenter = (rowDelta == 0) && (columnDelta == 0);
+        const isAlternatingCell = ((rowDelta + columnDelta + phase) & 1) == 0;
+        setSubpixel(rowDelta, columnDelta, isCenter ? centerColor : (isAlternatingCell ? colors.yellow : colors.coral));
+      }
+    }
+
+    for (let rowDelta = -waveRadius; rowDelta <= waveRadius; rowDelta++) {
+      for (let columnDelta = -waveRadius; columnDelta <= waveRadius; columnDelta++) {
+        const distance = Math.hypot(rowDelta, columnDelta);
+        const isOuterRing = Math.abs(distance - waveRadius) <= outerRingThickness;
+        const isMidRing = Math.abs(distance - midRadius) <= midRingThickness;
+        const isInnerRing = Math.abs(distance - innerRadius) <= innerRingThickness;
+        const isSpoke = (
+          ((Math.abs(rowDelta) <= 1) && (Math.abs(columnDelta) <= waveRadius) && (((Math.abs(columnDelta) / pixelSize) + phase) % 5 < 1))
+          || ((Math.abs(columnDelta) <= 1) && (Math.abs(rowDelta) <= waveRadius) && (((Math.abs(rowDelta) / pixelSize) + phase) % 5 < 1))
+        );
+
+        if (!isOuterRing && !isMidRing && !isInnerRing && !isSpoke) {continue;}
+
+        if (isOuterRing && (((Math.floor((Math.atan2(rowDelta, columnDelta) + Math.PI) * 6) + phaseModThree) % 3) == 0)) {
+          setSubpixel(rowDelta, columnDelta, colors.white);
+          continue;
+        }
+
+        if (isOuterRing) {
+          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.cyan : colors.blue);
+        } else if (isMidRing) {
+          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.yellow : colors.cyan);
+        } else if (isInnerRing) {
+          setSubpixel(rowDelta, columnDelta, colors.coral);
+        } else if (isSpoke) {
+          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.blue : colors.yellow);
+        }
+      }
+    }
+
+    for (const [rowDelta, columnDelta] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
+      setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.coral : colors.yellow);
+    }
   }
 }

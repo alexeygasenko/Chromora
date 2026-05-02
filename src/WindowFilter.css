@@ -424,6 +424,15 @@
   gap: 0.38rem;
 }
 
+#bm-window-filter:not(.bm-windowed) #bm-filter-flex {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: stretch;
+  margin-left: 0.18rem;
+  margin-right: 0.18rem;
+  width: auto;
+}
+
 /* Filter color */
 #bm-window-filter .bm-filter-color {
   position: relative;
@@ -495,8 +504,8 @@
 
 /* Fullscreen filter color cards */
 #bm-window-filter:not(.bm-windowed) .bm-filter-color {
-  width: min(100%, 23.5rem);
-  max-width: 23.5rem;
+  width: 100%;
+  max-width: none;
   min-height: 6.15rem;
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(7.6rem, 0.8fr);

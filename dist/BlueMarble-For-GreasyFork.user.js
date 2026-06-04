@@ -2,7 +2,7 @@
 // @name            Blue Marble
 // @name:en         Blue Marble
 // @namespace       https://github.com/SwingTheVine/
-// @version         0.97.0
+// @version         0.98.0
 // @description     A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
 // @description:en  A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
 // @author          SwingTheVine
@@ -4804,6 +4804,7 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
         bucket.minColumn = Math.min(bucket.minColumn, column);
         bucket.maxColumn = Math.max(bucket.maxColumn, column);
         bucket.count++;
+        bucket.cells.push([row, column]);
         return;
       }
       missingHighlightBuckets.set(bucketKey, {
@@ -4815,7 +4816,8 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
         minColumn: column,
         maxColumn: column,
         count: 1,
-        color
+        color,
+        cells: [[row, column]]
       });
     };
     for (let templateRow = 1; templateRow < templateHeight; templateRow += pixelSize) {
@@ -5002,44 +5004,92 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
   }) {
     const padding = pixelSize * 2;
     const outerThickness = Math.max(1, Math.round(pixelSize * 0.58));
-    const innerThickness = Math.max(1, Math.round(pixelSize * 0.36));
-    const innerInset = pixelSize * 2;
     const softColors = {
-      cyan: 3372219136,
-      magenta: 3103732735
+      cyan: 3372219136
     };
+    const protectedPixels = /* @__PURE__ */ new Set();
+    const protectedRadius = Math.floor(pixelSize / 2);
+    for (const bucket of cluster.buckets) {
+      for (const [row, column] of bucket.cells) {
+        for (let rowDelta = -protectedRadius; rowDelta <= protectedRadius; rowDelta++) {
+          for (let columnDelta = -protectedRadius; columnDelta <= protectedRadius; columnDelta++) {
+            protectedPixels.add((row + rowDelta) * templateWidth + (column + columnDelta));
+          }
+        }
+      }
+    }
     const setPixel = (row, column, color) => {
       if (row < 0 || row >= templateHeight || column < 0 || column >= templateWidth) {
         return;
       }
+      if (protectedPixels.has(row * templateWidth + column)) {
+        return;
+      }
       template32[row * templateWidth + column] = color;
     };
-    const contourColor = (isInner = false) => {
-      return isInner ? softColors.magenta : softColors.cyan;
+    const contourColor = () => {
+      return softColors.cyan;
     };
-    const drawHorizontal = (row, startColumn, endColumn, thickness, isInner = false) => {
+    const drawHorizontal = (row, startColumn, endColumn) => {
       if (startColumn > endColumn) {
         return;
       }
       for (let column = startColumn; column <= endColumn; column++) {
-        for (let offset = -thickness; offset <= thickness; offset++) {
-          setPixel(row + offset, column, contourColor(isInner));
-        }
+        setPixel(row, column, contourColor());
       }
     };
-    const drawVertical = (column, startRow, endRow, thickness, isInner = false) => {
-      if (startRow > endRow) {
+    const addInterval = (intervalsByRow, row, startColumn, endColumn) => {
+      if (startColumn > endColumn) {
         return;
       }
-      for (let row = startRow; row <= endRow; row++) {
-        for (let offset = -thickness; offset <= thickness; offset++) {
-          setPixel(row, column + offset, contourColor(isInner));
+      const intervals = intervalsByRow.get(row) ?? [];
+      intervals.push([startColumn, endColumn]);
+      intervalsByRow.set(row, intervals);
+    };
+    const mergeIntervals = (intervals) => {
+      if (!intervals?.length) {
+        return [];
+      }
+      const sorted = intervals.slice().sort((a, b) => a[0] - b[0]);
+      const merged = [];
+      for (const [startColumn, endColumn] of sorted) {
+        const previous = merged[merged.length - 1];
+        if (previous && startColumn <= previous[1] + 1) {
+          previous[1] = Math.max(previous[1], endColumn);
+        } else {
+          merged.push([startColumn, endColumn]);
         }
       }
+      return merged;
     };
-    const bucketSet = new Set(cluster.buckets.map((bucket) => `${bucket.bucketRow},${bucket.bucketColumn}`));
-    const hasBucket = (bucket, rowDelta, columnDelta) => bucketSet.has(`${bucket.bucketRow + rowDelta},${bucket.bucketColumn + columnDelta}`);
-    const drawBucketBoundary = ({ bucket, inset = 0, thickness = outerThickness, isInner = false }) => {
+    const subtractCoveredIntervals = ([startColumn, endColumn], blockers) => {
+      if (!blockers?.length) {
+        return [[startColumn, endColumn]];
+      }
+      const visibleSegments = [];
+      let segmentStart = startColumn;
+      for (const [blockStart, blockEnd] of blockers) {
+        if (blockEnd < segmentStart) {
+          continue;
+        }
+        if (blockStart > endColumn) {
+          break;
+        }
+        if (blockStart > segmentStart) {
+          visibleSegments.push([segmentStart, Math.min(endColumn, blockStart - 1)]);
+        }
+        segmentStart = Math.max(segmentStart, blockEnd + 1);
+        if (segmentStart > endColumn) {
+          break;
+        }
+      }
+      if (segmentStart <= endColumn) {
+        visibleSegments.push([segmentStart, endColumn]);
+      }
+      return visibleSegments;
+    };
+    const filledIntervalsByRow = /* @__PURE__ */ new Map();
+    for (const bucket of cluster.buckets) {
       const bucketTop = bucket.bucketRow * bucket.bucketSize;
       const bucketLeft = bucket.bucketColumn * bucket.bucketSize;
       const bucketBottom = bucketTop + bucket.bucketSize - 1;
@@ -5048,28 +5098,35 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
       const bottom = Math.min(templateHeight - 1, Math.ceil(bucketBottom + padding));
       const left = Math.max(0, Math.floor(bucketLeft - padding));
       const right = Math.min(templateWidth - 1, Math.ceil(bucketRight + padding));
-      if (!hasBucket(bucket, -1, 0)) {
-        drawHorizontal(top + inset, left, right, thickness, isInner);
+      for (let row = top; row <= bottom; row++) {
+        addInterval(filledIntervalsByRow, row, left, right);
       }
-      if (!hasBucket(bucket, 1, 0)) {
-        drawHorizontal(bottom - inset, left, right, thickness, isInner);
-      }
-      if (!hasBucket(bucket, 0, -1)) {
-        drawVertical(left + inset, top, bottom, thickness, isInner);
-      }
-      if (!hasBucket(bucket, 0, 1)) {
-        drawVertical(right - inset, top, bottom, thickness, isInner);
-      }
-    };
-    for (const bucket of cluster.buckets) {
-      drawBucketBoundary({ bucket });
-      if (bucket.count >= 3) {
-        drawBucketBoundary({
-          bucket,
-          inset: innerInset,
-          thickness: innerThickness,
-          isInner: true
-        });
+    }
+    const mergedIntervalsByRow = /* @__PURE__ */ new Map();
+    for (const [row, intervals] of filledIntervalsByRow) {
+      mergedIntervalsByRow.set(row, mergeIntervals(intervals));
+    }
+    const rows = Array.from(mergedIntervalsByRow.keys()).sort((a, b) => a - b);
+    for (const row of rows) {
+      const currentIntervals = mergedIntervalsByRow.get(row) ?? [];
+      const previousIntervals = mergedIntervalsByRow.get(row - 1) ?? [];
+      const nextIntervals = mergedIntervalsByRow.get(row + 1) ?? [];
+      for (const interval of currentIntervals) {
+        const [left, right] = interval;
+        for (const [startColumn, endColumn] of subtractCoveredIntervals(interval, previousIntervals)) {
+          for (let offset = 0; offset <= outerThickness; offset++) {
+            drawHorizontal(row + offset, startColumn, endColumn);
+          }
+        }
+        for (const [startColumn, endColumn] of subtractCoveredIntervals(interval, nextIntervals)) {
+          for (let offset = 0; offset <= outerThickness; offset++) {
+            drawHorizontal(row - offset, startColumn, endColumn);
+          }
+        }
+        for (let offset = 0; offset <= outerThickness; offset++) {
+          setPixel(row, left + offset, contourColor());
+          setPixel(row, right - offset, contourColor());
+        }
       }
     }
   };
@@ -5653,4 +5710,4 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   }
 })();
 
-// Build Hash: ab896884ead6
+// Build Hash: 4b4561bdc387

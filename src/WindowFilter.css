@@ -1305,8 +1305,9 @@
   align-self: center;
   min-width: 0;
   margin: 0;
+  padding-block: 0.04rem;
   font-size: 0.68rem;
-  line-height: 1;
+  line-height: 1.18;
 }
 
 #bm-window-filter.bm-windowed.bm-filter-layout-horizontal .bm-filter-color .bm-filter-color-pxl-cnt {

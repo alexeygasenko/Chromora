@@ -47,7 +47,6 @@ export default class WindowMain extends Overlay {
     }).addDragbar()
         .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'aria-label': 'Minimize window "Blue Marble"', 'data-button-status': 'expanded'}, (instance, button) => {
           button.onclick = () => instance.handleMinimization(button);
-          button.ontouchend = () => {button.click();}; // Needed ONLY to negate weird interaction with dragbar
         }).buildElement()
         .addDiv({'class': 'bm-main-drag-brand'})
           .addImg({'class': 'bm-favicon', 'src': 'https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/assets/Favicon.png'}, (instance, img) => {

@@ -8,6 +8,7 @@ const windowedIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidde
 const horizontalLayoutIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15M4.5 16.5h15"/><path d="M7.5 5v5M12 5v5M16.5 5v5M7.5 14v5M12 14v5M16.5 14v5"/></g></svg>';
 const verticalLayoutIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.5v15M16 4.5v15"/><path d="M5.5 7.5h5M5.5 12h5M5.5 16.5h5M13.5 7.5h5M13.5 12h5M13.5 16.5h5"/></g></svg>';
 const incorrectHighlightIcon = '<svg class="bm-filter-highlight-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6.4"/><path d="M12 3.8V7M12 17v3.2M3.8 12H7M17 12h3.2"/><path d="m9.3 9.3 5.4 5.4M14.7 9.3l-5.4 5.4"/></g></svg>';
+const colorToggleAnimations = new WeakMap();
 
 function localizeCompactDate(date) {
   const day = String(date.getDate()).padStart(2, '0');
@@ -49,6 +50,7 @@ export default class WindowFilter extends Overlay {
     this.sortDropdownPointerHandler = null; // Outside-click handler for custom sort dropdowns
     this.sortDropdownKeyHandler = null; // Keyboard handler for custom sort dropdowns
     this.colorRefreshInterval = null; // Auto-refresh timer for live color statistics
+    this.highlightRefreshPending = null; // Active map refresh triggered by a highlight-mode change
     this.colorRefreshIntervalMS = 10000; // Refresh Color Filter statistics every 10 seconds
     this.windowMinWidth = 360; // Minimum width for the windowed filter
     this.windowMinHeight = 220; // Minimum height for the windowed filter
@@ -118,23 +120,20 @@ export default class WindowFilter extends Overlay {
     }).addDragbar()
         .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'title': 'Minimize window "Color Filter"', 'aria-label': 'Minimize window "Color Filter"', 'data-button-status': 'expanded'}, (instance, button) => {
           button.onclick = () => instance.handleMinimization(button);
-          button.ontouchend = () => {button.click()}; // Needed only to negate weird interaction with dragbar
         }).buildElement()
         .addDiv({'class': 'bm-filter-drag-title-slot'})
           .addHeader(1, {'class': 'bm-dragbar-title-persistent bm-filter-drag-title', 'textContent': 'Color Filter'}).buildElement()
         .buildElement()
         .addDiv({'class': 'bm-flex-center'})
           .addButton({'class': 'bm-button-circle', 'innerHTML': windowedIcon, 'title': 'Switch to windowed mode for "Color Filter"', 'aria-label': 'Switch to windowed mode for "Color Filter"'}, (instance, button) => {
-            button.onclick = () => {
+            button.onclick = async () => {
               this.#setWindowModePreference(true);
-              this.#closeWindow(true);
+              await this.#closeWindow(true);
               this.buildWindowed();
             };
-            button.ontouchend = () => {button.click();}; // Needed only to negate weird interaction with dragbar
           }).buildElement()
           .addButton({'class': 'bm-button-circle', 'innerHTML': closeIcon, 'title': 'Close window "Color Filter"', 'aria-label': 'Close window "Color Filter"'}, (instance, button) => {
             button.onclick = () => this.#closeWindow();
-            button.ontouchend = () => {button.click();}; // Needed only to negate weird interaction with dragbar
           }).buildElement()
         .buildElement()
       .buildElement()
@@ -256,7 +255,9 @@ export default class WindowFilter extends Overlay {
    * Parent/child relationships in the DOM structure below are indicated by indentation.
    * @since 0.90.35
    */
-  buildWindowed() {
+  buildWindowed(layout = this.#getWindowedColorLayout()) {
+
+    const normalizedLayout = layout == 'horizontal' ? 'horizontal' : 'vertical';
 
     // If a color filter wizard window already exists, close it
     if (document.querySelector(`#${this.windowID}`)) {
@@ -279,7 +280,6 @@ export default class WindowFilter extends Overlay {
             }
             instance.handleMinimization(button);
           };
-          button.ontouchend = () => {button.click()}; // Needed only to negate weird interaction with dragbar
         }).buildElement()
         .addDiv()
           .addSpan({'id': 'bm-filter-windowed-color-totals-dragbar', 'class': 'bm-dragbar-text', 'style': 'font-weight: 700;'}).buildElement() // Contains correct / total pixel values
@@ -288,24 +288,22 @@ export default class WindowFilter extends Overlay {
         .buildElement() 
         .addDiv({'class': 'bm-flex-center'})
           .addButton({'id': 'bm-filter-layout-toggle', 'class': 'bm-button-circle bm-filter-layout-toggle', 'innerHTML': horizontalLayoutIcon, 'title': 'Switch color layout', 'aria-label': 'Switch to horizontal color layout'}, (instance, button) => {
-            button.onclick = () => {
-              const windowElement = button.closest(`#${this.windowID}`);
-              const currentLayout = windowElement?.classList.contains('bm-filter-layout-horizontal') ? 'horizontal' : 'vertical';
-              this.#applyWindowedColorLayout(currentLayout == 'horizontal' ? 'vertical' : 'horizontal');
+            button.onclick = async () => {
+              const nextLayout = normalizedLayout == 'horizontal' ? 'vertical' : 'horizontal';
+              await this.#closeWindow(true);
+              this.#setWindowedColorLayoutPreference(nextLayout);
+              this.buildWindowed(nextLayout);
             };
-            button.ontouchend = () => {button.click();}; // Needed only to negate weird interaction with dragbar
           }).buildElement()
           .addButton({'class': 'bm-button-circle bm-filter-fullscreen-toggle', 'innerHTML': fullscreenIcon, 'title': 'Switch to fullscreen mode for "Color Filter"', 'aria-label': 'Switch to fullscreen mode for "Color Filter"'}, (instance, button) => {
-            button.onclick = () => {
+            button.onclick = async () => {
               this.#setWindowModePreference(false);
-              this.#closeWindow(true);
+              await this.#closeWindow(true);
               this.buildWindow();
             };
-            button.ontouchend = () => {button.click();}; // Needed only to negate weird interaction with dragbar
           }).buildElement()
           .addButton({'class': 'bm-button-circle', 'innerHTML': closeIcon, 'title': 'Close window "Color Filter"', 'aria-label': 'Close window "Color Filter"'}, (instance, button) => {
             button.onclick = () => this.#closeWindow();
-            button.ontouchend = () => {button.click();}; // Needed only to negate weird interaction with dragbar
           }).buildElement()
         .buildElement()
       .buildElement()
@@ -349,7 +347,7 @@ export default class WindowFilter extends Overlay {
       }).buildElement()
     .buildElement().buildOverlay(this.windowParent);
 
-    this.#applyWindowedColorLayout(this.#getWindowedColorLayout(), false);
+    this.#applyWindowedColorLayout(normalizedLayout, false);
     this.#initializeWindowedPersistence();
 
     // Obtains the scrollable container to put the color filter in
@@ -429,6 +427,17 @@ export default class WindowFilter extends Overlay {
     return windowState?.colorLayout == 'horizontal' ? 'horizontal' : 'vertical';
   }
 
+  /** Updates the preferred windowed color layout.
+   * @param {'vertical' | 'horizontal'} layout
+   * @since 0.98.0
+   */
+  #setWindowedColorLayoutPreference(layout) {
+    const windowState = this.#getWindowState();
+    if (!windowState) {return;}
+    windowState.colorLayout = layout == 'horizontal' ? 'horizontal' : 'vertical';
+    void this.settingsManager?.saveUserStorageNow();
+  }
+
   /** Returns the active color layout for the rendered window.
    * @param {HTMLElement} [windowElement]
    * @returns {'vertical' | 'horizontal'}
@@ -438,9 +447,9 @@ export default class WindowFilter extends Overlay {
     return windowElement?.classList.contains('bm-filter-layout-horizontal') ? 'horizontal' : 'vertical';
   }
 
-  /** Returns the per-layout size object for the windowed filter.
+  /** Returns the per-layout geometry object for the windowed filter.
    * @param {'vertical' | 'horizontal'} layout
-   * @returns {{width?: number, height?: number} | null}
+   * @returns {{x?: number, y?: number, width?: number, height?: number} | null}
    * @since 0.95.0
    */
   #getWindowedLayoutSize(layout) {
@@ -548,27 +557,57 @@ export default class WindowFilter extends Overlay {
       this.#saveWindowLayoutSize(windowElement, previousLayout);
     }
 
-    windowElement.classList.toggle('bm-filter-layout-horizontal', normalizedLayout == 'horizontal');
-    windowElement.classList.toggle('bm-filter-layout-vertical', normalizedLayout != 'horizontal');
+    const applyLayout = () => {
+      windowElement.classList.toggle('bm-filter-layout-horizontal', normalizedLayout == 'horizontal');
+      windowElement.classList.toggle('bm-filter-layout-vertical', normalizedLayout != 'horizontal');
 
-    const toggleButton = windowElement.querySelector('#bm-filter-layout-toggle');
-    if (toggleButton) {
-      const showsHorizontalLayout = normalizedLayout == 'horizontal';
-      toggleButton.innerHTML = showsHorizontalLayout ? verticalLayoutIcon : horizontalLayoutIcon;
-      toggleButton.title = showsHorizontalLayout ? 'Switch to vertical color layout' : 'Switch to horizontal color layout';
-      toggleButton.ariaLabel = toggleButton.title;
-      toggleButton.setAttribute('aria-pressed', showsHorizontalLayout ? 'true' : 'false');
-    }
+      const toggleButton = windowElement.querySelector('#bm-filter-layout-toggle');
+      if (toggleButton) {
+        const showsHorizontalLayout = normalizedLayout == 'horizontal';
+        toggleButton.innerHTML = showsHorizontalLayout ? verticalLayoutIcon : horizontalLayoutIcon;
+        toggleButton.title = showsHorizontalLayout ? 'Switch to vertical color layout' : 'Switch to horizontal color layout';
+        toggleButton.ariaLabel = toggleButton.title;
+        toggleButton.setAttribute('aria-pressed', showsHorizontalLayout ? 'true' : 'false');
+      }
 
-    const windowState = this.#getWindowState();
-    if (windowState) {
-      windowState.colorLayout = normalizedLayout;
+      const windowState = this.#getWindowState();
+      if (windowState) {
+        windowState.colorLayout = normalizedLayout;
+      }
+      this.#syncWindowedColorLayoutLabels(windowElement);
+      this.#restoreWindowLayoutSize(windowElement, normalizedLayout);
+    };
+
+    if (shouldPersist) {
+      this.animateLayoutChange(windowElement, applyLayout);
+    } else {
+      applyLayout();
     }
-    this.updateColorList();
-    this.#restoreWindowLayoutSize(windowElement, normalizedLayout);
     if (shouldPersist) {
       this.#saveWindowState(windowElement);
       void this.settingsManager?.saveUserStorageNow();
+    }
+  }
+
+  /** Updates only line wrapping that differs between vertical and horizontal layouts.
+   * Avoids recalculating all pixel statistics during a layout-only action.
+   * @param {HTMLElement} windowElement
+   * @since 0.99.0
+   */
+  #syncWindowedColorLayoutLabels(windowElement) {
+    const isHorizontal = windowElement.classList.contains('bm-filter-layout-horizontal');
+    const pixelCounts = windowElement.querySelectorAll('.bm-filter-color-pxl-cnt');
+
+    for (const pixelCount of pixelCounts) {
+      const correct = pixelCount.dataset['correctLabel'];
+      const total = pixelCount.dataset['totalLabel'];
+      if (correct == null || total == null || Number(pixelCount.closest('.bm-filter-color')?.dataset['total']) === 0) {continue;}
+
+      if (isHorizontal) {
+        pixelCount.innerHTML = `${correct}<br>out of ${total}`;
+      } else {
+        pixelCount.textContent = `${correct} / ${total}`;
+      }
     }
   }
 
@@ -788,7 +827,7 @@ export default class WindowFilter extends Overlay {
   /** Immediately closes the filter window and cleans up persistence observers.
    * @since 0.92.0
    */
-  #closeWindow(preserveOpenState = false) {
+  async #closeWindow(preserveOpenState = false) {
     const windowElement = document.querySelector(`#${this.windowID}`);
     if (windowElement?.classList.contains('bm-windowed')) {
       this.#saveWindowState(windowElement);
@@ -799,7 +838,7 @@ export default class WindowFilter extends Overlay {
     this.#stopAutoRefresh();
     this.#cleanupWindowPersistence();
     this.#cleanupCustomSortDropdowns();
-    windowElement?.remove();
+    await this.handleWindowClose(windowElement);
   }
 
   /** Starts the automatic Color Filter statistics refresh loop.
@@ -908,8 +947,8 @@ export default class WindowFilter extends Overlay {
     requestAnimationFrame(() => {
       if (!windowElement.isConnected) {return;}
 
-      const x = Number(windowState.x);
-      const y = Number(windowState.y);
+      const x = Number(layoutSize?.x ?? windowState.x);
+      const y = Number(layoutSize?.y ?? windowState.y);
       if (!Number.isFinite(x) || !Number.isFinite(y)) {return;}
 
       const clampedPosition = this.#clampWindowPosition(windowElement, x, y);
@@ -919,8 +958,8 @@ export default class WindowFilter extends Overlay {
       windowElement.style.transform = `translate(${clampedPosition.x}px, ${clampedPosition.y}px)`;
 
       if ((clampedPosition.x != x) || (clampedPosition.y != y)) {
-        windowState.x = clampedPosition.x;
-        windowState.y = clampedPosition.y;
+        layoutSize.x = clampedPosition.x;
+        layoutSize.y = clampedPosition.y;
         void this.settingsManager?.saveUserStorageNow();
       }
     });
@@ -963,6 +1002,8 @@ export default class WindowFilter extends Overlay {
 
     const layoutSize = this.#getWindowedLayoutSize(layout);
     if (layoutSize) {
+      layoutSize.x = clampedPosition.x;
+      layoutSize.y = clampedPosition.y;
       layoutSize.width = width;
       layoutSize.height = height;
     }
@@ -1159,7 +1200,7 @@ export default class WindowFilter extends Overlay {
               }
             ).buildElement()
             .addHeader(2, {'textContent': color.name, 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}`}).buildElement()
-            .addSmall({'class': 'bm-filter-color-pxl-cnt', 'innerHTML': hasNoPixels ? '-' : (isHorizontalWindowedMode ? `${colorCorrectLocalized}<br>out of ${colorTotalLocalized}` : `${colorCorrectLocalized} / ${colorTotalLocalized}`), 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;`}).buildElement()
+            .addSmall({'class': 'bm-filter-color-pxl-cnt', 'data-correct-label': colorCorrectLocalized, 'data-total-label': colorTotalLocalized, 'innerHTML': hasNoPixels ? '-' : (isHorizontalWindowedMode ? `${colorCorrectLocalized}<br>out of ${colorTotalLocalized}` : `${colorCorrectLocalized} / ${colorTotalLocalized}`), 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;`}).buildElement()
           .buildElement()
         .buildElement();
       } else {
@@ -1252,40 +1293,45 @@ export default class WindowFilter extends Overlay {
 
     const colors = Array.from(colorList.children);
 
+    const hiddenStates = new Map(colors.map(color => [
+      color,
+      !showUnused && !Number(color.getAttribute('data-total'))
+    ]));
+
     colors.sort((index, nextIndex) => {
       const indexValue = index.getAttribute('data-' + sortPrimary);
       const nextIndexValue = nextIndex.getAttribute('data-' + sortPrimary);
-
       const indexValueNumber = parseFloat(indexValue);
       const nextIndexValueNumber = parseFloat(nextIndexValue);
 
-      const indexValueNumberIsNumber = !isNaN(indexValueNumber);
-      const nextIndexValueNumberIsNumber = !isNaN(nextIndexValueNumber);
-
-      // If the user wants to show unused colors...
-      if (showUnused) {
-        index.classList.remove('bm-color-hide'); // Show the color
-      } else if (!Number(index.getAttribute('data-total'))) {
-        // ...else if the user wants to hide unused colors, and this color is unused...
-        
-        index.classList.add('bm-color-hide'); // Hide the color
-      }
-
-      // If both index values are numbers...
-      if (indexValueNumberIsNumber && nextIndexValueNumberIsNumber) {
-        // Perform numeric comparison
+      if (!isNaN(indexValueNumber) && !isNaN(nextIndexValueNumber)) {
         return sortSecondary === 'ascending' ? indexValueNumber - nextIndexValueNumber : nextIndexValueNumber - indexValueNumber;
-      } else {
-        // Otherwise, perform string comparison
-        const indexValueString = indexValue.toLowerCase();
-        const nextIndexValueString = nextIndexValue.toLowerCase();
-        if (indexValueString < nextIndexValueString) return sortSecondary === 'ascending' ? -1 : 1;
-        if (indexValueString > nextIndexValueString) return sortSecondary === 'ascending' ? 1 : -1;
-        return 0;
       }
+
+      const indexValueString = indexValue.toLowerCase();
+      const nextIndexValueString = nextIndexValue.toLowerCase();
+      if (indexValueString < nextIndexValueString) {return sortSecondary === 'ascending' ? -1 : 1;}
+      if (indexValueString > nextIndexValueString) {return sortSecondary === 'ascending' ? 1 : -1;}
+      return 0;
     });
 
-    colors.forEach(color => colorList.appendChild(color));
+    const currentColors = Array.from(colorList.children);
+    const didChange = colors.some((color, index) =>
+      currentColors[index] != color || color.classList.contains('bm-color-hide') != hiddenStates.get(color)
+    );
+    if (!didChange) {return;}
+
+    const updateList = () => {
+      for (const color of colors) {
+        color.classList.toggle('bm-color-hide', hiddenStates.get(color));
+      }
+
+      const fragment = document.createDocumentFragment();
+      colors.forEach(color => fragment.appendChild(color));
+      colorList.appendChild(fragment);
+    };
+
+    this.animateListReorder(colors, updateList);
   }
 
   /** (Un)selects all colors in the color list that are visible to the user.
@@ -1298,21 +1344,34 @@ export default class WindowFilter extends Overlay {
     const colorList = document.querySelector(`#${this.colorListID}`);
     const colors = Array.from(colorList.children);
 
+    const shouldHide = !userWantsUnselect;
+    const changedColorIDs = [];
+
     // For each color...
     for (const color of colors) {
 
       // Skip this color if it is hidden
       if (color.classList?.contains('bm-color-hide')) {continue;}
 
-      // Gets the button to click
+      const colorID = Number(color.dataset['id']);
+      if (!colorID) {continue;}
+
+      // Gets the visibility button
       const button = color.querySelector('.bm-filter-color-visibility');
       
       // Exits early if the button is in its proper state
       if ((button.dataset['state'] == 'hidden') && !userWantsUnselect) {continue;} // If the button is selected, and the user wants to select all buttons, then skip this one
       if ((button.dataset['state'] == 'shown') && userWantsUnselect) {continue;} // If the button is not selected, and the user wants to unselect all buttons, then skip this one
       
-      button.click(); // If the button is not in its proper state, then we click it
+      button.dataset['state'] = shouldHide ? 'hidden' : 'shown';
+      button.innerHTML = shouldHide ? this.eyeClosed : this.eyeOpen;
+      this.#syncColorToggleLabel(button, {name: color.dataset['name'] || ''});
+      changedColorIDs.push(colorID);
     }
+
+    if (!changedColorIDs.length) {return;}
+    this.templateManager.setColorsFiltered(changedColorIDs, shouldHide);
+    this.animateStateChange(colorList);
   }
 
   /** Updates the color toggle labels on the icon and the clickable color block.
@@ -1365,11 +1424,37 @@ export default class WindowFilter extends Overlay {
    * @param {Object} color - Palette color metadata
    * @since 0.97.0
    */
-  #toggleIncorrectHighlightColor(button, color) {
-    if (!button || button.disabled || !color.id) {return;}
+  async #toggleIncorrectHighlightColor(button, color) {
+    if (!button || button.disabled || !color.id || this.highlightRefreshPending) {return;}
 
     this.templateManager.toggleIncorrectHighlightColor(color.id);
     this.#syncIncorrectHighlightButtons();
+
+    const highlightButtons = document.querySelectorAll(`#${this.windowID} .bm-filter-color-highlight`);
+    for (const highlightButton of highlightButtons) {
+      highlightButton.setAttribute('aria-disabled', 'true');
+    }
+    button.disabled = true;
+    button.dataset['loading'] = 'true';
+    button.setAttribute('aria-busy', 'true');
+
+    const refreshPromise = this.templateManager.requestCanvasRefresh();
+    this.highlightRefreshPending = refreshPromise;
+    try {
+      await refreshPromise;
+    } finally {
+      if (this.highlightRefreshPending == refreshPromise) {
+        this.highlightRefreshPending = null;
+      }
+      for (const highlightButton of highlightButtons) {
+        highlightButton.removeAttribute('aria-disabled');
+      }
+      if (button.isConnected) {
+        button.disabled = false;
+        delete button.dataset['loading'];
+        button.removeAttribute('aria-busy');
+      }
+    }
   }
 
   /** Returns the next-action label for the color highlight button.
@@ -1420,26 +1505,36 @@ export default class WindowFilter extends Overlay {
   #animateColorToggleIcon(button, direction) {
     if (!button) {return;}
 
-    const animateClass = direction == 'hide' ? 'bm-filter-eye-animate-hide' : 'bm-filter-eye-animate-show';
-    button.classList.remove('bm-filter-eye-animate-hide', 'bm-filter-eye-animate-show');
-
-    // Restart the class-driven SVG stroke animation when the same color is toggled repeatedly.
-    void button.offsetWidth;
-
-    button.classList.add(animateClass);
-
-    let timeoutID = null;
+    const previousAnimation = colorToggleAnimations.get(button);
+    colorToggleAnimations.delete(button);
+    previousAnimation?.cancel();
+    const slash = button.querySelector('.bm-filter-eye-icon path:nth-of-type(3)');
     const finishAnimation = () => {
-      window.clearTimeout(timeoutID);
-      button.classList.remove(animateClass);
-
       if ((direction == 'show') && (button.dataset['state'] == 'shown')) {
         button.innerHTML = this.eyeOpen;
       }
     };
 
-    button.addEventListener('animationend', finishAnimation, {once: true});
-    timeoutID = window.setTimeout(finishAnimation, 280);
+    if (!slash || window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof slash.animate != 'function') {
+      finishAnimation();
+      return;
+    }
+
+    const animation = slash.animate([
+      {strokeDashoffset: direction == 'hide' ? 20 : 0},
+      {strokeDashoffset: direction == 'hide' ? 0 : 20}
+    ], {
+      duration: 220,
+      easing: direction == 'hide' ? 'ease-out' : 'ease-in',
+      fill: 'forwards'
+    });
+    colorToggleAnimations.set(button, animation);
+    void animation.finished.catch(() => {}).then(() => {
+      if (colorToggleAnimations.get(button) != animation) {return;}
+      colorToggleAnimations.delete(button);
+      animation.cancel();
+      finishAnimation();
+    });
   }
 
   /** Makes a color block toggleable by pointer or keyboard.
@@ -1589,6 +1684,8 @@ export default class WindowFilter extends Overlay {
       // Updates the pixel count if it exists
       const pixelCount = document.querySelector(`#${this.windowID} .bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-cnt`);
       if (pixelCount) {
+        pixelCount.dataset['correctLabel'] = colorCorrectLocalized;
+        pixelCount.dataset['totalLabel'] = colorTotalLocalized;
         const isWindowedPixelCount = !!pixelCount.closest(`#${this.windowID}.bm-windowed`);
         const isHorizontalWindowedPixelCount = !!pixelCount.closest(`#${this.windowID}.bm-windowed.bm-filter-layout-horizontal`);
         if (Number(colorTotal) === 0) {

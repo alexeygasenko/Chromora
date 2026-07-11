@@ -116,6 +116,8 @@ export default class TemplateManager {
     this.shouldFilterColor = new Map();
     this.highlightIncorrectColorID = null; // Restricts incorrect-pixel highlighting to one template color when set
     this.highlightIncorrectMode = 'incorrect'; // Either "incorrect" or "missing" when color-specific highlighting is active
+    this.incorrectHighlightStencilCache = new Map();
+    this.canvasRefreshRevision = 0;
   }
 
   /** Updates the stored instance of the main window.
@@ -183,6 +185,26 @@ export default class TemplateManager {
     this.#persistFilteredColors();
   }
 
+  /** Updates many palette filters with one storage write.
+   * @param {Iterable<number>} colorIDs
+   * @param {boolean} shouldHide
+   * @since 0.99.0
+   */
+  setColorsFiltered(colorIDs, shouldHide) {
+    for (const colorID of colorIDs) {
+      const parsedColorID = Number(colorID);
+      if (!Number.isFinite(parsedColorID)) {continue;}
+
+      if (shouldHide) {
+        this.shouldFilterColor.set(parsedColorID, true);
+      } else {
+        this.shouldFilterColor.delete(parsedColorID);
+      }
+    }
+
+    this.#persistFilteredColors();
+  }
+
   /** Returns the color currently used to restrict incorrect-pixel highlighting.
    * @returns {number | null}
    * @since 0.97.0
@@ -241,6 +263,58 @@ export default class TemplateManager {
     }
 
     return {colorID: this.highlightIncorrectColorID, mode: this.highlightIncorrectMode};
+  }
+
+  /** Invalidates visible map tiles and resolves after refreshed tile rendering settles.
+   * @returns {Promise<void>}
+   * @since 0.98.0
+   */
+  requestCanvasRefresh() {
+    this.canvasRefreshRevision = (this.canvasRefreshRevision + 1) >>> 0;
+    const revision = this.canvasRefreshRevision;
+
+    return new Promise(resolve => {
+      let started = 0;
+      let completed = 0;
+      let settleTimer = null;
+      let noWorkTimer = null;
+      let hardTimeout = null;
+
+      const finish = () => {
+        clearTimeout(settleTimer);
+        clearTimeout(noWorkTimer);
+        clearTimeout(hardTimeout);
+        window.removeEventListener('message', handleProgress);
+        resolve();
+      };
+      const scheduleSettle = () => {
+        if (!started || (completed < started)) {return;}
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(finish, 180);
+      };
+      const handleProgress = event => {
+        const data = event.data;
+        if ((data?.source != 'blue-marble') || (data?.action != 'refresh-progress') || (Number(data?.revision) != revision)) {return;}
+
+        if (data.state == 'started') {
+          started++;
+          clearTimeout(noWorkTimer);
+          clearTimeout(settleTimer);
+        } else if (data.state == 'completed') {
+          completed++;
+          scheduleSettle();
+        }
+      };
+
+      window.addEventListener('message', handleProgress);
+      noWorkTimer = setTimeout(finish, 1200);
+      hardTimeout = setTimeout(finish, 10000);
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'refresh-tiles',
+        revision: revision
+      }, '*');
+    });
   }
 
   /** Creates the JSON object to store templates in
@@ -572,9 +646,10 @@ export default class TemplateManager {
     if (!this.templatesShouldBeDrawn) {return tileBlob;}
 
     const drawSize = this.tileSize * this.drawMult; // Calculate draw multiplier for scaling
+    const numericTileCoords = [Number(tileCoords[0]) || 0, Number(tileCoords[1]) || 0];
 
     // Format tile coordinates with proper padding for consistent lookup
-    tileCoords = tileCoords[0].toString().padStart(4, '0') + ',' + tileCoords[1].toString().padStart(4, '0');
+    tileCoords = numericTileCoords[0].toString().padStart(4, '0') + ',' + numericTileCoords[1].toString().padStart(4, '0');
 
     console.log(`Searching for templates in tile: "${tileCoords}"`);
 
@@ -702,6 +777,16 @@ export default class TemplateManager {
 
       const coordXtoDrawAt = Number(template.pixelCoords[0]) * this.drawMult;
       const coordYtoDrawAt = Number(template.pixelCoords[1]) * this.drawMult;
+      const templateOrigin = Array.isArray(template.instance.coords) ? template.instance.coords.map(Number) : null;
+      const highlightGridOrigin = templateOrigin?.every(Number.isFinite)
+        ? [
+            (((numericTileCoords[0] - templateOrigin[0]) * this.tileSize) + Number(template.pixelCoords[0]) - templateOrigin[2]) * this.drawMult,
+            (((numericTileCoords[1] - templateOrigin[1]) * this.tileSize) + Number(template.pixelCoords[1]) - templateOrigin[3]) * this.drawMult
+          ]
+        : [
+            (numericTileCoords[0] * drawSize) + coordXtoDrawAt,
+            (numericTileCoords[1] * drawSize) + coordYtoDrawAt
+          ];
 
       // Draws the template to the tile if there are no colors to filter, and there are no Erased pixels
       if ((this.shouldFilterColor.size == 0) && !templateHasErased) {
@@ -719,14 +804,15 @@ export default class TemplateManager {
       const {
         correctPixels: pixelsCorrect,
         filteredTemplate: templateAfterFilter
-      } = this.#calculateCorrectPixelsOnTile_And_FilterTile({
+      } = await this.#calculateCorrectPixelsOnTile_And_FilterTile({
         tile: tileBeforeTemplates32,
         template: templateBeforeFilter32,
         templateInfo: [coordXtoDrawAt, coordYtoDrawAt, template.bitmap.width, template.bitmap.height],
         highlightPattern: effectiveHighlightPattern,
         highlightDisabled: highlightDisabled && !hasIncorrectHighlightColor,
         highlightColorID: incorrectHighlightColorID,
-        highlightMode: incorrectHighlightMode
+        highlightMode: incorrectHighlightMode,
+        highlightGridOrigin: highlightGridOrigin
       });
 
       let pixelsCorrectTotal = 0;
@@ -937,16 +1023,18 @@ export default class TemplateManager {
    * @param {boolean} params.highlightDisabled - Should highlighting be disabled?
    * @param {number | null} params.highlightColorID - Restricts highlighting to one template color when set
    * @param {'incorrect' | 'missing'} params.highlightMode - Which color-specific highlight mode to use
-   * @returns {{correctPixels: Map<number, number>, filteredTemplate: Uint32Array}} A Map containing the color IDs (keys) and how many correct pixels there are for that color (values)
+   * @param {Array<number>} params.highlightGridOrigin - Absolute subpixel origin used to keep 16x16 zones aligned across map tiles
+   * @returns {Promise<{correctPixels: Map<number, number>, filteredTemplate: Uint32Array}>} A Map containing the color IDs (keys) and how many correct pixels there are for that color (values)
    */
-  #calculateCorrectPixelsOnTile_And_FilterTile({
+  async #calculateCorrectPixelsOnTile_And_FilterTile({
     tile: tile32, 
     template: template32, 
     templateInfo: templateInformation,
     highlightPattern: highlightPattern,
     highlightDisabled: highlightDisabled,
     highlightColorID: highlightColorID = null,
-    highlightMode: highlightMode = 'incorrect'
+    highlightMode: highlightMode = 'incorrect',
+    highlightGridOrigin: highlightGridOrigin = null
   }) {
 
     // Size of a pixel in actuality
@@ -963,6 +1051,8 @@ export default class TemplateManager {
     const templateCoordY = templateInformation[1];
     const templateWidth = templateInformation[2];
     const templateHeight = templateInformation[3];
+    const highlightGridOriginX = Number.isFinite(Number(highlightGridOrigin?.[0])) ? Number(highlightGridOrigin[0]) : templateCoordX;
+    const highlightGridOriginY = Number.isFinite(Number(highlightGridOrigin?.[1])) ? Number(highlightGridOrigin[1]) : templateCoordY;
     const tolerance = this.paletteTolerance;
 
     //console.log(`TemplateX: ${templateCoordX}\nTemplateY: ${templateCoordY}\nStarting Row:${templateCoordY+tilePixelOffsetY}\nStarting Column:${templateCoordX+tilePixelOffsetX}`);
@@ -987,26 +1077,32 @@ export default class TemplateManager {
     const incorrectHighlights = [];
     const maxIncorrectHighlightMarkers = 900;
     const incorrectHighlightBucketSize = pixelSize * 10;
+    const incorrectHighlightBucketStride = Math.ceil(templateWidth / incorrectHighlightBucketSize) + 2;
     const incorrectHighlightBuckets = new Set();
     const missingHighlightBucketSize = pixelSize * 16;
     const missingHighlightBuckets = new Map();
-    const queueIncorrectHighlight = ({row, column, color}) => {
+    const getMissingBucketKey = (bucketRow, bucketColumn) => {
+      if ((bucketRow < 0) || (bucketColumn < 0)) {return -1;}
+      const diagonal = bucketRow + bucketColumn;
+      return ((diagonal * (diagonal + 1)) / 2) + bucketColumn;
+    };
+    const queueIncorrectHighlight = ({row, column}) => {
       if (incorrectHighlights.length >= maxIncorrectHighlightMarkers) {return;}
 
-      const bucketKey = `${Math.floor(row / incorrectHighlightBucketSize)},${Math.floor(column / incorrectHighlightBucketSize)}`;
+      const bucketKey = (Math.floor(row / incorrectHighlightBucketSize) * incorrectHighlightBucketStride)
+        + Math.floor(column / incorrectHighlightBucketSize);
       if (incorrectHighlightBuckets.has(bucketKey)) {return;}
 
       incorrectHighlightBuckets.add(bucketKey);
       incorrectHighlights.push({
         row: row,
-        column: column,
-        color: color
+        column: column
       });
     };
-    const queueMissingHighlight = ({row, column, color}) => {
-      const bucketRow = Math.floor(row / missingHighlightBucketSize);
-      const bucketColumn = Math.floor(column / missingHighlightBucketSize);
-      const bucketKey = `${bucketRow},${bucketColumn}`;
+    const queueMissingHighlight = ({row, column}) => {
+      const bucketRow = Math.floor((highlightGridOriginY + row) / missingHighlightBucketSize);
+      const bucketColumn = Math.floor((highlightGridOriginX + column) / missingHighlightBucketSize);
+      const bucketKey = getMissingBucketKey(bucketRow, bucketColumn);
       const bucket = missingHighlightBuckets.get(bucketKey);
 
       if (bucket) {
@@ -1015,25 +1111,26 @@ export default class TemplateManager {
         bucket.minColumn = Math.min(bucket.minColumn, column);
         bucket.maxColumn = Math.max(bucket.maxColumn, column);
         bucket.count++;
-        bucket.cells.push([row, column]);
         return;
       }
 
       missingHighlightBuckets.set(bucketKey, {
         bucketRow: bucketRow,
         bucketColumn: bucketColumn,
+        bucketKey: bucketKey,
         bucketSize: missingHighlightBucketSize,
+        bucketTop: (bucketRow * missingHighlightBucketSize) - highlightGridOriginY,
+        bucketLeft: (bucketColumn * missingHighlightBucketSize) - highlightGridOriginX,
         minRow: row,
         maxRow: row,
         minColumn: column,
         maxColumn: column,
-        count: 1,
-        color: color,
-        cells: [[row, column]]
+        count: 1
       });
     };
 
     // For each center pixel...
+    let workSliceStarted = performance.now();
     for (let templateRow = 1; templateRow < templateHeight; templateRow += pixelSize) {
       for (let templateColumn = 1; templateColumn < templateWidth; templateColumn += pixelSize) {
         // ROWS ARE VERTICAL. "ROWS" AS IN, LIKE ON A SPREADSHEET
@@ -1128,20 +1225,19 @@ export default class TemplateManager {
           // If the tile pixel is NOT transparent, OR the user wants to highlight transparent pixels
           if ((hasHighlightColorFilter && (shouldHighlightSelectedColorMissing || (tilePixelAlpha > tolerance))) || (!hasHighlightColorFilter && (shouldTransparentTilePixelsBeHighlighted || (tilePixelAlpha > tolerance)))) {
 
+            if (hasHighlightColorFilter) {
+              (highlightMode == 'missing' ? queueMissingHighlight : queueIncorrectHighlight)({
+                row: templateRow,
+                column: templateColumn
+              });
+              continue;
+            }
+
             // Obtains the template color of this pixel
             const templatePixelColor = (templatePixelAlpha > tolerance)
               ? template32[(templateRow * templateWidth) + templateColumn]
               : tilePixelAbove;
             // This will retrieve the tile background instead if the color is filtered!
-
-            if (hasHighlightColorFilter) {
-              (highlightMode == 'missing' ? queueMissingHighlight : queueIncorrectHighlight)({
-                row: templateRow,
-                column: templateColumn,
-                color: templatePixelColor
-              });
-              continue;
-            }
 
             // For each of the 9 subpixels inside the pixel...
             for (const subpixelPattern of highlightPattern) {
@@ -1192,22 +1288,32 @@ export default class TemplateManager {
         const colorIDcount = _colorpalette.get(bestTemplateColorID);
         _colorpalette.set(bestTemplateColorID, colorIDcount ? colorIDcount + 1 : 1);
       }
+
+      if ((performance.now() - workSliceStarted) >= 4) {
+        await this.#yieldToBrowser();
+        workSliceStarted = performance.now();
+      }
     }
 
     if (hasHighlightColorFilter && (highlightMode == 'missing')) {
-      const missingHighlightClusters = this.#buildMissingHighlightClusters(missingHighlightBuckets, 96);
+      await this.#yieldToBrowser();
+      const missingHighlightClusters = await this.#buildMissingHighlightClusters(missingHighlightBuckets, 96);
+      await this.#yieldToBrowser();
       for (const cluster of missingHighlightClusters) {
         this.#drawMissingHighlightCluster({
           template: template32,
           templateWidth: templateWidth,
           templateHeight: templateHeight,
           cluster: cluster,
-          colors: incorrectHighlightColors,
-          phase: incorrectHighlightPhase,
           pixelSize: pixelSize
         });
+        if ((performance.now() - workSliceStarted) >= 4) {
+          await this.#yieldToBrowser();
+          workSliceStarted = performance.now();
+        }
       }
     } else {
+      const markerStencil = this.#getIncorrectHighlightStencil(incorrectHighlightColors, incorrectHighlightPhase);
       for (const highlight of incorrectHighlights) {
         this.#drawIncorrectHighlightMarker({
           template: template32,
@@ -1215,10 +1321,12 @@ export default class TemplateManager {
           templateHeight: templateHeight,
           row: highlight.row,
           column: highlight.column,
-          centerColor: highlight.color,
-          colors: incorrectHighlightColors,
-          phase: incorrectHighlightPhase
+          stencil: markerStencil
         });
+        if ((performance.now() - workSliceStarted) >= 4) {
+          await this.#yieldToBrowser();
+          workSliceStarted = performance.now();
+        }
       }
     }
 
@@ -1227,17 +1335,30 @@ export default class TemplateManager {
     return { correctPixels: _colorpalette, filteredTemplate: template32 };
   }
 
+  /** Lets input and animation frames run between expensive tile-render slices.
+   * @returns {Promise<void>}
+   * @since 0.98.0
+   */
+  async #yieldToBrowser() {
+    if (typeof globalThis.scheduler?.yield === 'function') {
+      await globalThis.scheduler.yield();
+      return;
+    }
+    await new Promise(resolve => requestAnimationFrame(() => resolve()));
+  }
+
   /** Builds connected blob bounds for dense missing-pixel highlighting.
-   * @param {Map<string, Object>} bucketMap
+   * @param {Map<number, Object>} bucketMap
    * @param {number} maxClusters
-   * @returns {Array<Object>}
+   * @returns {Promise<Array<Object>>}
    * @since 0.97.0
    */
-  #buildMissingHighlightClusters(bucketMap, maxClusters) {
+  async #buildMissingHighlightClusters(bucketMap, maxClusters) {
     if (!bucketMap?.size) {return [];}
 
     const visited = new Set();
     const clusters = [];
+    let workSliceStarted = performance.now();
     const neighborDeltas = [
       [-1, -1], [-1, 0], [-1, 1],
       [0, -1], [0, 1],
@@ -1254,7 +1375,6 @@ export default class TemplateManager {
         minColumn: startBucket.minColumn,
         maxColumn: startBucket.maxColumn,
         count: 0,
-        color: startBucket.color,
         buckets: []
       };
       visited.add(bucketKey);
@@ -1269,7 +1389,11 @@ export default class TemplateManager {
         cluster.buckets.push(bucket);
 
         for (const [rowDelta, columnDelta] of neighborDeltas) {
-          const neighborKey = `${bucket.bucketRow + rowDelta},${bucket.bucketColumn + columnDelta}`;
+          const neighborRow = bucket.bucketRow + rowDelta;
+          const neighborColumn = bucket.bucketColumn + columnDelta;
+          if ((neighborRow < 0) || (neighborColumn < 0)) {continue;}
+          const diagonal = neighborRow + neighborColumn;
+          const neighborKey = ((diagonal * (diagonal + 1)) / 2) + neighborColumn;
           if (visited.has(neighborKey)) {continue;}
 
           const neighbor = bucketMap.get(neighborKey);
@@ -1277,6 +1401,11 @@ export default class TemplateManager {
 
           visited.add(neighborKey);
           queue.push(neighbor);
+        }
+
+        if ((performance.now() - workSliceStarted) >= 4) {
+          await this.#yieldToBrowser();
+          workSliceStarted = performance.now();
         }
       }
 
@@ -1294,8 +1423,6 @@ export default class TemplateManager {
    * @param {number} params.templateWidth
    * @param {number} params.templateHeight
    * @param {Object} params.cluster
-   * @param {Object} params.colors
-   * @param {number} params.phase
    * @param {number} params.pixelSize
    * @since 0.97.0
    */
@@ -1304,185 +1431,165 @@ export default class TemplateManager {
     templateWidth: templateWidth,
     templateHeight: templateHeight,
     cluster: cluster,
-    colors: colors,
-    phase: phase,
     pixelSize: pixelSize
   }) {
-    const padding = pixelSize * 2;
-    const outerThickness = Math.max(1, Math.round(pixelSize * 0.58));
-    const softColors = {
-      cyan: 0xC8FFFB00
+    const contourColor = 0xC8FFFB00;
+    const logicalWidth = Math.ceil(templateWidth / pixelSize);
+    const logicalHeight = Math.ceil(templateHeight / pixelSize);
+    // Sweep half-open logical-pixel rectangles into constant-coverage horizontal slabs.
+    const events = new Map();
+
+    const addEvent = (row, type, rectangle) => {
+      const event = events.get(row) ?? {add: [], remove: []};
+      event[type].push(rectangle);
+      events.set(row, event);
     };
-    const protectedPixels = new Set();
-    const protectedRadius = Math.floor(pixelSize / 2);
-
-    for (const bucket of cluster.buckets) {
-      for (const [row, column] of bucket.cells) {
-        for (let rowDelta = -protectedRadius; rowDelta <= protectedRadius; rowDelta++) {
-          for (let columnDelta = -protectedRadius; columnDelta <= protectedRadius; columnDelta++) {
-            protectedPixels.add(((row + rowDelta) * templateWidth) + (column + columnDelta));
-          }
-        }
-      }
-    }
-
-    const setPixel = (row, column, color) => {
-      if ((row < 0) || (row >= templateHeight) || (column < 0) || (column >= templateWidth)) {return;}
-      if (protectedPixels.has((row * templateWidth) + column)) {return;}
-      template32[(row * templateWidth) + column] = color;
-    };
-
-    const contourColor = () => {
-      return softColors.cyan;
-    };
-
-    const drawHorizontal = (row, startColumn, endColumn) => {
-      if (startColumn > endColumn) {return;}
-      for (let column = startColumn; column <= endColumn; column++) {
-        setPixel(row, column, contourColor());
-      }
-    };
-
-    const addInterval = (intervalsByRow, row, startColumn, endColumn) => {
-      if (startColumn > endColumn) {return;}
-      const intervals = intervalsByRow.get(row) ?? [];
-      intervals.push([startColumn, endColumn]);
-      intervalsByRow.set(row, intervals);
-    };
-
-    const mergeIntervals = (intervals) => {
-      if (!intervals?.length) {return [];}
-
+    const mergeIntervals = intervals => {
+      if (!intervals.length) {return [];}
       const sorted = intervals.slice().sort((a, b) => a[0] - b[0]);
-      const merged = [];
-      for (const [startColumn, endColumn] of sorted) {
+      const merged = [sorted[0].slice()];
+
+      for (let index = 1; index < sorted.length; index++) {
+        const current = sorted[index];
         const previous = merged[merged.length - 1];
-        if (previous && (startColumn <= previous[1] + 1)) {
-          previous[1] = Math.max(previous[1], endColumn);
+        if (current[0] <= previous[1]) {
+          previous[1] = Math.max(previous[1], current[1]);
         } else {
-          merged.push([startColumn, endColumn]);
+          merged.push(current.slice());
         }
       }
-
       return merged;
     };
-
-    const subtractCoveredIntervals = ([startColumn, endColumn], blockers) => {
-      if (!blockers?.length) {return [[startColumn, endColumn]];}
-
-      const visibleSegments = [];
-      let segmentStart = startColumn;
+    const intervalsEqual = (first, second) => (
+      first.length == second.length
+      && first.every((interval, index) => interval[0] == second[index][0] && interval[1] == second[index][1])
+    );
+    const subtractIntervals = ([start, end], blockers) => {
+      const visible = [];
+      let cursor = start;
 
       for (const [blockStart, blockEnd] of blockers) {
-        if (blockEnd < segmentStart) {continue;}
-        if (blockStart > endColumn) {break;}
-
-        if (blockStart > segmentStart) {
-          visibleSegments.push([segmentStart, Math.min(endColumn, blockStart - 1)]);
-        }
-
-        segmentStart = Math.max(segmentStart, blockEnd + 1);
-        if (segmentStart > endColumn) {break;}
+        if (blockEnd <= cursor) {continue;}
+        if (blockStart >= end) {break;}
+        if (blockStart > cursor) {visible.push([cursor, Math.min(end, blockStart)]);}
+        cursor = Math.max(cursor, blockEnd);
+        if (cursor >= end) {break;}
       }
-
-      if (segmentStart <= endColumn) {
-        visibleSegments.push([segmentStart, endColumn]);
-      }
-
-      return visibleSegments;
+      if (cursor < end) {visible.push([cursor, end]);}
+      return visible;
     };
 
-    const filledIntervalsByRow = new Map();
     for (const bucket of cluster.buckets) {
-      const bucketTop = bucket.bucketRow * bucket.bucketSize;
-      const bucketLeft = bucket.bucketColumn * bucket.bucketSize;
-      const bucketBottom = bucketTop + bucket.bucketSize - 1;
-      const bucketRight = bucketLeft + bucket.bucketSize - 1;
-      const top = Math.max(0, Math.floor(bucketTop - padding));
-      const bottom = Math.min(templateHeight - 1, Math.ceil(bucketBottom + padding));
-      const left = Math.max(0, Math.floor(bucketLeft - padding));
-      const right = Math.min(templateWidth - 1, Math.ceil(bucketRight + padding));
+      const top = Math.round(bucket.bucketTop / pixelSize);
+      const left = Math.round(bucket.bucketLeft / pixelSize);
+      const size = Math.round(bucket.bucketSize / pixelSize);
+      const rectangle = {
+        top: top,
+        bottom: top + size,
+        left: left,
+        right: left + size
+      };
+      addEvent(rectangle.top, 'add', rectangle);
+      addEvent(rectangle.bottom, 'remove', rectangle);
+    }
 
-      for (let row = top; row <= bottom; row++) {
-        addInterval(filledIntervalsByRow, row, left, right);
+    const eventRows = Array.from(events.keys()).sort((a, b) => a - b);
+    const activeRectangles = new Set();
+    const slabs = [];
+
+    for (let eventIndex = 0; eventIndex < eventRows.length - 1; eventIndex++) {
+      const top = eventRows[eventIndex];
+      const nextTop = eventRows[eventIndex + 1];
+      const event = events.get(top);
+
+      for (const rectangle of event.remove) {activeRectangles.delete(rectangle);}
+      for (const rectangle of event.add) {activeRectangles.add(rectangle);}
+      if (!activeRectangles.size || (nextTop <= top)) {continue;}
+
+      const intervals = mergeIntervals(Array.from(activeRectangles, rectangle => [rectangle.left, rectangle.right]));
+      const previousSlab = slabs[slabs.length - 1];
+      if (previousSlab && (previousSlab.bottom == top) && intervalsEqual(previousSlab.intervals, intervals)) {
+        previousSlab.bottom = nextTop;
+      } else {
+        slabs.push({top: top, bottom: nextTop, intervals: intervals});
       }
     }
 
-    const mergedIntervalsByRow = new Map();
-    for (const [row, intervals] of filledIntervalsByRow) {
-      mergedIntervalsByRow.set(row, mergeIntervals(intervals));
-    }
+    const drawHorizontal = (row, startColumn, endColumn) => {
+      const start = Math.max(0, startColumn);
+      const end = Math.min(logicalWidth, endColumn);
+      if ((row < 0) || (row >= logicalHeight) || (start >= end)) {return;}
 
-    const rows = Array.from(mergedIntervalsByRow.keys()).sort((a, b) => a - b);
-    for (const row of rows) {
-      const currentIntervals = mergedIntervalsByRow.get(row) ?? [];
-      const previousIntervals = mergedIntervalsByRow.get(row - 1) ?? [];
-      const nextIntervals = mergedIntervalsByRow.get(row + 1) ?? [];
-
-      for (const interval of currentIntervals) {
-        const [left, right] = interval;
-
-        for (const [startColumn, endColumn] of subtractCoveredIntervals(interval, previousIntervals)) {
-          for (let offset = 0; offset <= outerThickness; offset++) {
-            drawHorizontal(row + offset, startColumn, endColumn);
-          }
-        }
-
-        for (const [startColumn, endColumn] of subtractCoveredIntervals(interval, nextIntervals)) {
-          for (let offset = 0; offset <= outerThickness; offset++) {
-            drawHorizontal(row - offset, startColumn, endColumn);
-          }
-        }
-
-        for (let offset = 0; offset <= outerThickness; offset++) {
-          setPixel(row, left + offset, contourColor());
-          setPixel(row, right - offset, contourColor());
-        }
+      const firstSubpixelRow = row * pixelSize;
+      const finalSubpixelRow = Math.min(templateHeight, firstSubpixelRow + pixelSize);
+      const firstSubpixelColumn = start * pixelSize;
+      const finalSubpixelColumn = Math.min(templateWidth, end * pixelSize);
+      for (let subpixelRow = firstSubpixelRow; subpixelRow < finalSubpixelRow; subpixelRow++) {
+        template32.fill(contourColor, (subpixelRow * templateWidth) + firstSubpixelColumn, (subpixelRow * templateWidth) + finalSubpixelColumn);
       }
-    }
-  }
-
-  /** Returns the same Uint32 RGBA color with a new alpha channel.
-   * @param {number} color
-   * @param {number} alpha
-   * @returns {number}
-   * @since 0.97.0
-   */
-  #withAlpha(color, alpha) {
-    return (color & 0x00FFFFFF) | ((Math.max(0, Math.min(255, alpha)) & 0xFF) << 24);
-  }
-
-  /** Draws a loud marker around one incorrect pixel for color-specific highlighting.
-   * @param {Object} params
-   * @param {Uint32Array} params.template
-   * @param {number} params.templateWidth
-   * @param {number} params.templateHeight
-   * @param {number} params.row
-   * @param {number} params.column
-   * @param {number} params.centerColor
-   * @param {Object} params.colors
-   * @param {number} params.phase
-   * @since 0.97.0
-   */
-  #drawIncorrectHighlightMarker({
-    template: template32,
-    templateWidth: templateWidth,
-    templateHeight: templateHeight,
-    row: templateRow,
-    column: templateColumn,
-    centerColor: centerColor,
-    colors: colors,
-    phase: phase
-  }) {
-    const setSubpixel = (rowDelta, columnDelta, color) => {
-      const row = templateRow + rowDelta;
-      const column = templateColumn + columnDelta;
-      if ((row < 0) || (row >= templateHeight) || (column < 0) || (column >= templateWidth)) {return;}
-      template32[(row * templateWidth) + column] = color;
     };
+    const drawVertical = (column, startRow, endRow) => {
+      const start = Math.max(0, startRow);
+      const end = Math.min(logicalHeight, endRow);
+      if ((column < 0) || (column >= logicalWidth) || (start >= end)) {return;}
 
+      const firstSubpixelColumn = column * pixelSize;
+      const finalSubpixelColumn = Math.min(templateWidth, firstSubpixelColumn + pixelSize);
+      for (let row = start; row < end; row++) {
+        const firstSubpixelRow = row * pixelSize;
+        const finalSubpixelRow = Math.min(templateHeight, firstSubpixelRow + pixelSize);
+        for (let subpixelRow = firstSubpixelRow; subpixelRow < finalSubpixelRow; subpixelRow++) {
+          template32.fill(contourColor, (subpixelRow * templateWidth) + firstSubpixelColumn, (subpixelRow * templateWidth) + finalSubpixelColumn);
+        }
+      }
+    };
+    const drawPixel = (row, column) => drawHorizontal(row, column, column + 1);
+
+    for (let slabIndex = 0; slabIndex < slabs.length; slabIndex++) {
+      const slab = slabs[slabIndex];
+      const previousSlab = slabs[slabIndex - 1];
+      const nextSlab = slabs[slabIndex + 1];
+      const previousIntervals = previousSlab && (previousSlab.bottom == slab.top) ? previousSlab.intervals : [];
+      const nextIntervals = nextSlab && (slab.bottom == nextSlab.top) ? nextSlab.intervals : [];
+
+      for (const interval of slab.intervals) {
+        const [left, right] = interval;
+        drawVertical(left, slab.top, slab.bottom);
+        drawVertical(right - 1, slab.top, slab.bottom);
+
+        for (const [start, end] of subtractIntervals(interval, previousIntervals)) {
+          drawHorizontal(slab.top, start, end);
+          if (start > left) {drawPixel(slab.top, start - 1);}
+          if (end < right) {drawPixel(slab.top, end);}
+        }
+        for (const [start, end] of subtractIntervals(interval, nextIntervals)) {
+          const bottomRow = slab.bottom - 1;
+          drawHorizontal(bottomRow, start, end);
+          if (start > left) {drawPixel(bottomRow, start - 1);}
+          if (end < right) {drawPixel(bottomRow, end);}
+        }
+      }
+    }
+  }
+
+  /** Builds one reusable marker stencil for the current animation phase.
+   * @param {Object} colors
+   * @param {number} phase
+   * @returns {Array<number>}
+   * @since 0.98.0
+   */
+  #getIncorrectHighlightStencil(colors, phase) {
+    const normalizedPhase = phase % 12;
+    const cacheKey = `${this.drawMult}:${normalizedPhase}`;
+    const cachedStencil = this.incorrectHighlightStencilCache.get(cacheKey);
+    if (cachedStencil) {return cachedStencil;}
+
+    const stencil = [];
+    const push = (rowDelta, columnDelta, color) => {
+      stencil.push(rowDelta, columnDelta, color);
+    };
     const pixelSize = this.drawMult;
-    const radiusPixels = 10 + (phase % 4);
+    const radiusPixels = 10 + (normalizedPhase % 4);
     const waveRadius = radiusPixels * pixelSize;
     const innerRadius = Math.max(pixelSize * 3, waveRadius - (pixelSize * 4));
     const midRadius = Math.max(pixelSize * 2, waveRadius - (pixelSize * 2));
@@ -1490,16 +1597,16 @@ export default class TemplateManager {
     const midRingThickness = pixelSize * 0.46;
     const innerRingThickness = pixelSize * 0.4;
     const spokeHalfThickness = Math.max(0, Math.floor(pixelSize * 0.22));
-    const phaseIsEven = (phase & 1) == 0;
-    const phaseModThree = phase % 3;
-
+    const phaseIsEven = (normalizedPhase & 1) == 0;
+    const phaseModThree = normalizedPhase % 3;
     const crossStart = Math.max(1, pixelSize);
     const crossEnd = Math.max(crossStart + 1, pixelSize * 2);
+
     for (let offset = crossStart; offset <= crossEnd; offset++) {
-      setSubpixel(-offset, 0, colors.yellow);
-      setSubpixel(offset, 0, colors.yellow);
-      setSubpixel(0, -offset, colors.yellow);
-      setSubpixel(0, offset, colors.yellow);
+      push(-offset, 0, colors.yellow);
+      push(offset, 0, colors.yellow);
+      push(0, -offset, colors.yellow);
+      push(0, offset, colors.yellow);
     }
 
     for (let rowDelta = -waveRadius; rowDelta <= waveRadius; rowDelta++) {
@@ -1509,31 +1616,61 @@ export default class TemplateManager {
         const isMidRing = Math.abs(distance - midRadius) <= midRingThickness;
         const isInnerRing = Math.abs(distance - innerRadius) <= innerRingThickness;
         const isSpoke = (
-          ((Math.abs(rowDelta) <= spokeHalfThickness) && (Math.abs(columnDelta) >= crossStart) && (Math.abs(columnDelta) <= waveRadius) && (((Math.abs(columnDelta) / pixelSize) + phase) % 5 < 1))
-          || ((Math.abs(columnDelta) <= spokeHalfThickness) && (Math.abs(rowDelta) >= crossStart) && (Math.abs(rowDelta) <= waveRadius) && (((Math.abs(rowDelta) / pixelSize) + phase) % 5 < 1))
+          ((Math.abs(rowDelta) <= spokeHalfThickness) && (Math.abs(columnDelta) >= crossStart) && (Math.abs(columnDelta) <= waveRadius) && (((Math.abs(columnDelta) / pixelSize) + normalizedPhase) % 5 < 1))
+          || ((Math.abs(columnDelta) <= spokeHalfThickness) && (Math.abs(rowDelta) >= crossStart) && (Math.abs(rowDelta) <= waveRadius) && (((Math.abs(rowDelta) / pixelSize) + normalizedPhase) % 5 < 1))
         );
 
         if (!isOuterRing && !isMidRing && !isInnerRing && !isSpoke) {continue;}
 
         if (isOuterRing && (((Math.floor((Math.atan2(rowDelta, columnDelta) + Math.PI) * 6) + phaseModThree) % 3) == 0)) {
-          setSubpixel(rowDelta, columnDelta, colors.white);
-          continue;
-        }
-
-        if (isOuterRing) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.cyan : colors.blue);
+          push(rowDelta, columnDelta, colors.white);
+        } else if (isOuterRing) {
+          push(rowDelta, columnDelta, phaseIsEven ? colors.cyan : colors.blue);
         } else if (isMidRing) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.yellow : colors.cyan);
+          push(rowDelta, columnDelta, phaseIsEven ? colors.yellow : colors.cyan);
         } else if (isInnerRing) {
-          setSubpixel(rowDelta, columnDelta, colors.coral);
-        } else if (isSpoke) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.blue : colors.yellow);
+          push(rowDelta, columnDelta, colors.coral);
+        } else {
+          push(rowDelta, columnDelta, phaseIsEven ? colors.blue : colors.yellow);
         }
       }
     }
 
     for (const [rowDelta, columnDelta] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
-      setSubpixel(rowDelta, columnDelta, colors.yellow);
+      push(rowDelta, columnDelta, colors.yellow);
+    }
+
+    this.incorrectHighlightStencilCache.set(cacheKey, stencil);
+    return stencil;
+  }
+
+  /** Draws a loud marker around one incorrect pixel for color-specific highlighting.
+   * @param {Object} params
+   * @param {Uint32Array} params.template
+   * @param {number} params.templateWidth
+   * @param {number} params.templateHeight
+   * @param {number} params.row
+   * @param {number} params.column
+   * @param {Array<number>} params.stencil
+   * @since 0.97.0
+   */
+  #drawIncorrectHighlightMarker({
+    template: template32,
+    templateWidth: templateWidth,
+    templateHeight: templateHeight,
+    row: templateRow,
+    column: templateColumn,
+    stencil: stencil
+  }) {
+    const setSubpixel = (rowDelta, columnDelta, color) => {
+      const row = templateRow + rowDelta;
+      const column = templateColumn + columnDelta;
+      if ((row < 0) || (row >= templateHeight) || (column < 0) || (column >= templateWidth)) {return;}
+      template32[(row * templateWidth) + column] = color;
+    };
+
+    for (let index = 0; index < stencil.length; index += 3) {
+      setSubpixel(stencil[index], stencil[index + 1], stencil[index + 2]);
     }
   }
 }

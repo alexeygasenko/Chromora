@@ -52,17 +52,17 @@ export default class WindowTelemetry extends Overlay {
         .addHr().buildElement()
         .addDiv({'class': 'bm-container bm-flex-center', 'style': 'gap: 1.5ch; flex-wrap: wrap;'})
           .addButton({'textContent': 'Enable Telemetry'}, (instance, button) => {
-            button.onclick = () => {
+            button.onclick = async () => {
               this.#setTelemetryValue(this.currentTelemetryVersion);
               const element = document.getElementById(this.windowID);
-              element?.remove();
+              await this.handleWindowClose(element);
             };
           }).buildElement()
           .addButton({'textContent': 'Disable Telemetry'}, (instance, button) => {
-            button.onclick = () => {
+            button.onclick = async () => {
               this.#setTelemetryValue(0);
               const element = document.getElementById(this.windowID);
-              element?.remove();
+              await this.handleWindowClose(element);
             };
           }).buildElement()
           .addButton({'textContent': 'More Information'}, (instance, button) => {

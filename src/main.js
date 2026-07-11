@@ -38,9 +38,18 @@ inject(() => {
   const name = script?.getAttribute('bm-name') || 'Blue Marble'; // Gets the name value that was passed in. Defaults to "Blue Marble" if nothing was found
   const consoleStyle = script?.getAttribute('bm-cStyle') || ''; // Gets the console style value that was passed in. Defaults to no styling if nothing was found
   const fetchedBlobQueue = new Map(); // Blobs being processed
+  let tileRefreshRevision = 0;
 
   window.addEventListener('message', (event) => {
-    const { source, endpoint, blobID, blobData, blink } = event.data;
+    const { source, action, revision, endpoint, blobID, blobData, blink } = event.data;
+
+    if ((source == 'blue-marble') && (action == 'refresh-tiles')) {
+      tileRefreshRevision = Math.max(tileRefreshRevision + 1, Number(revision) || 0);
+      window.dispatchEvent(new Event('online'));
+      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+      return;
+    }
+    if ((source == 'blue-marble') && (action == 'refresh-progress')) {return;}
 
     const elapsed = Date.now() - blink;
 
@@ -75,11 +84,53 @@ inject(() => {
   // Overrides fetch
   window.fetch = async function(...args) {
 
-    const response = await originalFetch.apply(this, args); // Sends a fetch
-    const cloned = response.clone(); // Makes a copy of the response
+    const endpointName = ((args[0] instanceof Request) ? args[0]?.url : args[0])?.toString() || 'ignore';
+    let fetchArgs = args;
+    let requestRefreshRevision = 0;
 
-    // Retrieves the endpoint name. Unknown endpoint = "ignore"
-    const endpointName = ((args[0] instanceof Request) ? args[0]?.url : args[0]) || 'ignore';
+    if (tileRefreshRevision && endpointName.includes('/tiles/') && !endpointName.includes('openfreemap') && !endpointName.includes('maps')) {
+      try {
+        const refreshedURL = new URL(endpointName, window.location.href);
+        refreshedURL.searchParams.set('bm-revision', tileRefreshRevision.toString());
+        const refreshedInput = args[0] instanceof Request
+          ? new Request(refreshedURL.toString(), args[0])
+          : refreshedURL.toString();
+        fetchArgs = [refreshedInput, ...args.slice(1)];
+        requestRefreshRevision = tileRefreshRevision;
+      } catch (error) {
+        console.warn(`%c${name}%c: Failed to revise tile URL`, consoleStyle, '', error);
+      }
+    }
+
+    if (requestRefreshRevision) {
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'refresh-progress',
+        revision: requestRefreshRevision,
+        state: 'started'
+      }, '*');
+    }
+
+    let refreshCompletionSent = false;
+    const completeRefreshRequest = () => {
+      if (!requestRefreshRevision || refreshCompletionSent) {return;}
+      refreshCompletionSent = true;
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'refresh-progress',
+        revision: requestRefreshRevision,
+        state: 'completed'
+      }, '*');
+    };
+
+    let response;
+    try {
+      response = await originalFetch.apply(this, fetchArgs); // Sends a fetch
+    } catch (error) {
+      completeRefreshRequest();
+      throw error;
+    }
+    const cloned = response.clone(); // Makes a copy of the response
 
     // Check Content-Type to only process JSON
     const contentType = cloned.headers.get('content-type') || '';
@@ -140,6 +191,7 @@ inject(() => {
 
           // Since this code does not run in the userscript, we can't use consoleLog().
           console.log(`%c${name}%c: ${fetchedBlobQueue.size} Processed blob "${blobUUID}"`, consoleStyle, '');
+          completeRefreshRequest();
         });
 
         window.postMessage({
@@ -150,6 +202,7 @@ inject(() => {
           blink: blink
         });
       }).catch(exception => {
+        completeRefreshRequest();
         const elapsed = Date.now();
         console.error(`%c${name}%c: Failed to Promise blob!`, consoleStyle, '');
         console.groupCollapsed(`%c${name}%c: Details of failed blob Promise:`, consoleStyle, '');
@@ -167,6 +220,7 @@ inject(() => {
       // });
     }
 
+    completeRefreshRequest();
     return response; // Returns the original response
   };
 });

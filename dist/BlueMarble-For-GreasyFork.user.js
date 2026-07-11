@@ -314,6 +314,45 @@
   // src/Overlay.js
   var minimizeIconExpanded = '<svg class="bm-button-icon bm-button-icon-minimize" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 9.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var minimizeIconCollapsed = '<svg class="bm-button-icon bm-button-icon-minimize" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9.5 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var motionAnimations = /* @__PURE__ */ new WeakMap();
+  var motionTiming = Object.freeze({
+    fast: 180,
+    window: 300,
+    ease: "cubic-bezier(.2, .8, .2, 1)",
+    spring: "cubic-bezier(.16, 1, .3, 1)"
+  });
+  function shouldReduceMotion() {
+    return typeof window != "undefined" && typeof window.matchMedia == "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  function cancelMotion(element) {
+    const animations = motionAnimations.get(element);
+    animations?.forEach((animation) => animation.cancel());
+    motionAnimations.delete(element);
+  }
+  function startMotion(element, keyframes, options) {
+    if (!element || shouldReduceMotion() || typeof element.animate != "function") {
+      return null;
+    }
+    cancelMotion(element);
+    const animation = element.animate(keyframes, { fill: "both", ...options });
+    motionAnimations.set(element, /* @__PURE__ */ new Set([animation]));
+    void animation.finished.catch(() => {
+    }).finally(() => {
+      const animations = motionAnimations.get(element);
+      animations?.delete(animation);
+      if (!animations?.size) {
+        motionAnimations.delete(element);
+      }
+    });
+    return animation;
+  }
+  async function waitForMotion(animations) {
+    await Promise.all(animations.filter(Boolean).map((animation) => animation.finished.catch(() => {
+    })));
+  }
+  function releaseMotion(animations) {
+    animations.filter(Boolean).forEach((animation) => animation.cancel());
+  }
   var _Overlay_instances, createElement_fn, applyAttribute_fn;
   var Overlay = class {
     /** Constructor for the Overlay class.
@@ -380,7 +419,11 @@
      * // <div><p></p></div>
      */
     buildOverlay(parent) {
-      parent?.appendChild(this.overlay);
+      const overlay = this.overlay;
+      parent?.appendChild(overlay);
+      if (overlay?.classList.contains("bm-window")) {
+        this.handleWindowOpen(overlay);
+      }
       this.overlay = null;
       this.currentParent = null;
       this.parentStack = [];
@@ -1305,11 +1348,167 @@
         element.innerHTML = html;
       }
     }
+    /** Animates a newly-mounted window without changing its final visual state.
+     * @param {HTMLElement} windowElement - Window that was added to the document
+     * @since 0.99.0
+     */
+    handleWindowOpen(windowElement) {
+      if (!windowElement) {
+        return;
+      }
+      const content = windowElement.querySelector(".bm-window-content");
+      const dragbar = windowElement.querySelector(".bm-dragbar");
+      windowElement.classList.add("bm-window-motion");
+      const animations = [
+        startMotion(windowElement, [
+          { opacity: 0.32, clipPath: "inset(0 0 86% 0 round 16px)" },
+          { opacity: 1, clipPath: "inset(0 0 0 0 round 16px)" }
+        ], { duration: motionTiming.window, easing: motionTiming.spring }),
+        startMotion(content, [
+          { opacity: 0, transform: "translateY(-10px) scaleY(.97)" },
+          { opacity: 1, transform: "translateY(0) scaleY(1)" }
+        ], { duration: motionTiming.window, delay: 24, easing: motionTiming.spring }),
+        startMotion(dragbar, [
+          { opacity: 0.7, transform: "translateY(-4px) scale(.985)" },
+          { opacity: 1, transform: "translateY(0) scale(1)" }
+        ], { duration: 240, easing: motionTiming.spring })
+      ];
+      void waitForMotion(animations).then(() => {
+        releaseMotion(animations);
+        windowElement.classList.remove("bm-window-motion");
+      });
+    }
+    /** Animates and removes a window.
+     * @param {HTMLElement} windowElement - Window to remove
+     * @returns {Promise<void>}
+     * @since 0.99.0
+     */
+    async handleWindowClose(windowElement) {
+      if (!windowElement?.isConnected) {
+        return;
+      }
+      const content = windowElement.querySelector(".bm-window-content");
+      const dragbar = windowElement.querySelector(".bm-dragbar");
+      windowElement.classList.add("bm-window-motion", "bm-window-closing");
+      windowElement.setAttribute("aria-hidden", "true");
+      const animations = [
+        startMotion(windowElement, [
+          { opacity: 1, clipPath: "inset(0 0 0 0 round 16px)" },
+          { opacity: 0, clipPath: "inset(0 0 88% 0 round 16px)" }
+        ], { duration: 220, easing: motionTiming.ease }),
+        startMotion(content, [
+          { opacity: 1, transform: "translateY(0) scaleY(1)" },
+          { opacity: 0, transform: "translateY(-8px) scaleY(.97)" }
+        ], { duration: motionTiming.fast, easing: motionTiming.ease }),
+        startMotion(dragbar, [
+          { opacity: 1, transform: "scale(1)" },
+          { opacity: 0.72, transform: "scale(.98)" }
+        ], { duration: 200, easing: motionTiming.ease })
+      ];
+      await waitForMotion(animations);
+      windowElement.remove();
+      releaseMotion(animations);
+    }
+    /** Runs a compositor-only FLIP animation around a layout change.
+     * @param {HTMLElement} element - Element whose bounds will change
+     * @param {function():void} updateLayout - Synchronous DOM update
+     * @param {{duration?: number}} [options={}]
+     * @since 0.99.0
+     */
+    animateLayoutChange(element, updateLayout, options = {}) {
+      if (!element || typeof updateLayout != "function" || shouldReduceMotion()) {
+        updateLayout?.();
+        return;
+      }
+      const first = element.getBoundingClientRect();
+      updateLayout();
+      const last = element.getBoundingClientRect();
+      if (!first.width || !first.height || !last.width || !last.height) {
+        return;
+      }
+      const animation = startMotion(element, [
+        {
+          scale: `${first.width / last.width} ${first.height / last.height}`,
+          transformOrigin: "top left"
+        },
+        { scale: "1 1", transformOrigin: "top left" }
+      ], { duration: options.duration ?? 280, easing: motionTiming.spring });
+      if (!animation) {
+        return;
+      }
+      element.classList.add("bm-window-motion");
+      void waitForMotion([animation]).then(() => {
+        animation.cancel();
+        element.classList.remove("bm-window-motion");
+      });
+    }
+    /** Animates visible list items from their previous positions after a reorder.
+     * @param {HTMLElement[]} elements - Items being reordered
+     * @param {function():void} updateList - Synchronous DOM update
+     * @since 0.99.0
+     */
+    animateListReorder(elements, updateList) {
+      if (!Array.isArray(elements) || typeof updateList != "function" || shouldReduceMotion()) {
+        updateList?.();
+        return;
+      }
+      if (elements[0]?.closest(".bm-window")?.classList.contains("bm-window-motion")) {
+        updateList();
+        return;
+      }
+      const viewport = elements[0]?.closest(".bm-scrollable")?.getBoundingClientRect() ?? elements[0]?.parentElement?.getBoundingClientRect();
+      const isVisible = (rect) => rect.width > 0 && rect.height > 0 && (!viewport || rect.bottom >= viewport.top && rect.top <= viewport.bottom && rect.right >= viewport.left && rect.left <= viewport.right);
+      const first = /* @__PURE__ */ new Map();
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect();
+        if (isVisible(rect)) {
+          first.set(element, rect);
+        }
+      }
+      updateList();
+      for (const element of elements) {
+        const previous = first.get(element);
+        if (!previous) {
+          continue;
+        }
+        const next = element.getBoundingClientRect();
+        if (!isVisible(next)) {
+          continue;
+        }
+        const deltaX = previous.left - next.left;
+        const deltaY = previous.top - next.top;
+        if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {
+          continue;
+        }
+        const animation = startMotion(element, [
+          { translate: `${deltaX}px ${deltaY}px` },
+          { translate: "0 0" }
+        ], { duration: 260, easing: motionTiming.spring });
+        if (animation) {
+          void animation.finished.catch(() => {
+          }).then(() => animation.cancel());
+        }
+      }
+    }
+    /** Gives a changed control group a short liquid settle animation.
+     * @param {HTMLElement} element - Updated group
+     * @since 0.99.0
+     */
+    animateStateChange(element) {
+      const animation = startMotion(element, [
+        { opacity: 0.76, scale: ".992 .985" },
+        { opacity: 1, scale: "1 1" }
+      ], { duration: 220, easing: motionTiming.spring });
+      if (animation) {
+        void animation.finished.catch(() => {
+        }).then(() => animation.cancel());
+      }
+    }
     /** Handles the minimization logic for windows spawned by Blue Marble
      * @param {HTMLButtonElement} button - The UI button that triggered this minimization event
      * @since 0.88.142
     */
-    handleMinimization(button) {
+    async handleMinimization(button) {
       if (button.disabled) {
         return;
       }
@@ -1326,29 +1525,6 @@
         button.style.textDecoration = "";
         return;
       }
-      const finishMinimizeTransition = (callback) => {
-        let isFinished = false;
-        let fallbackTimer;
-        const finish = () => {
-          if (isFinished) {
-            return;
-          }
-          isFinished = true;
-          clearTimeout(fallbackTimer);
-          windowContent.removeEventListener("transitionend", handler);
-          callback();
-          button.disabled = false;
-          button.style.textDecoration = "";
-        };
-        const handler = (event) => {
-          if (event.target != windowContent || event.propertyName != "height") {
-            return;
-          }
-          finish();
-        };
-        windowContent.addEventListener("transitionend", handler);
-        fallbackTimer = setTimeout(finish, 360);
-      };
       const getCollapsedHeight = () => {
         const windowStyle = getComputedStyle(window2);
         const toPixels = (value) => parseFloat(value) || 0;
@@ -1356,24 +1532,30 @@
         return Math.ceil(dragbar.getBoundingClientRect().height + extraHeight + 2);
       };
       window2.parentElement.append(window2);
+      const animateMinimizeIcon = () => {
+        const icon = button.querySelector("svg");
+        const animation = startMotion(icon, [
+          { opacity: 0.3, transform: "rotate(-28deg) scale(.72)" },
+          { opacity: 1, transform: "rotate(0) scale(1)" }
+        ], { duration: 240, easing: motionTiming.spring });
+        if (animation) {
+          void animation.finished.catch(() => {
+          }).then(() => animation.cancel());
+        }
+      };
+      const collapsedHeight = getCollapsedHeight();
+      window2.classList.add("bm-window-motion");
       if (button.dataset["buttonStatus"] == "expanded") {
         window2.dataset["widthBeforeMinimize"] = window2.style.width;
         window2.dataset["heightBeforeMinimize"] = window2.style.height;
         window2.dataset["minHeightBeforeMinimize"] = window2.style.minHeight;
-        windowContent.style.height = windowContent.scrollHeight + "px";
-        void windowContent.offsetHeight;
+        const expandedRect = window2.getBoundingClientRect();
         if (!window2.style.width) {
-          window2.style.width = window2.scrollWidth + "px";
+          const style = getComputedStyle(window2);
+          const horizontalExtras = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) + (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0);
+          const width = style.boxSizing == "border-box" ? expandedRect.width : expandedRect.width - horizontalExtras;
+          window2.style.width = `${Math.max(0, width)}px`;
         }
-        finishMinimizeTransition(() => {
-          windowContent.style.display = "none";
-        });
-        windowContent.style.height = "0";
-        if (window2.style.height || window2.classList.contains("bm-windowed")) {
-          window2.style.minHeight = "0px";
-          window2.style.height = getCollapsedHeight() + "px";
-        }
-        window2.classList.add("bm-window-collapsed");
         const dragbarHeader1 = persistentDragbarHeader ?? header?.cloneNode(true) ?? document.createElement("h1");
         const dragbarHeader1Text = dragbarHeader1.textContent;
         if (!persistentDragbarHeader) {
@@ -1381,34 +1563,73 @@
           (titleSlot ?? dragbar).appendChild(dragbarHeader1);
         }
         button.innerHTML = minimizeIconCollapsed;
+        animateMinimizeIcon();
         button.dataset["buttonStatus"] = "collapsed";
         button.ariaLabel = `Unminimize window "${dragbarHeader1Text}"`;
         button.title = button.ariaLabel;
+        const clipBottom = Math.max(0, expandedRect.height - collapsedHeight);
+        const animations = [
+          startMotion(window2, [
+            { clipPath: "inset(0 0 0 0 round 16px)" },
+            { clipPath: `inset(0 0 ${clipBottom}px 0 round 16px)` }
+          ], { duration: motionTiming.window, easing: motionTiming.spring }),
+          startMotion(windowContent, [
+            { opacity: 1, transform: "translateY(0) scaleY(1)" },
+            { opacity: 0, transform: "translateY(-10px) scaleY(.96)" }
+          ], { duration: 220, easing: motionTiming.ease })
+        ];
+        await waitForMotion(animations);
+        windowContent.hidden = true;
+        windowContent.setAttribute("aria-hidden", "true");
+        window2.classList.add("bm-window-collapsed");
+        window2.style.minHeight = "0px";
+        if (window2.dataset["heightBeforeMinimize"] || window2.classList.contains("bm-windowed")) {
+          const windowStyle = getComputedStyle(window2);
+          const height = windowStyle.boxSizing == "border-box" ? collapsedHeight : Math.max(0, collapsedHeight - ((parseFloat(windowStyle.paddingTop) || 0) + (parseFloat(windowStyle.paddingBottom) || 0) + (parseFloat(windowStyle.borderTopWidth) || 0) + (parseFloat(windowStyle.borderBottomWidth) || 0)));
+          window2.style.height = `${height}px`;
+        } else {
+          window2.style.height = "";
+        }
+        releaseMotion(animations);
       } else {
         const dragbarHeader1 = dragbar.querySelector(".bm-dragbar-minimized-title") ?? dragbar.querySelector(".bm-dragbar-title-persistent") ?? dragbar.querySelector("h1") ?? document.createElement("h1");
         const dragbarHeader1Text = dragbarHeader1.textContent;
         if (dragbarHeader1.classList.contains("bm-dragbar-minimized-title")) {
           dragbarHeader1.remove();
         }
-        windowContent.style.display = "";
-        windowContent.style.height = "0";
+        const collapsedRect = window2.getBoundingClientRect();
+        windowContent.hidden = false;
+        windowContent.removeAttribute("aria-hidden");
         window2.classList.remove("bm-window-collapsed");
         window2.style.width = window2.dataset["widthBeforeMinimize"] ?? "";
         window2.style.minHeight = window2.dataset["minHeightBeforeMinimize"] ?? "";
         window2.style.height = window2.dataset["heightBeforeMinimize"] ?? "";
-        void windowContent.offsetHeight;
-        finishMinimizeTransition(() => {
-          windowContent.style.height = "";
-          delete window2.dataset["widthBeforeMinimize"];
-          delete window2.dataset["heightBeforeMinimize"];
-          delete window2.dataset["minHeightBeforeMinimize"];
-        });
-        windowContent.style.height = windowContent.scrollHeight + "px";
+        const expandedRect = window2.getBoundingClientRect();
         button.innerHTML = minimizeIconExpanded;
+        animateMinimizeIcon();
         button.dataset["buttonStatus"] = "expanded";
         button.ariaLabel = `Minimize window "${dragbarHeader1Text}"`;
         button.title = button.ariaLabel;
+        const clipBottom = Math.max(0, expandedRect.height - collapsedRect.height);
+        const animations = [
+          startMotion(window2, [
+            { clipPath: `inset(0 0 ${clipBottom}px 0 round 16px)` },
+            { clipPath: "inset(0 0 0 0 round 16px)" }
+          ], { duration: motionTiming.window, easing: motionTiming.spring }),
+          startMotion(windowContent, [
+            { opacity: 0, transform: "translateY(-10px) scaleY(.96)" },
+            { opacity: 1, transform: "translateY(0) scaleY(1)" }
+          ], { duration: 260, delay: 30, easing: motionTiming.spring })
+        ];
+        await waitForMotion(animations);
+        delete window2.dataset["widthBeforeMinimize"];
+        delete window2.dataset["heightBeforeMinimize"];
+        delete window2.dataset["minHeightBeforeMinimize"];
+        releaseMotion(animations);
       }
+      window2.classList.remove("bm-window-motion");
+      button.disabled = false;
+      button.style.textDecoration = "";
     }
     /** Handles dragging of the overlay.
      * Uses requestAnimationFrame for smooth animations and GPU-accelerated transforms.
@@ -1426,105 +1647,88 @@
         this.handleDisplayError(`Can not drag! ${!moveMe ? "moveMe" : ""} ${!moveMe && !iMoveThings ? "and " : ""}${!iMoveThings ? "iMoveThings " : ""}was not found!`);
         return;
       }
-      let isDragging = false;
-      let offsetX, offsetY = 0;
-      let animationFrame = null;
+      let pointerID = null;
+      let offsetX = 0;
+      let offsetY = 0;
       let currentX = 0;
       let currentY = 0;
       let targetX = 0;
       let targetY = 0;
-      let initialRect = null;
+      let animationFrame = null;
       const updatePosition = () => {
-        if (isDragging) {
-          const deltaX = Math.abs(currentX - targetX);
-          const deltaY = Math.abs(currentY - targetY);
-          if (deltaX > 0.5 || deltaY > 0.5) {
-            currentX = targetX;
-            currentY = targetY;
-            moveMe.style.transform = `translate(${currentX}px, ${currentY}px)`;
-            moveMe.style.left = "0px";
-            moveMe.style.top = "0px";
-            moveMe.style.right = "";
-          }
+        animationFrame = null;
+        if (pointerID == null) {
+          return;
+        }
+        if (Math.abs(currentX - targetX) < 0.5 && Math.abs(currentY - targetY) < 0.5) {
+          return;
+        }
+        currentX = targetX;
+        currentY = targetY;
+        moveMe.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+      };
+      const schedulePositionUpdate = () => {
+        if (animationFrame == null) {
           animationFrame = requestAnimationFrame(updatePosition);
         }
       };
-      const startDrag = (clientX, clientY) => {
-        isDragging = true;
-        initialRect = moveMe.getBoundingClientRect();
-        offsetX = clientX - initialRect.left;
-        offsetY = clientY - initialRect.top;
-        const computedStyle = window.getComputedStyle(moveMe);
-        const transform = computedStyle.transform;
-        if (transform && transform !== "none") {
-          const matrix = new DOMMatrix(transform);
-          currentX = matrix.m41;
-          currentY = matrix.m42;
-        } else {
-          currentX = initialRect.left;
-          currentY = initialRect.top;
+      const endDrag = (event) => {
+        if (pointerID == null || event?.pointerId != null && event.pointerId != pointerID) {
+          return;
         }
-        targetX = currentX;
-        targetY = currentY;
-        document.body.style.userSelect = "none";
-        iMoveThings.classList.add("bm-dragging");
-        document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("touchmove", onTouchMove, { passive: false });
-        document.addEventListener("mouseup", endDrag);
-        document.addEventListener("touchend", endDrag);
-        document.addEventListener("touchcancel", endDrag);
-        if (animationFrame) {
-          cancelAnimationFrame(animationFrame);
-        }
-        updatePosition();
-      };
-      const endDrag = () => {
-        isDragging = false;
-        if (animationFrame) {
+        if (animationFrame != null) {
           cancelAnimationFrame(animationFrame);
           animationFrame = null;
         }
+        currentX = targetX;
+        currentY = targetY;
+        moveMe.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+        const completedPointerID = pointerID;
+        pointerID = null;
+        if (iMoveThings.hasPointerCapture?.(completedPointerID)) {
+          iMoveThings.releasePointerCapture(completedPointerID);
+        }
         document.body.style.userSelect = "";
         iMoveThings.classList.remove("bm-dragging");
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("touchmove", onTouchMove);
-        document.removeEventListener("mouseup", endDrag);
-        document.removeEventListener("touchend", endDrag);
-        document.removeEventListener("touchcancel", endDrag);
-        onEnd({
-          element: moveMe,
-          x: currentX,
-          y: currentY
-        });
-        initialRect = null;
+        moveMe.classList.remove("bm-window-interacting");
+        onEnd({ element: moveMe, x: currentX, y: currentY });
       };
-      const onMouseMove = (event) => {
-        if (isDragging && initialRect) {
-          targetX = event.clientX - offsetX;
-          targetY = event.clientY - offsetY;
-        }
-      };
-      const onTouchMove = (event) => {
-        if (isDragging && initialRect) {
-          const touch = event.touches[0];
-          if (!touch) return;
-          targetX = touch.clientX - offsetX;
-          targetY = touch.clientY - offsetY;
-          event.preventDefault();
-        }
-      };
-      iMoveThings.addEventListener("mousedown", function(event) {
-        event.preventDefault();
-        startDrag(event.clientX, event.clientY);
-      });
-      iMoveThings.addEventListener("touchstart", function(event) {
-        const touch = event?.touches?.[0];
-        if (!touch) {
+      iMoveThings.addEventListener("pointerdown", (event) => {
+        if (pointerID != null || event.pointerType == "mouse" && event.button != 0) {
           return;
         }
-        startDrag(touch.clientX, touch.clientY);
+        if (event.target.closest('button, a, input, select, textarea, [role="button"]')) {
+          return;
+        }
+        const rect = moveMe.getBoundingClientRect();
+        pointerID = event.pointerId;
+        offsetX = event.clientX - rect.left;
+        offsetY = event.clientY - rect.top;
+        currentX = rect.left;
+        currentY = rect.top;
+        targetX = currentX;
+        targetY = currentY;
+        moveMe.style.left = "0px";
+        moveMe.style.top = "0px";
+        moveMe.style.right = "";
+        moveMe.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+        document.body.style.userSelect = "none";
+        iMoveThings.classList.add("bm-dragging");
+        moveMe.classList.add("bm-window-interacting");
+        iMoveThings.setPointerCapture?.(pointerID);
         event.preventDefault();
-      }, { passive: false });
+      });
+      iMoveThings.addEventListener("pointermove", (event) => {
+        if (event.pointerId != pointerID) {
+          return;
+        }
+        targetX = event.clientX - offsetX;
+        targetY = event.clientY - offsetY;
+        schedulePositionUpdate();
+      });
+      iMoveThings.addEventListener("pointerup", endDrag);
+      iMoveThings.addEventListener("pointercancel", endDrag);
+      iMoveThings.addEventListener("lostpointercapture", endDrag);
     }
     /** Handles resizing of an overlay window from a resize handle.
      * @param {string} resizeMeSelector - The element to resize
@@ -1541,7 +1745,7 @@
         this.handleDisplayError(`Can not resize! ${!resizeMe ? "resizeMe" : ""} ${!resizeMe && !iResizeThings ? "and " : ""}${!iResizeThings ? "iResizeThings " : ""}was not found!`);
         return;
       }
-      let isResizing = false;
+      let pointerID = null;
       let startX = 0;
       let startY = 0;
       let startWidth = 0;
@@ -1551,110 +1755,110 @@
       let targetWidth = 0;
       let targetHeight = 0;
       let animationFrame = null;
+      let minimumWidth = 0;
+      let minimumHeight = 0;
+      let maximumWidth = 0;
+      let maximumHeight = 0;
       const getMaximumWidth = () => {
-        const maximumWidth = typeof options?.maxWidth == "function" ? options.maxWidth() : options?.maxWidth;
-        return Number.isFinite(maximumWidth) ? maximumWidth : window.innerWidth - 16;
+        const maximumWidth2 = typeof options?.maxWidth == "function" ? options.maxWidth() : options?.maxWidth;
+        return Number.isFinite(maximumWidth2) ? maximumWidth2 : window.innerWidth - 16;
       };
       const getMaximumHeight = () => {
-        const maximumHeight = typeof options?.maxHeight == "function" ? options.maxHeight() : options?.maxHeight;
-        return Number.isFinite(maximumHeight) ? maximumHeight : window.innerHeight - 16;
+        const maximumHeight2 = typeof options?.maxHeight == "function" ? options.maxHeight() : options?.maxHeight;
+        return Number.isFinite(maximumHeight2) ? maximumHeight2 : window.innerHeight - 16;
       };
       const getMinimumWidth = () => {
-        const minimumWidth = typeof options?.minWidth == "function" ? options.minWidth() : options?.minWidth;
-        return Number.isFinite(minimumWidth) ? minimumWidth : 200;
+        const minimumWidth2 = typeof options?.minWidth == "function" ? options.minWidth() : options?.minWidth;
+        return Number.isFinite(minimumWidth2) ? minimumWidth2 : 200;
       };
       const getMinimumHeight = () => {
-        const minimumHeight = typeof options?.minHeight == "function" ? options.minHeight() : options?.minHeight;
-        return Number.isFinite(minimumHeight) ? minimumHeight : 160;
+        const minimumHeight2 = typeof options?.minHeight == "function" ? options.minHeight() : options?.minHeight;
+        return Number.isFinite(minimumHeight2) ? minimumHeight2 : 160;
       };
       const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
       const updateSize = () => {
-        if (isResizing) {
-          const deltaWidth = Math.abs(currentWidth - targetWidth);
-          const deltaHeight = Math.abs(currentHeight - targetHeight);
-          if (deltaWidth > 0.5 || deltaHeight > 0.5) {
-            currentWidth = targetWidth;
-            currentHeight = targetHeight;
-            resizeMe.style.width = `${currentWidth}px`;
-            resizeMe.style.height = `${currentHeight}px`;
-          }
+        animationFrame = null;
+        if (pointerID == null) {
+          return;
+        }
+        if (Math.abs(currentWidth - targetWidth) < 0.5 && Math.abs(currentHeight - targetHeight) < 0.5) {
+          return;
+        }
+        currentWidth = targetWidth;
+        currentHeight = targetHeight;
+        resizeMe.style.width = `${currentWidth}px`;
+        resizeMe.style.height = `${currentHeight}px`;
+      };
+      const scheduleSizeUpdate = () => {
+        if (animationFrame == null) {
           animationFrame = requestAnimationFrame(updateSize);
         }
       };
-      const startResize = (clientX, clientY) => {
-        isResizing = true;
-        startX = clientX;
-        startY = clientY;
-        startWidth = resizeMe.offsetWidth;
-        startHeight = resizeMe.offsetHeight;
+      const startResize = (event) => {
+        const rect = resizeMe.getBoundingClientRect();
+        pointerID = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+        startWidth = rect.width;
+        startHeight = rect.height;
         currentWidth = startWidth;
         currentHeight = startHeight;
         targetWidth = startWidth;
         targetHeight = startHeight;
+        minimumWidth = getMinimumWidth();
+        minimumHeight = getMinimumHeight();
+        maximumWidth = getMaximumWidth();
+        maximumHeight = getMaximumHeight();
         document.body.style.userSelect = "none";
         iResizeThings.classList.add("bm-resizing");
-        document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("touchmove", onTouchMove, { passive: false });
-        document.addEventListener("mouseup", endResize);
-        document.addEventListener("touchend", endResize);
-        document.addEventListener("touchcancel", endResize);
-        if (animationFrame) {
-          cancelAnimationFrame(animationFrame);
-        }
-        updateSize();
+        resizeMe.classList.add("bm-window-interacting");
+        iResizeThings.setPointerCapture?.(pointerID);
       };
-      const endResize = () => {
-        isResizing = false;
-        if (animationFrame) {
+      const endResize = (event) => {
+        if (pointerID == null || event?.pointerId != null && event.pointerId != pointerID) {
+          return;
+        }
+        if (animationFrame != null) {
           cancelAnimationFrame(animationFrame);
           animationFrame = null;
         }
+        currentWidth = targetWidth;
+        currentHeight = targetHeight;
+        resizeMe.style.width = `${currentWidth}px`;
+        resizeMe.style.height = `${currentHeight}px`;
+        const completedPointerID = pointerID;
+        pointerID = null;
+        if (iResizeThings.hasPointerCapture?.(completedPointerID)) {
+          iResizeThings.releasePointerCapture(completedPointerID);
+        }
         document.body.style.userSelect = "";
         iResizeThings.classList.remove("bm-resizing");
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("touchmove", onTouchMove);
-        document.removeEventListener("mouseup", endResize);
-        document.removeEventListener("touchend", endResize);
-        document.removeEventListener("touchcancel", endResize);
+        resizeMe.classList.remove("bm-window-interacting");
         onEnd({
           element: resizeMe,
           width: currentWidth,
           height: currentHeight
         });
       };
-      const onMouseMove = (event) => {
-        if (!isResizing) {
+      iResizeThings.addEventListener("pointerdown", (event) => {
+        if (pointerID != null || resizeMe.classList.contains("bm-window-collapsed") || event.pointerType == "mouse" && event.button != 0) {
           return;
         }
-        targetWidth = clamp(startWidth + (event.clientX - startX), getMinimumWidth(), getMaximumWidth());
-        targetHeight = clamp(startHeight + (event.clientY - startY), getMinimumHeight(), getMaximumHeight());
-      };
-      const onTouchMove = (event) => {
-        if (!isResizing) {
-          return;
-        }
-        const touch = event?.touches?.[0];
-        if (!touch) {
-          return;
-        }
-        targetWidth = clamp(startWidth + (touch.clientX - startX), getMinimumWidth(), getMaximumWidth());
-        targetHeight = clamp(startHeight + (touch.clientY - startY), getMinimumHeight(), getMaximumHeight());
-        event.preventDefault();
-      };
-      iResizeThings.addEventListener("mousedown", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        startResize(event.clientX, event.clientY);
+        startResize(event);
       });
-      iResizeThings.addEventListener("touchstart", (event) => {
-        const touch = event?.touches?.[0];
-        if (!touch) {
+      iResizeThings.addEventListener("pointermove", (event) => {
+        if (event.pointerId != pointerID) {
           return;
         }
-        event.preventDefault();
-        event.stopPropagation();
-        startResize(touch.clientX, touch.clientY);
-      }, { passive: false });
+        targetWidth = clamp(startWidth + (event.clientX - startX), minimumWidth, maximumWidth);
+        targetHeight = clamp(startHeight + (event.clientY - startY), minimumHeight, maximumHeight);
+        scheduleSizeUpdate();
+      });
+      iResizeThings.addEventListener("pointerup", endResize);
+      iResizeThings.addEventListener("pointercancel", endResize);
+      iResizeThings.addEventListener("lostpointercapture", endResize);
     }
     /** Handles status display.
      * This will output plain text into the output Status box.
@@ -1763,14 +1967,8 @@
       }
       this.window = this.addDiv({ "id": this.windowID, "class": "bm-window" }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "aria-label": 'Minimize window "Settings"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => instance.handleMinimization(button);
-        button.ontouchend = () => {
-          button.click();
-        };
       }).buildElement().addDiv({ "class": "bm-settings-drag-title-slot" }).addHeader(1, { "class": "bm-dragbar-title-persistent bm-settings-drag-title", "textContent": "Settings" }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "innerHTML": closeIcon, "aria-label": 'Close window "Settings"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowSettings_instances, closeWindow_fn).call(this);
-        button.ontouchend = () => {
-          button.click();
-        };
       }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addHr({ "class": "bm-window-divider-top" }).buildElement().addDiv({ "class": "bm-container bm-scrollable" }, (instance, div) => {
         this.buildHighlight();
         this.buildTemplate();
@@ -1805,13 +2003,10 @@
     (_a = this.userSettings)[_b = this.windowStateKey] ?? (_a[_b] = {});
     return this.userSettings[this.windowStateKey];
   };
-  /** Immediately closes the settings window and saves its position.
-   * @since 0.95.0
-   */
-  closeWindow_fn = function() {
+  closeWindow_fn = async function() {
     const windowElement = document.querySelector(`#${this.windowID}`);
     __privateMethod(this, _WindowSettings_instances, saveWindowPosition_fn).call(this, windowElement);
-    windowElement?.remove();
+    await this.handleWindowClose(windowElement);
   };
   /** Returns a viewport-safe position for the settings window.
    * @param {HTMLElement} windowElement
@@ -2471,6 +2666,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   var horizontalLayoutIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15M4.5 16.5h15"/><path d="M7.5 5v5M12 5v5M16.5 5v5M7.5 14v5M12 14v5M16.5 14v5"/></g></svg>';
   var verticalLayoutIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.5v15M16 4.5v15"/><path d="M5.5 7.5h5M5.5 12h5M5.5 16.5h5M13.5 7.5h5M13.5 12h5M13.5 16.5h5"/></g></svg>';
   var incorrectHighlightIcon = '<svg class="bm-filter-highlight-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6.4"/><path d="M12 3.8V7M12 17v3.2M3.8 12H7M17 12h3.2"/><path d="m9.3 9.3 5.4 5.4M14.7 9.3l-5.4 5.4"/></g></svg>';
+  var colorToggleAnimations = /* @__PURE__ */ new WeakMap();
   function localizeCompactDate(date) {
     const day = String(date.getDate()).padStart(2, "0");
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -2479,7 +2675,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     const minute = String(date.getMinutes()).padStart(2, "0");
     return `${day}.${month}.${year} ${hour}:${minute}`;
   }
-  var _WindowFilter_instances, getWindowState_fn2, setWindowOpenState_fn, prefersWindowedMode_fn, setWindowModePreference_fn, getWindowedColorLayout_fn, getActiveWindowedColorLayout_fn, getWindowedLayoutSize_fn, getWindowLayoutMaxWidth_fn, getWindowLayoutMinHeight_fn, getWindowLayoutMaxHeight_fn, saveWindowLayoutSize_fn, restoreWindowLayoutSize_fn, applyWindowedColorLayout_fn, syncSortFormControls_fn, initializeCustomSortDropdowns_fn, closeCustomSortDropdowns_fn, cleanupCustomSortDropdowns_fn, closeWindow_fn2, startAutoRefresh_fn, stopAutoRefresh_fn, cleanupWindowPersistence_fn, clampWindowDimension_fn, clampWindowPosition_fn2, restoreWindowState_fn, saveWindowState_fn, scheduleWindowStateSave_fn, initializeWindowedPersistence_fn, initializeHorizontalScrollWheel_fn, buildColorList_fn, sortColorList_fn, selectColorList_fn, syncColorToggleLabel_fn, toggleColorVisibility_fn, toggleIncorrectHighlightColor_fn, getIncorrectHighlightButtonLabel_fn, syncIncorrectHighlightButtons_fn, animateColorToggleIcon_fn, initializeColorBlockToggle_fn, calculatePixelStatistics_fn;
+  var _WindowFilter_instances, getWindowState_fn2, setWindowOpenState_fn, prefersWindowedMode_fn, setWindowModePreference_fn, getWindowedColorLayout_fn, setWindowedColorLayoutPreference_fn, getActiveWindowedColorLayout_fn, getWindowedLayoutSize_fn, getWindowLayoutMaxWidth_fn, getWindowLayoutMinHeight_fn, getWindowLayoutMaxHeight_fn, saveWindowLayoutSize_fn, restoreWindowLayoutSize_fn, applyWindowedColorLayout_fn, syncWindowedColorLayoutLabels_fn, syncSortFormControls_fn, initializeCustomSortDropdowns_fn, closeCustomSortDropdowns_fn, cleanupCustomSortDropdowns_fn, closeWindow_fn2, startAutoRefresh_fn, stopAutoRefresh_fn, cleanupWindowPersistence_fn, clampWindowDimension_fn, clampWindowPosition_fn2, restoreWindowState_fn, saveWindowState_fn, scheduleWindowStateSave_fn, initializeWindowedPersistence_fn, initializeHorizontalScrollWheel_fn, buildColorList_fn, sortColorList_fn, selectColorList_fn, syncColorToggleLabel_fn, toggleColorVisibility_fn, toggleIncorrectHighlightColor_fn, getIncorrectHighlightButtonLabel_fn, syncIncorrectHighlightButtons_fn, animateColorToggleIcon_fn, initializeColorBlockToggle_fn, calculatePixelStatistics_fn;
   var WindowFilter = class extends Overlay {
     /** Constructor for the color filter window
      * @param {*} executor - The executing class
@@ -2504,6 +2700,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.sortDropdownPointerHandler = null;
       this.sortDropdownKeyHandler = null;
       this.colorRefreshInterval = null;
+      this.highlightRefreshPending = null;
       this.colorRefreshIntervalMS = 1e4;
       this.windowMinWidth = 360;
       this.windowMinHeight = 220;
@@ -2550,23 +2747,14 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.window = this.addDiv({ "id": this.windowID, "class": "bm-window" }, (instance, div) => {
       }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "title": 'Minimize window "Color Filter"', "aria-label": 'Minimize window "Color Filter"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => instance.handleMinimization(button);
-        button.ontouchend = () => {
-          button.click();
-        };
       }).buildElement().addDiv({ "class": "bm-filter-drag-title-slot" }).addHeader(1, { "class": "bm-dragbar-title-persistent bm-filter-drag-title", "textContent": "Color Filter" }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "innerHTML": windowedIcon, "title": 'Switch to windowed mode for "Color Filter"', "aria-label": 'Switch to windowed mode for "Color Filter"' }, (instance, button) => {
-        button.onclick = () => {
+        button.onclick = async () => {
           __privateMethod(this, _WindowFilter_instances, setWindowModePreference_fn).call(this, true);
-          __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
+          await __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
           this.buildWindowed();
-        };
-        button.ontouchend = () => {
-          button.click();
         };
       }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon2, "title": 'Close window "Color Filter"', "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
-        button.ontouchend = () => {
-          button.click();
-        };
       }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addHr({ "class": "bm-window-divider-top" }).buildElement().addDiv({ "class": "bm-container bm-flex-between bm-center-vertically bm-filter-toolbar", "style": "gap: 1.5ch;" }).addButton({ "class": "bm-button-secondary", "textContent": "Hide All Colors" }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, selectColorList_fn).call(this, false);
       }).buildElement().addButton({ "class": "bm-button-secondary", "textContent": "Show All Colors" }, (instance, button) => {
@@ -2609,7 +2797,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
      * Parent/child relationships in the DOM structure below are indicated by indentation.
      * @since 0.90.35
      */
-    buildWindowed() {
+    buildWindowed(layout = __privateMethod(this, _WindowFilter_instances, getWindowedColorLayout_fn).call(this)) {
+      const normalizedLayout = layout == "horizontal" ? "horizontal" : "vertical";
       if (document.querySelector(`#${this.windowID}`)) {
         __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
         return;
@@ -2626,32 +2815,21 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
           }
           instance.handleMinimization(button);
         };
-        button.ontouchend = () => {
-          button.click();
-        };
       }).buildElement().addDiv().addSpan({ "id": "bm-filter-windowed-color-totals-dragbar", "class": "bm-dragbar-text", "style": "font-weight: 700;" }).buildElement().addHeader(1, { "class": "bm-dragbar-title-persistent bm-filter-drag-title bm-filter-horizontal-drag-title", "textContent": "Color Filter" }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "id": "bm-filter-layout-toggle", "class": "bm-button-circle bm-filter-layout-toggle", "innerHTML": horizontalLayoutIcon, "title": "Switch color layout", "aria-label": "Switch to horizontal color layout" }, (instance, button) => {
-        button.onclick = () => {
-          const windowElement = button.closest(`#${this.windowID}`);
-          const currentLayout = windowElement?.classList.contains("bm-filter-layout-horizontal") ? "horizontal" : "vertical";
-          __privateMethod(this, _WindowFilter_instances, applyWindowedColorLayout_fn).call(this, currentLayout == "horizontal" ? "vertical" : "horizontal");
-        };
-        button.ontouchend = () => {
-          button.click();
+        button.onclick = async () => {
+          const nextLayout = normalizedLayout == "horizontal" ? "vertical" : "horizontal";
+          await __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
+          __privateMethod(this, _WindowFilter_instances, setWindowedColorLayoutPreference_fn).call(this, nextLayout);
+          this.buildWindowed(nextLayout);
         };
       }).buildElement().addButton({ "class": "bm-button-circle bm-filter-fullscreen-toggle", "innerHTML": fullscreenIcon, "title": 'Switch to fullscreen mode for "Color Filter"', "aria-label": 'Switch to fullscreen mode for "Color Filter"' }, (instance, button) => {
-        button.onclick = () => {
+        button.onclick = async () => {
           __privateMethod(this, _WindowFilter_instances, setWindowModePreference_fn).call(this, false);
-          __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
+          await __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
           this.buildWindow();
-        };
-        button.ontouchend = () => {
-          button.click();
         };
       }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon2, "title": 'Close window "Color Filter"', "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
-        button.ontouchend = () => {
-          button.click();
-        };
       }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addHr({ "class": "bm-window-divider-top" }).buildElement().addDiv({ "class": "bm-container bm-center-vertically bm-filter-windowed-summary-row" }).addDiv({ "class": "bm-filter-windowed-summary" }).addSpan({ "class": "bm-filter-windowed-summary-label", "textContent": "Painted" }).buildElement().addSpan({ "id": "bm-filter-windowed-color-totals-inline", "class": "bm-filter-windowed-summary-value", "textContent": "0 / ???" }).buildElement().buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container bm-flex-between bm-center-vertically bm-filter-toolbar bm-filter-toolbar-vertical", "style": "gap: 1.5ch;" }).addButton({ "class": "bm-button-secondary", "textContent": "None", "title": "Hide all colors", "aria-label": "Hide all colors" }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, selectColorList_fn).call(this, false);
       }).buildElement().addButton({ "class": "bm-button-secondary", "textContent": "All", "title": "Show all colors", "aria-label": "Show all colors" }, (instance, button) => {
@@ -2668,7 +2846,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
         "textContent": "\u25E2",
         "style": "position: absolute; right: 0; bottom: 0; width: 28px; height: 28px; display: flex; align-items: flex-end; justify-content: flex-end; padding-right: 4px; padding-bottom: 4px; box-sizing: border-box; z-index: 5; cursor: nwse-resize; pointer-events: auto; touch-action: none; user-select: none; font-size: 8px; line-height: 1; color: rgba(255,255,255,0.95); background: transparent; border: none; box-shadow: none;"
       }).buildElement().buildElement().buildOverlay(this.windowParent);
-      __privateMethod(this, _WindowFilter_instances, applyWindowedColorLayout_fn).call(this, __privateMethod(this, _WindowFilter_instances, getWindowedColorLayout_fn).call(this), false);
+      __privateMethod(this, _WindowFilter_instances, applyWindowedColorLayout_fn).call(this, normalizedLayout, false);
       __privateMethod(this, _WindowFilter_instances, initializeWindowedPersistence_fn).call(this);
       const scrollableContainer = document.querySelector(`#${this.windowID} .bm-container.bm-scrollable`);
       __privateMethod(this, _WindowFilter_instances, initializeHorizontalScrollWheel_fn).call(this, scrollableContainer);
@@ -2764,6 +2942,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
         color.dataset["incorrect"] = colorIncorrect || 0;
         const pixelCount = document.querySelector(`#${this.windowID} .bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-cnt`);
         if (pixelCount) {
+          pixelCount.dataset["correctLabel"] = colorCorrectLocalized;
+          pixelCount.dataset["totalLabel"] = colorTotalLocalized;
           const isWindowedPixelCount = !!pixelCount.closest(`#${this.windowID}.bm-windowed`);
           const isHorizontalWindowedPixelCount = !!pixelCount.closest(`#${this.windowID}.bm-windowed.bm-filter-layout-horizontal`);
           if (Number(colorTotal) === 0) {
@@ -2847,6 +3027,18 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     const windowState = __privateMethod(this, _WindowFilter_instances, getWindowState_fn2).call(this);
     return windowState?.colorLayout == "horizontal" ? "horizontal" : "vertical";
   };
+  /** Updates the preferred windowed color layout.
+   * @param {'vertical' | 'horizontal'} layout
+   * @since 0.98.0
+   */
+  setWindowedColorLayoutPreference_fn = function(layout) {
+    const windowState = __privateMethod(this, _WindowFilter_instances, getWindowState_fn2).call(this);
+    if (!windowState) {
+      return;
+    }
+    windowState.colorLayout = layout == "horizontal" ? "horizontal" : "vertical";
+    void this.settingsManager?.saveUserStorageNow();
+  };
   /** Returns the active color layout for the rendered window.
    * @param {HTMLElement} [windowElement]
    * @returns {'vertical' | 'horizontal'}
@@ -2855,9 +3047,9 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   getActiveWindowedColorLayout_fn = function(windowElement = document.querySelector(`#${this.windowID}.bm-windowed`)) {
     return windowElement?.classList.contains("bm-filter-layout-horizontal") ? "horizontal" : "vertical";
   };
-  /** Returns the per-layout size object for the windowed filter.
+  /** Returns the per-layout geometry object for the windowed filter.
    * @param {'vertical' | 'horizontal'} layout
-   * @returns {{width?: number, height?: number} | null}
+   * @returns {{x?: number, y?: number, width?: number, height?: number} | null}
    * @since 0.95.0
    */
   getWindowedLayoutSize_fn = function(layout) {
@@ -2958,25 +3150,53 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     if (shouldPersist && previousLayout != normalizedLayout) {
       __privateMethod(this, _WindowFilter_instances, saveWindowLayoutSize_fn).call(this, windowElement, previousLayout);
     }
-    windowElement.classList.toggle("bm-filter-layout-horizontal", normalizedLayout == "horizontal");
-    windowElement.classList.toggle("bm-filter-layout-vertical", normalizedLayout != "horizontal");
-    const toggleButton = windowElement.querySelector("#bm-filter-layout-toggle");
-    if (toggleButton) {
-      const showsHorizontalLayout = normalizedLayout == "horizontal";
-      toggleButton.innerHTML = showsHorizontalLayout ? verticalLayoutIcon : horizontalLayoutIcon;
-      toggleButton.title = showsHorizontalLayout ? "Switch to vertical color layout" : "Switch to horizontal color layout";
-      toggleButton.ariaLabel = toggleButton.title;
-      toggleButton.setAttribute("aria-pressed", showsHorizontalLayout ? "true" : "false");
+    const applyLayout = () => {
+      windowElement.classList.toggle("bm-filter-layout-horizontal", normalizedLayout == "horizontal");
+      windowElement.classList.toggle("bm-filter-layout-vertical", normalizedLayout != "horizontal");
+      const toggleButton = windowElement.querySelector("#bm-filter-layout-toggle");
+      if (toggleButton) {
+        const showsHorizontalLayout = normalizedLayout == "horizontal";
+        toggleButton.innerHTML = showsHorizontalLayout ? verticalLayoutIcon : horizontalLayoutIcon;
+        toggleButton.title = showsHorizontalLayout ? "Switch to vertical color layout" : "Switch to horizontal color layout";
+        toggleButton.ariaLabel = toggleButton.title;
+        toggleButton.setAttribute("aria-pressed", showsHorizontalLayout ? "true" : "false");
+      }
+      const windowState = __privateMethod(this, _WindowFilter_instances, getWindowState_fn2).call(this);
+      if (windowState) {
+        windowState.colorLayout = normalizedLayout;
+      }
+      __privateMethod(this, _WindowFilter_instances, syncWindowedColorLayoutLabels_fn).call(this, windowElement);
+      __privateMethod(this, _WindowFilter_instances, restoreWindowLayoutSize_fn).call(this, windowElement, normalizedLayout);
+    };
+    if (shouldPersist) {
+      this.animateLayoutChange(windowElement, applyLayout);
+    } else {
+      applyLayout();
     }
-    const windowState = __privateMethod(this, _WindowFilter_instances, getWindowState_fn2).call(this);
-    if (windowState) {
-      windowState.colorLayout = normalizedLayout;
-    }
-    this.updateColorList();
-    __privateMethod(this, _WindowFilter_instances, restoreWindowLayoutSize_fn).call(this, windowElement, normalizedLayout);
     if (shouldPersist) {
       __privateMethod(this, _WindowFilter_instances, saveWindowState_fn).call(this, windowElement);
       void this.settingsManager?.saveUserStorageNow();
+    }
+  };
+  /** Updates only line wrapping that differs between vertical and horizontal layouts.
+   * Avoids recalculating all pixel statistics during a layout-only action.
+   * @param {HTMLElement} windowElement
+   * @since 0.99.0
+   */
+  syncWindowedColorLayoutLabels_fn = function(windowElement) {
+    const isHorizontal = windowElement.classList.contains("bm-filter-layout-horizontal");
+    const pixelCounts = windowElement.querySelectorAll(".bm-filter-color-pxl-cnt");
+    for (const pixelCount of pixelCounts) {
+      const correct = pixelCount.dataset["correctLabel"];
+      const total = pixelCount.dataset["totalLabel"];
+      if (correct == null || total == null || Number(pixelCount.closest(".bm-filter-color")?.dataset["total"]) === 0) {
+        continue;
+      }
+      if (isHorizontal) {
+        pixelCount.innerHTML = `${correct}<br>out of ${total}`;
+      } else {
+        pixelCount.textContent = `${correct} / ${total}`;
+      }
     }
   };
   /** Updates the visible sort controls to reflect the active sort state.
@@ -3177,10 +3397,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.sortDropdownKeyHandler = null;
     }
   };
-  /** Immediately closes the filter window and cleans up persistence observers.
-   * @since 0.92.0
-   */
-  closeWindow_fn2 = function(preserveOpenState = false) {
+  closeWindow_fn2 = async function(preserveOpenState = false) {
     const windowElement = document.querySelector(`#${this.windowID}`);
     if (windowElement?.classList.contains("bm-windowed")) {
       __privateMethod(this, _WindowFilter_instances, saveWindowState_fn).call(this, windowElement);
@@ -3191,7 +3408,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     __privateMethod(this, _WindowFilter_instances, stopAutoRefresh_fn).call(this);
     __privateMethod(this, _WindowFilter_instances, cleanupWindowPersistence_fn).call(this);
     __privateMethod(this, _WindowFilter_instances, cleanupCustomSortDropdowns_fn).call(this);
-    windowElement?.remove();
+    await this.handleWindowClose(windowElement);
   };
   /** Starts the automatic Color Filter statistics refresh loop.
    * @since 0.92.1
@@ -3296,8 +3513,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       if (!windowElement.isConnected) {
         return;
       }
-      const x = Number(windowState.x);
-      const y = Number(windowState.y);
+      const x = Number(layoutSize?.x ?? windowState.x);
+      const y = Number(layoutSize?.y ?? windowState.y);
       if (!Number.isFinite(x) || !Number.isFinite(y)) {
         return;
       }
@@ -3307,8 +3524,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       windowElement.style.right = "";
       windowElement.style.transform = `translate(${clampedPosition.x}px, ${clampedPosition.y}px)`;
       if (clampedPosition.x != x || clampedPosition.y != y) {
-        windowState.x = clampedPosition.x;
-        windowState.y = clampedPosition.y;
+        layoutSize.x = clampedPosition.x;
+        layoutSize.y = clampedPosition.y;
         void this.settingsManager?.saveUserStorageNow();
       }
     });
@@ -3347,6 +3564,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     windowState.colorLayout = layout;
     const layoutSize = __privateMethod(this, _WindowFilter_instances, getWindowedLayoutSize_fn).call(this, layout);
     if (layoutSize) {
+      layoutSize.x = clampedPosition.x;
+      layoutSize.y = clampedPosition.y;
       layoutSize.width = width;
       layoutSize.height = height;
     }
@@ -3508,7 +3727,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
               button.disabled = true;
             }
           }
-        ).buildElement().addHeader(2, { "textContent": color.name, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-cnt", "innerHTML": hasNoPixels ? "-" : isHorizontalWindowedMode ? `${colorCorrectLocalized}<br>out of ${colorTotalLocalized}` : `${colorCorrectLocalized} / ${colorTotalLocalized}`, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;` }).buildElement().buildElement().buildElement();
+        ).buildElement().addHeader(2, { "textContent": color.name, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-cnt", "data-correct-label": colorCorrectLocalized, "data-total-label": colorTotalLocalized, "innerHTML": hasNoPixels ? "-" : isHorizontalWindowedMode ? `${colorCorrectLocalized}<br>out of ${colorTotalLocalized}` : `${colorCorrectLocalized} / ${colorTotalLocalized}`, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;` }).buildElement().buildElement().buildElement();
       } else {
         colorList.addDiv({
           "class": "bm-container bm-filter-color bm-flex-between",
@@ -3576,29 +3795,44 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     this.showUnused = showUnused;
     const colorList = document.querySelector(`#${this.colorListID}`);
     const colors = Array.from(colorList.children);
+    const hiddenStates = new Map(colors.map((color) => [
+      color,
+      !showUnused && !Number(color.getAttribute("data-total"))
+    ]));
     colors.sort((index, nextIndex) => {
       const indexValue = index.getAttribute("data-" + sortPrimary);
       const nextIndexValue = nextIndex.getAttribute("data-" + sortPrimary);
       const indexValueNumber = parseFloat(indexValue);
       const nextIndexValueNumber = parseFloat(nextIndexValue);
-      const indexValueNumberIsNumber = !isNaN(indexValueNumber);
-      const nextIndexValueNumberIsNumber = !isNaN(nextIndexValueNumber);
-      if (showUnused) {
-        index.classList.remove("bm-color-hide");
-      } else if (!Number(index.getAttribute("data-total"))) {
-        index.classList.add("bm-color-hide");
-      }
-      if (indexValueNumberIsNumber && nextIndexValueNumberIsNumber) {
+      if (!isNaN(indexValueNumber) && !isNaN(nextIndexValueNumber)) {
         return sortSecondary === "ascending" ? indexValueNumber - nextIndexValueNumber : nextIndexValueNumber - indexValueNumber;
-      } else {
-        const indexValueString = indexValue.toLowerCase();
-        const nextIndexValueString = nextIndexValue.toLowerCase();
-        if (indexValueString < nextIndexValueString) return sortSecondary === "ascending" ? -1 : 1;
-        if (indexValueString > nextIndexValueString) return sortSecondary === "ascending" ? 1 : -1;
-        return 0;
       }
+      const indexValueString = indexValue.toLowerCase();
+      const nextIndexValueString = nextIndexValue.toLowerCase();
+      if (indexValueString < nextIndexValueString) {
+        return sortSecondary === "ascending" ? -1 : 1;
+      }
+      if (indexValueString > nextIndexValueString) {
+        return sortSecondary === "ascending" ? 1 : -1;
+      }
+      return 0;
     });
-    colors.forEach((color) => colorList.appendChild(color));
+    const currentColors = Array.from(colorList.children);
+    const didChange = colors.some(
+      (color, index) => currentColors[index] != color || color.classList.contains("bm-color-hide") != hiddenStates.get(color)
+    );
+    if (!didChange) {
+      return;
+    }
+    const updateList = () => {
+      for (const color of colors) {
+        color.classList.toggle("bm-color-hide", hiddenStates.get(color));
+      }
+      const fragment = document.createDocumentFragment();
+      colors.forEach((color) => fragment.appendChild(color));
+      colorList.appendChild(fragment);
+    };
+    this.animateListReorder(colors, updateList);
   };
   /** (Un)selects all colors in the color list that are visible to the user.
    * @param {boolean} userWantsUnselect - Does the user want to unselect colors?
@@ -3607,8 +3841,14 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   selectColorList_fn = function(userWantsUnselect) {
     const colorList = document.querySelector(`#${this.colorListID}`);
     const colors = Array.from(colorList.children);
+    const shouldHide = !userWantsUnselect;
+    const changedColorIDs = [];
     for (const color of colors) {
       if (color.classList?.contains("bm-color-hide")) {
+        continue;
+      }
+      const colorID = Number(color.dataset["id"]);
+      if (!colorID) {
         continue;
       }
       const button = color.querySelector(".bm-filter-color-visibility");
@@ -3618,8 +3858,16 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       if (button.dataset["state"] == "shown" && userWantsUnselect) {
         continue;
       }
-      button.click();
+      button.dataset["state"] = shouldHide ? "hidden" : "shown";
+      button.innerHTML = shouldHide ? this.eyeClosed : this.eyeOpen;
+      __privateMethod(this, _WindowFilter_instances, syncColorToggleLabel_fn).call(this, button, { name: color.dataset["name"] || "" });
+      changedColorIDs.push(colorID);
     }
+    if (!changedColorIDs.length) {
+      return;
+    }
+    this.templateManager.setColorsFiltered(changedColorIDs, shouldHide);
+    this.animateStateChange(colorList);
   };
   /** Updates the color toggle labels on the icon and the clickable color block.
    * @param {HTMLButtonElement} button - The color visibility button
@@ -3658,17 +3906,36 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     button.disabled = false;
     button.style.textDecoration = "";
   };
-  /** Toggles incorrect-pixel highlighting for one template color.
-   * @param {HTMLButtonElement} button - The color highlight button
-   * @param {Object} color - Palette color metadata
-   * @since 0.97.0
-   */
-  toggleIncorrectHighlightColor_fn = function(button, color) {
-    if (!button || button.disabled || !color.id) {
+  toggleIncorrectHighlightColor_fn = async function(button, color) {
+    if (!button || button.disabled || !color.id || this.highlightRefreshPending) {
       return;
     }
     this.templateManager.toggleIncorrectHighlightColor(color.id);
     __privateMethod(this, _WindowFilter_instances, syncIncorrectHighlightButtons_fn).call(this);
+    const highlightButtons = document.querySelectorAll(`#${this.windowID} .bm-filter-color-highlight`);
+    for (const highlightButton of highlightButtons) {
+      highlightButton.setAttribute("aria-disabled", "true");
+    }
+    button.disabled = true;
+    button.dataset["loading"] = "true";
+    button.setAttribute("aria-busy", "true");
+    const refreshPromise = this.templateManager.requestCanvasRefresh();
+    this.highlightRefreshPending = refreshPromise;
+    try {
+      await refreshPromise;
+    } finally {
+      if (this.highlightRefreshPending == refreshPromise) {
+        this.highlightRefreshPending = null;
+      }
+      for (const highlightButton of highlightButtons) {
+        highlightButton.removeAttribute("aria-disabled");
+      }
+      if (button.isConnected) {
+        button.disabled = false;
+        delete button.dataset["loading"];
+        button.removeAttribute("aria-busy");
+      }
+    }
   };
   /** Returns the next-action label for the color highlight button.
    * @param {string} colorName
@@ -3715,20 +3982,37 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     if (!button) {
       return;
     }
-    const animateClass = direction == "hide" ? "bm-filter-eye-animate-hide" : "bm-filter-eye-animate-show";
-    button.classList.remove("bm-filter-eye-animate-hide", "bm-filter-eye-animate-show");
-    void button.offsetWidth;
-    button.classList.add(animateClass);
-    let timeoutID = null;
+    const previousAnimation = colorToggleAnimations.get(button);
+    colorToggleAnimations.delete(button);
+    previousAnimation?.cancel();
+    const slash = button.querySelector(".bm-filter-eye-icon path:nth-of-type(3)");
     const finishAnimation = () => {
-      window.clearTimeout(timeoutID);
-      button.classList.remove(animateClass);
       if (direction == "show" && button.dataset["state"] == "shown") {
         button.innerHTML = this.eyeOpen;
       }
     };
-    button.addEventListener("animationend", finishAnimation, { once: true });
-    timeoutID = window.setTimeout(finishAnimation, 280);
+    if (!slash || window.matchMedia("(prefers-reduced-motion: reduce)").matches || typeof slash.animate != "function") {
+      finishAnimation();
+      return;
+    }
+    const animation = slash.animate([
+      { strokeDashoffset: direction == "hide" ? 20 : 0 },
+      { strokeDashoffset: direction == "hide" ? 0 : 20 }
+    ], {
+      duration: 220,
+      easing: direction == "hide" ? "ease-out" : "ease-in",
+      fill: "forwards"
+    });
+    colorToggleAnimations.set(button, animation);
+    void animation.finished.catch(() => {
+    }).then(() => {
+      if (colorToggleAnimations.get(button) != animation) {
+        return;
+      }
+      colorToggleAnimations.delete(button);
+      animation.cancel();
+      finishAnimation();
+    });
   };
   /** Makes a color block toggleable by pointer or keyboard.
    * @param {HTMLElement} colorElement - The color block element
@@ -3829,9 +4113,6 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.window = this.addDiv({ "id": this.windowID, "class": "bm-window bm-windowed", "style": "top: 10px; left: unset; right: 75px;" }, (instance, div) => {
       }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "aria-label": 'Minimize window "Blue Marble"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => instance.handleMinimization(button);
-        button.ontouchend = () => {
-          button.click();
-        };
       }).buildElement().addDiv({ "class": "bm-main-drag-brand" }).addImg({ "class": "bm-favicon", "src": "https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/assets/Favicon.png" }, (instance, img) => {
         const date = /* @__PURE__ */ new Date();
         const dayOfTheYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 1)) / (1e3 * 60 * 60 * 24)) + 1;
@@ -3993,7 +4274,7 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
      */
     buildWindow() {
       if (document.querySelector(`#${this.windowID}`)) {
-        document.querySelector(`#${this.windowID}`).remove();
+        void this.handleWindowClose(document.querySelector(`#${this.windowID}`));
         return;
       }
       let style = "";
@@ -4003,16 +4284,8 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
       this.window = this.addDiv({ "id": this.windowID, "class": "bm-window", "style": style }, (instance, div) => {
       }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "aria-label": 'Minimize window "Template Wizard"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => instance.handleMinimization(button);
-        button.ontouchend = () => {
-          button.click();
-        };
       }).buildElement().addDiv().buildElement().addButton({ "class": "bm-button-circle", "textContent": "\u2716", "aria-label": 'Close window "Template Wizard"' }, (instance, button) => {
-        button.onclick = () => {
-          document.querySelector(`#${this.windowID}`)?.remove();
-        };
-        button.ontouchend = () => {
-          button.click();
-        };
+        button.onclick = () => this.handleWindowClose(document.querySelector(`#${this.windowID}`));
       }).buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container bm-center-vertically" }).addHeader(1, { "textContent": "Template Wizard" }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Status" }).buildElement().addP({ "id": "bm-wizard-status", "textContent": "Loading template storage status..." }).buildElement().buildElement().addDiv({ "class": "bm-container bm-scrollable" }).addHeader(2, { "textContent": "Detected templates:" }).buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
       this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
       __privateMethod(this, _WindowWizard_instances, displaySchemaHealth_fn).call(this);
@@ -4121,14 +4394,14 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
     }
     if (shouldWindowWizardOpen) {
       console.log(`Restarting Template Wizard...`);
-      document.querySelector(`#${this.windowID}`).remove();
+      await this.handleWindowClose(document.querySelector(`#${this.windowID}`));
       new _WindowWizard(this.name, this.version, this.schemaVersionBleedingEdge, this.templateManager).buildWindow();
     }
   };
   var WindowWizard = _WindowWizard;
 
   // src/templateManager.js
-  var _TemplateManager_instances, restoreFilteredColorsFromSettings_fn, persistFilteredColors_fn, loadTemplate_fn, storeTemplates_fn, parseBlueMarble_fn, parseOSU_fn, calculateCorrectPixelsOnTile_And_FilterTile_fn, buildMissingHighlightClusters_fn, drawMissingHighlightCluster_fn, withAlpha_fn, drawIncorrectHighlightMarker_fn;
+  var _TemplateManager_instances, restoreFilteredColorsFromSettings_fn, persistFilteredColors_fn, loadTemplate_fn, storeTemplates_fn, parseBlueMarble_fn, parseOSU_fn, calculateCorrectPixelsOnTile_And_FilterTile_fn, yieldToBrowser_fn, buildMissingHighlightClusters_fn, drawMissingHighlightCluster_fn, getIncorrectHighlightStencil_fn, drawIncorrectHighlightMarker_fn;
   var TemplateManager = class {
     /** The constructor for the {@link TemplateManager} class.
      * @param {string} name - The name of the userscript
@@ -4157,6 +4430,8 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
       this.shouldFilterColor = /* @__PURE__ */ new Map();
       this.highlightIncorrectColorID = null;
       this.highlightIncorrectMode = "incorrect";
+      this.incorrectHighlightStencilCache = /* @__PURE__ */ new Map();
+      this.canvasRefreshRevision = 0;
     }
     /** Updates the stored instance of the main window.
      * @param {WindowMain} windowMain - The main window instance
@@ -4187,6 +4462,25 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
         this.shouldFilterColor.set(parsedColorID, true);
       } else {
         this.shouldFilterColor.delete(parsedColorID);
+      }
+      __privateMethod(this, _TemplateManager_instances, persistFilteredColors_fn).call(this);
+    }
+    /** Updates many palette filters with one storage write.
+     * @param {Iterable<number>} colorIDs
+     * @param {boolean} shouldHide
+     * @since 0.99.0
+     */
+    setColorsFiltered(colorIDs, shouldHide) {
+      for (const colorID of colorIDs) {
+        const parsedColorID = Number(colorID);
+        if (!Number.isFinite(parsedColorID)) {
+          continue;
+        }
+        if (shouldHide) {
+          this.shouldFilterColor.set(parsedColorID, true);
+        } else {
+          this.shouldFilterColor.delete(parsedColorID);
+        }
       }
       __privateMethod(this, _TemplateManager_instances, persistFilteredColors_fn).call(this);
     }
@@ -4243,6 +4537,57 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
         this.setIncorrectHighlightColor(null);
       }
       return { colorID: this.highlightIncorrectColorID, mode: this.highlightIncorrectMode };
+    }
+    /** Invalidates visible map tiles and resolves after refreshed tile rendering settles.
+     * @returns {Promise<void>}
+     * @since 0.98.0
+     */
+    requestCanvasRefresh() {
+      this.canvasRefreshRevision = this.canvasRefreshRevision + 1 >>> 0;
+      const revision = this.canvasRefreshRevision;
+      return new Promise((resolve) => {
+        let started = 0;
+        let completed = 0;
+        let settleTimer = null;
+        let noWorkTimer = null;
+        let hardTimeout = null;
+        const finish = () => {
+          clearTimeout(settleTimer);
+          clearTimeout(noWorkTimer);
+          clearTimeout(hardTimeout);
+          window.removeEventListener("message", handleProgress);
+          resolve();
+        };
+        const scheduleSettle = () => {
+          if (!started || completed < started) {
+            return;
+          }
+          clearTimeout(settleTimer);
+          settleTimer = setTimeout(finish, 180);
+        };
+        const handleProgress = (event) => {
+          const data = event.data;
+          if (data?.source != "blue-marble" || data?.action != "refresh-progress" || Number(data?.revision) != revision) {
+            return;
+          }
+          if (data.state == "started") {
+            started++;
+            clearTimeout(noWorkTimer);
+            clearTimeout(settleTimer);
+          } else if (data.state == "completed") {
+            completed++;
+            scheduleSettle();
+          }
+        };
+        window.addEventListener("message", handleProgress);
+        noWorkTimer = setTimeout(finish, 1200);
+        hardTimeout = setTimeout(finish, 1e4);
+        window.postMessage({
+          source: "blue-marble",
+          action: "refresh-tiles",
+          revision
+        }, "*");
+      });
     }
     /** Creates the JSON object to store templates in
      * @returns {{ whoami: string, scriptVersion: string, schemaVersion: string, templates: Object }} The JSON object
@@ -4458,7 +4803,8 @@ Canvas Height: ${canvasHeight}`);
         return tileBlob;
       }
       const drawSize = this.tileSize * this.drawMult;
-      tileCoords = tileCoords[0].toString().padStart(4, "0") + "," + tileCoords[1].toString().padStart(4, "0");
+      const numericTileCoords = [Number(tileCoords[0]) || 0, Number(tileCoords[1]) || 0];
+      tileCoords = numericTileCoords[0].toString().padStart(4, "0") + "," + numericTileCoords[1].toString().padStart(4, "0");
       console.log(`Searching for templates in tile: "${tileCoords}"`);
       const templateArray = this.templatesArray;
       console.log(templateArray);
@@ -4531,6 +4877,14 @@ Version: ${this.version}`);
         let templateBeforeFilter32 = template.chunked32.slice();
         const coordXtoDrawAt = Number(template.pixelCoords[0]) * this.drawMult;
         const coordYtoDrawAt = Number(template.pixelCoords[1]) * this.drawMult;
+        const templateOrigin = Array.isArray(template.instance.coords) ? template.instance.coords.map(Number) : null;
+        const highlightGridOrigin = templateOrigin?.every(Number.isFinite) ? [
+          ((numericTileCoords[0] - templateOrigin[0]) * this.tileSize + Number(template.pixelCoords[0]) - templateOrigin[2]) * this.drawMult,
+          ((numericTileCoords[1] - templateOrigin[1]) * this.tileSize + Number(template.pixelCoords[1]) - templateOrigin[3]) * this.drawMult
+        ] : [
+          numericTileCoords[0] * drawSize + coordXtoDrawAt,
+          numericTileCoords[1] * drawSize + coordYtoDrawAt
+        ];
         if (this.shouldFilterColor.size == 0 && !templateHasErased) {
           context.drawImage(template.bitmap, coordXtoDrawAt, coordYtoDrawAt);
         }
@@ -4542,14 +4896,15 @@ Version: ${this.version}`);
         const {
           correctPixels: pixelsCorrect,
           filteredTemplate: templateAfterFilter
-        } = __privateMethod(this, _TemplateManager_instances, calculateCorrectPixelsOnTile_And_FilterTile_fn).call(this, {
+        } = await __privateMethod(this, _TemplateManager_instances, calculateCorrectPixelsOnTile_And_FilterTile_fn).call(this, {
           tile: tileBeforeTemplates32,
           template: templateBeforeFilter32,
           templateInfo: [coordXtoDrawAt, coordYtoDrawAt, template.bitmap.width, template.bitmap.height],
           highlightPattern: effectiveHighlightPattern,
           highlightDisabled: highlightDisabled && !hasIncorrectHighlightColor,
           highlightColorID: incorrectHighlightColorID,
-          highlightMode: incorrectHighlightMode
+          highlightMode: incorrectHighlightMode,
+          highlightGridOrigin
         });
         let pixelsCorrectTotal = 0;
         const transparentColorID = 0;
@@ -4726,29 +5081,15 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
    */
   parseOSU_fn = function() {
   };
-  /** Calculates the correct pixels on this tile.
-   * In addition, this function filters colors based on user input.
-   * In addition, this function modifies colors to properly display (#deface).
-   * In addition, this function modifies incorrect pixels to display highlighting.
-   * This function has multiple purposes only to reduce iterations of scans over every pixel on the template.
-   * @param {Object} params - Object containing all parameters
-   * @param {Uint32Array} params.tile - The tile without templates as a Uint32Array
-   * @param {Uint32Array} params.template - The template without filtering as a Uint32Array
-   * @param {Array<Number, Number, Number, Number>} params.templateInfo - Information about template location and size
-   * @param {Array<number[]>} params.highlightPattern - The highlight pattern selected by the user
-   * @param {boolean} params.highlightDisabled - Should highlighting be disabled?
-   * @param {number | null} params.highlightColorID - Restricts highlighting to one template color when set
-   * @param {'incorrect' | 'missing'} params.highlightMode - Which color-specific highlight mode to use
-   * @returns {{correctPixels: Map<number, number>, filteredTemplate: Uint32Array}} A Map containing the color IDs (keys) and how many correct pixels there are for that color (values)
-   */
-  calculateCorrectPixelsOnTile_And_FilterTile_fn = function({
+  calculateCorrectPixelsOnTile_And_FilterTile_fn = async function({
     tile: tile32,
     template: template32,
     templateInfo: templateInformation,
     highlightPattern,
     highlightDisabled,
     highlightColorID = null,
-    highlightMode = "incorrect"
+    highlightMode = "incorrect",
+    highlightGridOrigin = null
   }) {
     const pixelSize = this.drawMult;
     const tileWidth = this.tileSize * pixelSize;
@@ -4759,6 +5100,8 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
     const templateCoordY = templateInformation[1];
     const templateWidth = templateInformation[2];
     const templateHeight = templateInformation[3];
+    const highlightGridOriginX = Number.isFinite(Number(highlightGridOrigin?.[0])) ? Number(highlightGridOrigin[0]) : templateCoordX;
+    const highlightGridOriginY = Number.isFinite(Number(highlightGridOrigin?.[1])) ? Number(highlightGridOrigin[1]) : templateCoordY;
     const tolerance = this.paletteTolerance;
     const shouldTransparentTilePixelsBeHighlighted = !this.settingsManager?.userSettings?.flags?.includes("hl-noTrans");
     const hasHighlightColorFilter = Number.isFinite(highlightColorID);
@@ -4775,28 +5118,35 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
     const incorrectHighlights = [];
     const maxIncorrectHighlightMarkers = 900;
     const incorrectHighlightBucketSize = pixelSize * 10;
+    const incorrectHighlightBucketStride = Math.ceil(templateWidth / incorrectHighlightBucketSize) + 2;
     const incorrectHighlightBuckets = /* @__PURE__ */ new Set();
     const missingHighlightBucketSize = pixelSize * 16;
     const missingHighlightBuckets = /* @__PURE__ */ new Map();
-    const queueIncorrectHighlight = ({ row, column, color }) => {
+    const getMissingBucketKey = (bucketRow, bucketColumn) => {
+      if (bucketRow < 0 || bucketColumn < 0) {
+        return -1;
+      }
+      const diagonal = bucketRow + bucketColumn;
+      return diagonal * (diagonal + 1) / 2 + bucketColumn;
+    };
+    const queueIncorrectHighlight = ({ row, column }) => {
       if (incorrectHighlights.length >= maxIncorrectHighlightMarkers) {
         return;
       }
-      const bucketKey = `${Math.floor(row / incorrectHighlightBucketSize)},${Math.floor(column / incorrectHighlightBucketSize)}`;
+      const bucketKey = Math.floor(row / incorrectHighlightBucketSize) * incorrectHighlightBucketStride + Math.floor(column / incorrectHighlightBucketSize);
       if (incorrectHighlightBuckets.has(bucketKey)) {
         return;
       }
       incorrectHighlightBuckets.add(bucketKey);
       incorrectHighlights.push({
         row,
-        column,
-        color
+        column
       });
     };
-    const queueMissingHighlight = ({ row, column, color }) => {
-      const bucketRow = Math.floor(row / missingHighlightBucketSize);
-      const bucketColumn = Math.floor(column / missingHighlightBucketSize);
-      const bucketKey = `${bucketRow},${bucketColumn}`;
+    const queueMissingHighlight = ({ row, column }) => {
+      const bucketRow = Math.floor((highlightGridOriginY + row) / missingHighlightBucketSize);
+      const bucketColumn = Math.floor((highlightGridOriginX + column) / missingHighlightBucketSize);
+      const bucketKey = getMissingBucketKey(bucketRow, bucketColumn);
       const bucket = missingHighlightBuckets.get(bucketKey);
       if (bucket) {
         bucket.minRow = Math.min(bucket.minRow, row);
@@ -4804,22 +5154,23 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
         bucket.minColumn = Math.min(bucket.minColumn, column);
         bucket.maxColumn = Math.max(bucket.maxColumn, column);
         bucket.count++;
-        bucket.cells.push([row, column]);
         return;
       }
       missingHighlightBuckets.set(bucketKey, {
         bucketRow,
         bucketColumn,
+        bucketKey,
         bucketSize: missingHighlightBucketSize,
+        bucketTop: bucketRow * missingHighlightBucketSize - highlightGridOriginY,
+        bucketLeft: bucketColumn * missingHighlightBucketSize - highlightGridOriginX,
         minRow: row,
         maxRow: row,
         minColumn: column,
         maxColumn: column,
-        count: 1,
-        color,
-        cells: [[row, column]]
+        count: 1
       });
     };
+    let workSliceStarted = performance.now();
     for (let templateRow = 1; templateRow < templateHeight; templateRow += pixelSize) {
       for (let templateColumn = 1; templateColumn < templateWidth; templateColumn += pixelSize) {
         const tileRow = templateCoordY + templateRow + tilePixelOffsetY;
@@ -4858,15 +5209,14 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
         const shouldHighlightGeneralMismatch = !hasHighlightColorFilter && templatePixelAlpha > tolerance && bestTileColorID != bestTemplateColorID;
         if (!highlightDisabled && (shouldHighlightSelectedColorMismatch || shouldHighlightSelectedColorMissing || shouldHighlightGeneralMismatch)) {
           if (hasHighlightColorFilter && (shouldHighlightSelectedColorMissing || tilePixelAlpha > tolerance) || !hasHighlightColorFilter && (shouldTransparentTilePixelsBeHighlighted || tilePixelAlpha > tolerance)) {
-            const templatePixelColor = templatePixelAlpha > tolerance ? template32[templateRow * templateWidth + templateColumn] : tilePixelAbove;
             if (hasHighlightColorFilter) {
               (highlightMode == "missing" ? queueMissingHighlight : queueIncorrectHighlight)({
                 row: templateRow,
-                column: templateColumn,
-                color: templatePixelColor
+                column: templateColumn
               });
               continue;
             }
+            const templatePixelColor = templatePixelAlpha > tolerance ? template32[templateRow * templateWidth + templateColumn] : tilePixelAbove;
             for (const subpixelPattern of highlightPattern) {
               const [subpixelState, subpixelColumnDelta, subpixelRowDelta] = subpixelPattern;
               const subpixelColor = subpixelState != 0 ? subpixelState != 1 ? templatePixelColor : 4278190335 : 0;
@@ -4888,21 +5238,30 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
         const colorIDcount = _colorpalette.get(bestTemplateColorID);
         _colorpalette.set(bestTemplateColorID, colorIDcount ? colorIDcount + 1 : 1);
       }
+      if (performance.now() - workSliceStarted >= 4) {
+        await __privateMethod(this, _TemplateManager_instances, yieldToBrowser_fn).call(this);
+        workSliceStarted = performance.now();
+      }
     }
     if (hasHighlightColorFilter && highlightMode == "missing") {
-      const missingHighlightClusters = __privateMethod(this, _TemplateManager_instances, buildMissingHighlightClusters_fn).call(this, missingHighlightBuckets, 96);
+      await __privateMethod(this, _TemplateManager_instances, yieldToBrowser_fn).call(this);
+      const missingHighlightClusters = await __privateMethod(this, _TemplateManager_instances, buildMissingHighlightClusters_fn).call(this, missingHighlightBuckets, 96);
+      await __privateMethod(this, _TemplateManager_instances, yieldToBrowser_fn).call(this);
       for (const cluster of missingHighlightClusters) {
         __privateMethod(this, _TemplateManager_instances, drawMissingHighlightCluster_fn).call(this, {
           template: template32,
           templateWidth,
           templateHeight,
           cluster,
-          colors: incorrectHighlightColors,
-          phase: incorrectHighlightPhase,
           pixelSize
         });
+        if (performance.now() - workSliceStarted >= 4) {
+          await __privateMethod(this, _TemplateManager_instances, yieldToBrowser_fn).call(this);
+          workSliceStarted = performance.now();
+        }
       }
     } else {
+      const markerStencil = __privateMethod(this, _TemplateManager_instances, getIncorrectHighlightStencil_fn).call(this, incorrectHighlightColors, incorrectHighlightPhase);
       for (const highlight of incorrectHighlights) {
         __privateMethod(this, _TemplateManager_instances, drawIncorrectHighlightMarker_fn).call(this, {
           template: template32,
@@ -4910,28 +5269,32 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
           templateHeight,
           row: highlight.row,
           column: highlight.column,
-          centerColor: highlight.color,
-          colors: incorrectHighlightColors,
-          phase: incorrectHighlightPhase
+          stencil: markerStencil
         });
+        if (performance.now() - workSliceStarted >= 4) {
+          await __privateMethod(this, _TemplateManager_instances, yieldToBrowser_fn).call(this);
+          workSliceStarted = performance.now();
+        }
       }
     }
     console.log(`List of template pixels that match the tile:`);
     console.log(_colorpalette);
     return { correctPixels: _colorpalette, filteredTemplate: template32 };
   };
-  /** Builds connected blob bounds for dense missing-pixel highlighting.
-   * @param {Map<string, Object>} bucketMap
-   * @param {number} maxClusters
-   * @returns {Array<Object>}
-   * @since 0.97.0
-   */
-  buildMissingHighlightClusters_fn = function(bucketMap, maxClusters) {
+  yieldToBrowser_fn = async function() {
+    if (typeof globalThis.scheduler?.yield === "function") {
+      await globalThis.scheduler.yield();
+      return;
+    }
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  };
+  buildMissingHighlightClusters_fn = async function(bucketMap, maxClusters) {
     if (!bucketMap?.size) {
       return [];
     }
     const visited = /* @__PURE__ */ new Set();
     const clusters = [];
+    let workSliceStarted = performance.now();
     const neighborDeltas = [
       [-1, -1],
       [-1, 0],
@@ -4953,7 +5316,6 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
         minColumn: startBucket.minColumn,
         maxColumn: startBucket.maxColumn,
         count: 0,
-        color: startBucket.color,
         buckets: []
       };
       visited.add(bucketKey);
@@ -4966,7 +5328,13 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
         cluster.count += bucket.count;
         cluster.buckets.push(bucket);
         for (const [rowDelta, columnDelta] of neighborDeltas) {
-          const neighborKey = `${bucket.bucketRow + rowDelta},${bucket.bucketColumn + columnDelta}`;
+          const neighborRow = bucket.bucketRow + rowDelta;
+          const neighborColumn = bucket.bucketColumn + columnDelta;
+          if (neighborRow < 0 || neighborColumn < 0) {
+            continue;
+          }
+          const diagonal = neighborRow + neighborColumn;
+          const neighborKey = diagonal * (diagonal + 1) / 2 + neighborColumn;
           if (visited.has(neighborKey)) {
             continue;
           }
@@ -4976,6 +5344,10 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
           }
           visited.add(neighborKey);
           queue.push(neighbor);
+        }
+        if (performance.now() - workSliceStarted >= 4) {
+          await __privateMethod(this, _TemplateManager_instances, yieldToBrowser_fn).call(this);
+          workSliceStarted = performance.now();
         }
       }
       clusters.push(cluster);
@@ -4988,8 +5360,6 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
    * @param {number} params.templateWidth
    * @param {number} params.templateHeight
    * @param {Object} params.cluster
-   * @param {Object} params.colors
-   * @param {number} params.phase
    * @param {number} params.pixelSize
    * @since 0.97.0
    */
@@ -4998,146 +5368,222 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
     templateWidth,
     templateHeight,
     cluster,
-    colors,
-    phase,
     pixelSize
   }) {
-    const padding = pixelSize * 2;
-    const outerThickness = Math.max(1, Math.round(pixelSize * 0.58));
-    const softColors = {
-      cyan: 3372219136
-    };
-    const protectedPixels = /* @__PURE__ */ new Set();
-    const protectedRadius = Math.floor(pixelSize / 2);
-    for (const bucket of cluster.buckets) {
-      for (const [row, column] of bucket.cells) {
-        for (let rowDelta = -protectedRadius; rowDelta <= protectedRadius; rowDelta++) {
-          for (let columnDelta = -protectedRadius; columnDelta <= protectedRadius; columnDelta++) {
-            protectedPixels.add((row + rowDelta) * templateWidth + (column + columnDelta));
-          }
-        }
-      }
-    }
-    const setPixel = (row, column, color) => {
-      if (row < 0 || row >= templateHeight || column < 0 || column >= templateWidth) {
-        return;
-      }
-      if (protectedPixels.has(row * templateWidth + column)) {
-        return;
-      }
-      template32[row * templateWidth + column] = color;
-    };
-    const contourColor = () => {
-      return softColors.cyan;
-    };
-    const drawHorizontal = (row, startColumn, endColumn) => {
-      if (startColumn > endColumn) {
-        return;
-      }
-      for (let column = startColumn; column <= endColumn; column++) {
-        setPixel(row, column, contourColor());
-      }
-    };
-    const addInterval = (intervalsByRow, row, startColumn, endColumn) => {
-      if (startColumn > endColumn) {
-        return;
-      }
-      const intervals = intervalsByRow.get(row) ?? [];
-      intervals.push([startColumn, endColumn]);
-      intervalsByRow.set(row, intervals);
+    const contourColor = 3372219136;
+    const logicalWidth = Math.ceil(templateWidth / pixelSize);
+    const logicalHeight = Math.ceil(templateHeight / pixelSize);
+    const events = /* @__PURE__ */ new Map();
+    const addEvent = (row, type, rectangle) => {
+      const event = events.get(row) ?? { add: [], remove: [] };
+      event[type].push(rectangle);
+      events.set(row, event);
     };
     const mergeIntervals = (intervals) => {
-      if (!intervals?.length) {
+      if (!intervals.length) {
         return [];
       }
       const sorted = intervals.slice().sort((a, b) => a[0] - b[0]);
-      const merged = [];
-      for (const [startColumn, endColumn] of sorted) {
+      const merged = [sorted[0].slice()];
+      for (let index = 1; index < sorted.length; index++) {
+        const current = sorted[index];
         const previous = merged[merged.length - 1];
-        if (previous && startColumn <= previous[1] + 1) {
-          previous[1] = Math.max(previous[1], endColumn);
+        if (current[0] <= previous[1]) {
+          previous[1] = Math.max(previous[1], current[1]);
         } else {
-          merged.push([startColumn, endColumn]);
+          merged.push(current.slice());
         }
       }
       return merged;
     };
-    const subtractCoveredIntervals = ([startColumn, endColumn], blockers) => {
-      if (!blockers?.length) {
-        return [[startColumn, endColumn]];
-      }
-      const visibleSegments = [];
-      let segmentStart = startColumn;
+    const intervalsEqual = (first, second) => first.length == second.length && first.every((interval, index) => interval[0] == second[index][0] && interval[1] == second[index][1]);
+    const subtractIntervals = ([start, end], blockers) => {
+      const visible = [];
+      let cursor = start;
       for (const [blockStart, blockEnd] of blockers) {
-        if (blockEnd < segmentStart) {
+        if (blockEnd <= cursor) {
           continue;
         }
-        if (blockStart > endColumn) {
+        if (blockStart >= end) {
           break;
         }
-        if (blockStart > segmentStart) {
-          visibleSegments.push([segmentStart, Math.min(endColumn, blockStart - 1)]);
+        if (blockStart > cursor) {
+          visible.push([cursor, Math.min(end, blockStart)]);
         }
-        segmentStart = Math.max(segmentStart, blockEnd + 1);
-        if (segmentStart > endColumn) {
+        cursor = Math.max(cursor, blockEnd);
+        if (cursor >= end) {
           break;
         }
       }
-      if (segmentStart <= endColumn) {
-        visibleSegments.push([segmentStart, endColumn]);
+      if (cursor < end) {
+        visible.push([cursor, end]);
       }
-      return visibleSegments;
+      return visible;
     };
-    const filledIntervalsByRow = /* @__PURE__ */ new Map();
     for (const bucket of cluster.buckets) {
-      const bucketTop = bucket.bucketRow * bucket.bucketSize;
-      const bucketLeft = bucket.bucketColumn * bucket.bucketSize;
-      const bucketBottom = bucketTop + bucket.bucketSize - 1;
-      const bucketRight = bucketLeft + bucket.bucketSize - 1;
-      const top = Math.max(0, Math.floor(bucketTop - padding));
-      const bottom = Math.min(templateHeight - 1, Math.ceil(bucketBottom + padding));
-      const left = Math.max(0, Math.floor(bucketLeft - padding));
-      const right = Math.min(templateWidth - 1, Math.ceil(bucketRight + padding));
-      for (let row = top; row <= bottom; row++) {
-        addInterval(filledIntervalsByRow, row, left, right);
+      const top = Math.round(bucket.bucketTop / pixelSize);
+      const left = Math.round(bucket.bucketLeft / pixelSize);
+      const size = Math.round(bucket.bucketSize / pixelSize);
+      const rectangle = {
+        top,
+        bottom: top + size,
+        left,
+        right: left + size
+      };
+      addEvent(rectangle.top, "add", rectangle);
+      addEvent(rectangle.bottom, "remove", rectangle);
+    }
+    const eventRows = Array.from(events.keys()).sort((a, b) => a - b);
+    const activeRectangles = /* @__PURE__ */ new Set();
+    const slabs = [];
+    for (let eventIndex = 0; eventIndex < eventRows.length - 1; eventIndex++) {
+      const top = eventRows[eventIndex];
+      const nextTop = eventRows[eventIndex + 1];
+      const event = events.get(top);
+      for (const rectangle of event.remove) {
+        activeRectangles.delete(rectangle);
+      }
+      for (const rectangle of event.add) {
+        activeRectangles.add(rectangle);
+      }
+      if (!activeRectangles.size || nextTop <= top) {
+        continue;
+      }
+      const intervals = mergeIntervals(Array.from(activeRectangles, (rectangle) => [rectangle.left, rectangle.right]));
+      const previousSlab = slabs[slabs.length - 1];
+      if (previousSlab && previousSlab.bottom == top && intervalsEqual(previousSlab.intervals, intervals)) {
+        previousSlab.bottom = nextTop;
+      } else {
+        slabs.push({ top, bottom: nextTop, intervals });
       }
     }
-    const mergedIntervalsByRow = /* @__PURE__ */ new Map();
-    for (const [row, intervals] of filledIntervalsByRow) {
-      mergedIntervalsByRow.set(row, mergeIntervals(intervals));
-    }
-    const rows = Array.from(mergedIntervalsByRow.keys()).sort((a, b) => a - b);
-    for (const row of rows) {
-      const currentIntervals = mergedIntervalsByRow.get(row) ?? [];
-      const previousIntervals = mergedIntervalsByRow.get(row - 1) ?? [];
-      const nextIntervals = mergedIntervalsByRow.get(row + 1) ?? [];
-      for (const interval of currentIntervals) {
+    const drawHorizontal = (row, startColumn, endColumn) => {
+      const start = Math.max(0, startColumn);
+      const end = Math.min(logicalWidth, endColumn);
+      if (row < 0 || row >= logicalHeight || start >= end) {
+        return;
+      }
+      const firstSubpixelRow = row * pixelSize;
+      const finalSubpixelRow = Math.min(templateHeight, firstSubpixelRow + pixelSize);
+      const firstSubpixelColumn = start * pixelSize;
+      const finalSubpixelColumn = Math.min(templateWidth, end * pixelSize);
+      for (let subpixelRow = firstSubpixelRow; subpixelRow < finalSubpixelRow; subpixelRow++) {
+        template32.fill(contourColor, subpixelRow * templateWidth + firstSubpixelColumn, subpixelRow * templateWidth + finalSubpixelColumn);
+      }
+    };
+    const drawVertical = (column, startRow, endRow) => {
+      const start = Math.max(0, startRow);
+      const end = Math.min(logicalHeight, endRow);
+      if (column < 0 || column >= logicalWidth || start >= end) {
+        return;
+      }
+      const firstSubpixelColumn = column * pixelSize;
+      const finalSubpixelColumn = Math.min(templateWidth, firstSubpixelColumn + pixelSize);
+      for (let row = start; row < end; row++) {
+        const firstSubpixelRow = row * pixelSize;
+        const finalSubpixelRow = Math.min(templateHeight, firstSubpixelRow + pixelSize);
+        for (let subpixelRow = firstSubpixelRow; subpixelRow < finalSubpixelRow; subpixelRow++) {
+          template32.fill(contourColor, subpixelRow * templateWidth + firstSubpixelColumn, subpixelRow * templateWidth + finalSubpixelColumn);
+        }
+      }
+    };
+    const drawPixel = (row, column) => drawHorizontal(row, column, column + 1);
+    for (let slabIndex = 0; slabIndex < slabs.length; slabIndex++) {
+      const slab = slabs[slabIndex];
+      const previousSlab = slabs[slabIndex - 1];
+      const nextSlab = slabs[slabIndex + 1];
+      const previousIntervals = previousSlab && previousSlab.bottom == slab.top ? previousSlab.intervals : [];
+      const nextIntervals = nextSlab && slab.bottom == nextSlab.top ? nextSlab.intervals : [];
+      for (const interval of slab.intervals) {
         const [left, right] = interval;
-        for (const [startColumn, endColumn] of subtractCoveredIntervals(interval, previousIntervals)) {
-          for (let offset = 0; offset <= outerThickness; offset++) {
-            drawHorizontal(row + offset, startColumn, endColumn);
+        drawVertical(left, slab.top, slab.bottom);
+        drawVertical(right - 1, slab.top, slab.bottom);
+        for (const [start, end] of subtractIntervals(interval, previousIntervals)) {
+          drawHorizontal(slab.top, start, end);
+          if (start > left) {
+            drawPixel(slab.top, start - 1);
+          }
+          if (end < right) {
+            drawPixel(slab.top, end);
           }
         }
-        for (const [startColumn, endColumn] of subtractCoveredIntervals(interval, nextIntervals)) {
-          for (let offset = 0; offset <= outerThickness; offset++) {
-            drawHorizontal(row - offset, startColumn, endColumn);
+        for (const [start, end] of subtractIntervals(interval, nextIntervals)) {
+          const bottomRow = slab.bottom - 1;
+          drawHorizontal(bottomRow, start, end);
+          if (start > left) {
+            drawPixel(bottomRow, start - 1);
           }
-        }
-        for (let offset = 0; offset <= outerThickness; offset++) {
-          setPixel(row, left + offset, contourColor());
-          setPixel(row, right - offset, contourColor());
+          if (end < right) {
+            drawPixel(bottomRow, end);
+          }
         }
       }
     }
   };
-  /** Returns the same Uint32 RGBA color with a new alpha channel.
-   * @param {number} color
-   * @param {number} alpha
-   * @returns {number}
-   * @since 0.97.0
+  /** Builds one reusable marker stencil for the current animation phase.
+   * @param {Object} colors
+   * @param {number} phase
+   * @returns {Array<number>}
+   * @since 0.98.0
    */
-  withAlpha_fn = function(color, alpha) {
-    return color & 16777215 | (Math.max(0, Math.min(255, alpha)) & 255) << 24;
+  getIncorrectHighlightStencil_fn = function(colors, phase) {
+    const normalizedPhase = phase % 12;
+    const cacheKey = `${this.drawMult}:${normalizedPhase}`;
+    const cachedStencil = this.incorrectHighlightStencilCache.get(cacheKey);
+    if (cachedStencil) {
+      return cachedStencil;
+    }
+    const stencil = [];
+    const push = (rowDelta, columnDelta, color) => {
+      stencil.push(rowDelta, columnDelta, color);
+    };
+    const pixelSize = this.drawMult;
+    const radiusPixels = 10 + normalizedPhase % 4;
+    const waveRadius = radiusPixels * pixelSize;
+    const innerRadius = Math.max(pixelSize * 3, waveRadius - pixelSize * 4);
+    const midRadius = Math.max(pixelSize * 2, waveRadius - pixelSize * 2);
+    const outerRingThickness = pixelSize * 0.52;
+    const midRingThickness = pixelSize * 0.46;
+    const innerRingThickness = pixelSize * 0.4;
+    const spokeHalfThickness = Math.max(0, Math.floor(pixelSize * 0.22));
+    const phaseIsEven = (normalizedPhase & 1) == 0;
+    const phaseModThree = normalizedPhase % 3;
+    const crossStart = Math.max(1, pixelSize);
+    const crossEnd = Math.max(crossStart + 1, pixelSize * 2);
+    for (let offset = crossStart; offset <= crossEnd; offset++) {
+      push(-offset, 0, colors.yellow);
+      push(offset, 0, colors.yellow);
+      push(0, -offset, colors.yellow);
+      push(0, offset, colors.yellow);
+    }
+    for (let rowDelta = -waveRadius; rowDelta <= waveRadius; rowDelta++) {
+      for (let columnDelta = -waveRadius; columnDelta <= waveRadius; columnDelta++) {
+        const distance = Math.hypot(rowDelta, columnDelta);
+        const isOuterRing = Math.abs(distance - waveRadius) <= outerRingThickness;
+        const isMidRing = Math.abs(distance - midRadius) <= midRingThickness;
+        const isInnerRing = Math.abs(distance - innerRadius) <= innerRingThickness;
+        const isSpoke = Math.abs(rowDelta) <= spokeHalfThickness && Math.abs(columnDelta) >= crossStart && Math.abs(columnDelta) <= waveRadius && (Math.abs(columnDelta) / pixelSize + normalizedPhase) % 5 < 1 || Math.abs(columnDelta) <= spokeHalfThickness && Math.abs(rowDelta) >= crossStart && Math.abs(rowDelta) <= waveRadius && (Math.abs(rowDelta) / pixelSize + normalizedPhase) % 5 < 1;
+        if (!isOuterRing && !isMidRing && !isInnerRing && !isSpoke) {
+          continue;
+        }
+        if (isOuterRing && (Math.floor((Math.atan2(rowDelta, columnDelta) + Math.PI) * 6) + phaseModThree) % 3 == 0) {
+          push(rowDelta, columnDelta, colors.white);
+        } else if (isOuterRing) {
+          push(rowDelta, columnDelta, phaseIsEven ? colors.cyan : colors.blue);
+        } else if (isMidRing) {
+          push(rowDelta, columnDelta, phaseIsEven ? colors.yellow : colors.cyan);
+        } else if (isInnerRing) {
+          push(rowDelta, columnDelta, colors.coral);
+        } else {
+          push(rowDelta, columnDelta, phaseIsEven ? colors.blue : colors.yellow);
+        }
+      }
+    }
+    for (const [rowDelta, columnDelta] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
+      push(rowDelta, columnDelta, colors.yellow);
+    }
+    this.incorrectHighlightStencilCache.set(cacheKey, stencil);
+    return stencil;
   };
   /** Draws a loud marker around one incorrect pixel for color-specific highlighting.
    * @param {Object} params
@@ -5146,9 +5592,7 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
    * @param {number} params.templateHeight
    * @param {number} params.row
    * @param {number} params.column
-   * @param {number} params.centerColor
-   * @param {Object} params.colors
-   * @param {number} params.phase
+   * @param {Array<number>} params.stencil
    * @since 0.97.0
    */
   drawIncorrectHighlightMarker_fn = function({
@@ -5157,9 +5601,7 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
     templateHeight,
     row: templateRow,
     column: templateColumn,
-    centerColor,
-    colors,
-    phase
+    stencil
   }) {
     const setSubpixel = (rowDelta, columnDelta, color) => {
       const row = templateRow + rowDelta;
@@ -5169,52 +5611,8 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
       }
       template32[row * templateWidth + column] = color;
     };
-    const pixelSize = this.drawMult;
-    const radiusPixels = 10 + phase % 4;
-    const waveRadius = radiusPixels * pixelSize;
-    const innerRadius = Math.max(pixelSize * 3, waveRadius - pixelSize * 4);
-    const midRadius = Math.max(pixelSize * 2, waveRadius - pixelSize * 2);
-    const outerRingThickness = pixelSize * 0.52;
-    const midRingThickness = pixelSize * 0.46;
-    const innerRingThickness = pixelSize * 0.4;
-    const spokeHalfThickness = Math.max(0, Math.floor(pixelSize * 0.22));
-    const phaseIsEven = (phase & 1) == 0;
-    const phaseModThree = phase % 3;
-    const crossStart = Math.max(1, pixelSize);
-    const crossEnd = Math.max(crossStart + 1, pixelSize * 2);
-    for (let offset = crossStart; offset <= crossEnd; offset++) {
-      setSubpixel(-offset, 0, colors.yellow);
-      setSubpixel(offset, 0, colors.yellow);
-      setSubpixel(0, -offset, colors.yellow);
-      setSubpixel(0, offset, colors.yellow);
-    }
-    for (let rowDelta = -waveRadius; rowDelta <= waveRadius; rowDelta++) {
-      for (let columnDelta = -waveRadius; columnDelta <= waveRadius; columnDelta++) {
-        const distance = Math.hypot(rowDelta, columnDelta);
-        const isOuterRing = Math.abs(distance - waveRadius) <= outerRingThickness;
-        const isMidRing = Math.abs(distance - midRadius) <= midRingThickness;
-        const isInnerRing = Math.abs(distance - innerRadius) <= innerRingThickness;
-        const isSpoke = Math.abs(rowDelta) <= spokeHalfThickness && Math.abs(columnDelta) >= crossStart && Math.abs(columnDelta) <= waveRadius && (Math.abs(columnDelta) / pixelSize + phase) % 5 < 1 || Math.abs(columnDelta) <= spokeHalfThickness && Math.abs(rowDelta) >= crossStart && Math.abs(rowDelta) <= waveRadius && (Math.abs(rowDelta) / pixelSize + phase) % 5 < 1;
-        if (!isOuterRing && !isMidRing && !isInnerRing && !isSpoke) {
-          continue;
-        }
-        if (isOuterRing && (Math.floor((Math.atan2(rowDelta, columnDelta) + Math.PI) * 6) + phaseModThree) % 3 == 0) {
-          setSubpixel(rowDelta, columnDelta, colors.white);
-          continue;
-        }
-        if (isOuterRing) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.cyan : colors.blue);
-        } else if (isMidRing) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.yellow : colors.cyan);
-        } else if (isInnerRing) {
-          setSubpixel(rowDelta, columnDelta, colors.coral);
-        } else if (isSpoke) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.blue : colors.yellow);
-        }
-      }
-    }
-    for (const [rowDelta, columnDelta] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
-      setSubpixel(rowDelta, columnDelta, colors.yellow);
+    for (let index = 0; index < stencil.length; index += 3) {
+      setSubpixel(stencil[index], stencil[index + 1], stencil[index + 2]);
     }
   };
 
@@ -5492,16 +5890,16 @@ HTTP ${response.status}`);
       const browser = await this.apiManager.getBrowserFromUA(navigator.userAgent);
       const os = this.apiManager.getOS(navigator.userAgent);
       this.window = this.addDiv({ "id": this.windowID, "class": "bm-window", "style": "height: 80vh; z-index: 9998;" }).addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container bm-center-vertically" }).addHeader(1, { "textContent": `${this.name} Telemetry` }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container bm-flex-center", "style": "gap: 1.5ch; flex-wrap: wrap;" }).addButton({ "textContent": "Enable Telemetry" }, (instance, button) => {
-        button.onclick = () => {
+        button.onclick = async () => {
           __privateMethod(this, _WindowTelemetry_instances, setTelemetryValue_fn).call(this, this.currentTelemetryVersion);
           const element = document.getElementById(this.windowID);
-          element?.remove();
+          await this.handleWindowClose(element);
         };
       }).buildElement().addButton({ "textContent": "Disable Telemetry" }, (instance, button) => {
-        button.onclick = () => {
+        button.onclick = async () => {
           __privateMethod(this, _WindowTelemetry_instances, setTelemetryValue_fn).call(this, 0);
           const element = document.getElementById(this.windowID);
-          element?.remove();
+          await this.handleWindowClose(element);
         };
       }).buildElement().addButton({ "textContent": "More Information" }, (instance, button) => {
         button.onclick = () => {
@@ -5540,8 +5938,18 @@ HTTP ${response.status}`);
     const name2 = script?.getAttribute("bm-name") || "Blue Marble";
     const consoleStyle2 = script?.getAttribute("bm-cStyle") || "";
     const fetchedBlobQueue = /* @__PURE__ */ new Map();
+    let tileRefreshRevision = 0;
     window.addEventListener("message", (event) => {
-      const { source, endpoint, blobID, blobData, blink } = event.data;
+      const { source, action, revision, endpoint, blobID, blobData, blink } = event.data;
+      if (source == "blue-marble" && action == "refresh-tiles") {
+        tileRefreshRevision = Math.max(tileRefreshRevision + 1, Number(revision) || 0);
+        window.dispatchEvent(new Event("online"));
+        requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+        return;
+      }
+      if (source == "blue-marble" && action == "refresh-progress") {
+        return;
+      }
       const elapsed = Date.now() - blink;
       console.groupCollapsed(`%c${name2}%c: ${fetchedBlobQueue.size} Recieved IMAGE message about blob "${blobID}"`, consoleStyle2, "");
       console.log(`Blob fetch took %c${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String(Math.floor(elapsed / 1e3) % 60).padStart(2, "0")}.${String(elapsed % 1e3).padStart(3, "0")}%c MM:SS.mmm`, consoleStyle2, "");
@@ -5559,9 +5967,49 @@ HTTP ${response.status}`);
     });
     const originalFetch = window.fetch;
     window.fetch = async function(...args) {
-      const response = await originalFetch.apply(this, args);
+      const endpointName = (args[0] instanceof Request ? args[0]?.url : args[0])?.toString() || "ignore";
+      let fetchArgs = args;
+      let requestRefreshRevision = 0;
+      if (tileRefreshRevision && endpointName.includes("/tiles/") && !endpointName.includes("openfreemap") && !endpointName.includes("maps")) {
+        try {
+          const refreshedURL = new URL(endpointName, window.location.href);
+          refreshedURL.searchParams.set("bm-revision", tileRefreshRevision.toString());
+          const refreshedInput = args[0] instanceof Request ? new Request(refreshedURL.toString(), args[0]) : refreshedURL.toString();
+          fetchArgs = [refreshedInput, ...args.slice(1)];
+          requestRefreshRevision = tileRefreshRevision;
+        } catch (error) {
+          console.warn(`%c${name2}%c: Failed to revise tile URL`, consoleStyle2, "", error);
+        }
+      }
+      if (requestRefreshRevision) {
+        window.postMessage({
+          source: "blue-marble",
+          action: "refresh-progress",
+          revision: requestRefreshRevision,
+          state: "started"
+        }, "*");
+      }
+      let refreshCompletionSent = false;
+      const completeRefreshRequest = () => {
+        if (!requestRefreshRevision || refreshCompletionSent) {
+          return;
+        }
+        refreshCompletionSent = true;
+        window.postMessage({
+          source: "blue-marble",
+          action: "refresh-progress",
+          revision: requestRefreshRevision,
+          state: "completed"
+        }, "*");
+      };
+      let response;
+      try {
+        response = await originalFetch.apply(this, fetchArgs);
+      } catch (error) {
+        completeRefreshRequest();
+        throw error;
+      }
       const cloned = response.clone();
-      const endpointName = (args[0] instanceof Request ? args[0]?.url : args[0]) || "ignore";
       const contentType = cloned.headers.get("content-type") || "";
       if (contentType.includes("application/json")) {
         console.log(`%c${name2}%c: Sending JSON message about endpoint "${endpointName}"`, consoleStyle2, "");
@@ -5595,6 +6043,7 @@ HTTP ${response.status}`);
               statusText: cloned.statusText
             }));
             console.log(`%c${name2}%c: ${fetchedBlobQueue.size} Processed blob "${blobUUID}"`, consoleStyle2, "");
+            completeRefreshRequest();
           });
           window.postMessage({
             source: "blue-marble",
@@ -5604,6 +6053,7 @@ HTTP ${response.status}`);
             blink
           });
         }).catch((exception) => {
+          completeRefreshRequest();
           const elapsed = Date.now();
           console.error(`%c${name2}%c: Failed to Promise blob!`, consoleStyle2, "");
           console.groupCollapsed(`%c${name2}%c: Details of failed blob Promise:`, consoleStyle2, "");
@@ -5615,6 +6065,7 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
           console.groupEnd();
         });
       }
+      completeRefreshRequest();
       return response;
     };
   });
@@ -5710,4 +6161,4 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   }
 })();
 
-// Build Hash: 4b4561bdc387
+// Build Hash: e06b5e38b51f

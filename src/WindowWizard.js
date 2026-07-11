@@ -44,7 +44,7 @@ export default class WindowWizard extends Overlay {
 
     // If a template wizard window already exists, close it
     if (document.querySelector(`#${this.windowID}`)) {
-      document.querySelector(`#${this.windowID}`).remove();
+      void this.handleWindowClose(document.querySelector(`#${this.windowID}`));
       return;
     }
 
@@ -65,12 +65,10 @@ export default class WindowWizard extends Overlay {
     }).addDragbar()
         .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'aria-label': 'Minimize window "Template Wizard"', 'data-button-status': 'expanded'}, (instance, button) => {
           button.onclick = () => instance.handleMinimization(button);
-          button.ontouchend = () => {button.click()}; // Needed only to negate weird interaction with dragbar
         }).buildElement()
         .addDiv().buildElement() // Contains the minimized h1 element
         .addButton({'class': 'bm-button-circle', 'textContent': '✖', 'aria-label': 'Close window "Template Wizard"'}, (instance, button) => {
-          button.onclick = () => {document.querySelector(`#${this.windowID}`)?.remove();};
-          button.ontouchend = () => {button.click();}; // Needed only to negate weird interaction with dragbar
+          button.onclick = () => this.handleWindowClose(document.querySelector(`#${this.windowID}`));
         }).buildElement()
       .buildElement()
       .addDiv({'class': 'bm-window-content'})
@@ -296,7 +294,7 @@ export default class WindowWizard extends Overlay {
     // If it has been requested that we open a new Template Wizard window, we do so
     if (shouldWindowWizardOpen) {
       console.log(`Restarting Template Wizard...`);
-      document.querySelector(`#${this.windowID}`).remove();
+      await this.handleWindowClose(document.querySelector(`#${this.windowID}`));
       new WindowWizard(this.name, this.version, this.schemaVersionBleedingEdge, this.templateManager).buildWindow();
     }
   }

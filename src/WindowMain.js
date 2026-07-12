@@ -24,6 +24,7 @@ export default class WindowMain extends Overlay {
     this.window = null; // Contains the *window* DOM tree
     this.windowID = 'bm-window-main'; // The ID attribute for this window
     this.windowParent = document.body; // The parent of the window DOM tree
+    this.windowFilter = null; // Single owner for Color Filter timers and DOM
   }
 
   /** Creates the main Blue Marble window.
@@ -143,7 +144,7 @@ export default class WindowMain extends Overlay {
               }
             }).buildElement()
             .addButton({'class': 'bm-button-primary', 'textContent': 'Create'}, (instance, button) => {
-              button.onclick = () => {
+              button.onclick = async () => {
                 const input = document.querySelector(`#${this.windowID} .bm-input-file`);
 
                 // Checks to see if the coordinates are valid. Throws an error if they are not
@@ -159,8 +160,16 @@ export default class WindowMain extends Overlay {
                 // Kills itself if there is no file
                 if (!input?.files[0]) {instance.handleDisplayError(`No file selected!`); return;}
 
-                instance?.apiManager?.templateManager.createTemplate(input.files[0], input.files[0]?.name.replace(/\.[^/.]+$/, ''), [Number(coordTlX.value), Number(coordTlY.value), Number(coordPxX.value), Number(coordPxY.value)]);
-                instance.handleDisplayStatus(`Drew to canvas!`);
+                button.disabled = true;
+                try {
+                  await instance?.apiManager?.templateManager.createTemplate(input.files[0], input.files[0]?.name.replace(/\.[^/.]+$/, ''), [Number(coordTlX.value), Number(coordTlY.value), Number(coordPxX.value), Number(coordPxY.value)]);
+                  instance.handleDisplayStatus(`Drew to canvas!`);
+                } catch (error) {
+                  console.error('Blue Marble: Template creation failed.', error);
+                  instance.handleDisplayError(`Template creation failed: ${error instanceof Error ? error.message : String(error)}`);
+                } finally {
+                  button.disabled = false;
+                }
               }
             }).buildElement()
             .addButton({'class': 'bm-button-secondary', 'textContent': 'Filter'}, (instance, button) => {
@@ -184,7 +193,11 @@ export default class WindowMain extends Overlay {
    * @since 0.88.330
    */
   buildWindowFilter({respectSavedVisibility = false} = {}) {
-    const windowFilter = new WindowFilter(this); // Creates a new color filter window instance
+    if (!this.windowFilter || (this.windowFilter.templateManager != this.apiManager?.templateManager)) {
+      this.windowFilter?.dispose();
+      this.windowFilter = new WindowFilter(this);
+    }
+    const windowFilter = this.windowFilter;
     if (respectSavedVisibility && !windowFilter.shouldAutoOpen()) {
       return;
     }

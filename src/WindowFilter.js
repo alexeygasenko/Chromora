@@ -1,6 +1,6 @@
 import ConfettiManager from "./confetttiManager";
 import Overlay, { minimizeIconExpanded } from "./Overlay";
-import { calculateRelativeLuminance, localizeNumber, localizePercent } from "./utils";
+import { calculateRelativeLuminance, colorpaletteForBlueMarble, localizeNumber, localizePercent } from "./utils";
 
 const closeIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
 const fullscreenIcon = '<svg class="bm-button-icon bm-button-icon-fullscreen" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.5H4.5V8M16 4.5h3.5V8M19.5 16v3.5H16M8 19.5H4.5V16"/><path d="M4.8 4.8l5.1 5.1M19.2 4.8l-5.1 5.1M19.2 19.2l-5.1-5.1M4.8 19.2l5.1-5.1"/></g></svg>';
@@ -36,6 +36,7 @@ export default class WindowFilter extends Overlay {
   constructor(executor) {
     super(executor.name, executor.version); // Executes the code in the Overlay constructor
     this.window = null; // Contains the *window* DOM tree
+    this.windowElement = null; // Root element currently owned by this instance
     this.windowID = 'bm-window-filter'; // The ID attribute for this window
     this.colorListID = 'bm-filter-flex'; // The ID attribute for the color list
     this.windowParent = document.body; // The parent of the window DOM tree
@@ -52,6 +53,9 @@ export default class WindowFilter extends Overlay {
     this.colorRefreshInterval = null; // Auto-refresh timer for live color statistics
     this.highlightRefreshPending = null; // Active map refresh triggered by a highlight-mode change
     this.colorRefreshIntervalMS = 10000; // Refresh Color Filter statistics every 10 seconds
+    this.templateWasComplete = false; // Prevent repeated completion effects on every statistics refresh
+    this.ownerID = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+    this.modeTransitionPending = false;
     this.windowMinWidth = 360; // Minimum width for the windowed filter
     this.windowMinHeight = 220; // Minimum height for the windowed filter
     this.windowHorizontalHeight = 170; // Fixed height for the horizontal windowed filter
@@ -66,8 +70,11 @@ export default class WindowFilter extends Overlay {
     this.eyeClosed = '<svg class="bm-filter-eye-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.6 9.8C6.1 8.3 8.6 7 12 7c5.1 0 8.2 5 8.2 5a15.2 15.2 0 0 1-2.2 2.7"/><path d="M14.1 16.7a8.3 8.3 0 0 1-2.1.3c-5.1 0-8.2-5-8.2-5a14.9 14.9 0 0 1 1.8-2.3"/><path d="M5 5l14 14"/><path d="M10.4 10.7a2.5 2.5 0 0 0 2.9 2.9"/></svg>';
 
     // Obtains the color palette Blue Marble currently uses
-    const { palette: palette, LUT: _ } = this.templateManager.paletteBM;
-    this.palette = palette;
+    const rendererPalette = this.templateManager?.paletteBM?.palette;
+    this.palette = Array.isArray(rendererPalette) && rendererPalette.length
+      ? rendererPalette
+      : colorpaletteForBlueMarble(3).palette;
+    this.unsubscribeTemplateChanges = this.templateManager?.onTemplatesChanged?.(() => this.refreshColorList()) ?? null;
 
     // Tile quantity information
     this.tilesLoadedTotal = 0; // Number of tiles that have been loaded in this session
@@ -85,6 +92,71 @@ export default class WindowFilter extends Overlay {
     this.sortPrimary = 'total'; // The last used primary sort option
     this.sortSecondary = 'descending'; // The last used secondary sort option
     this.showUnused = false; // Were unused colors shown the last time the user sorted the color list?
+  }
+
+  /** Releases timers and subscriptions owned by this Color Filter instance.
+   * @since 0.99.0
+   */
+  dispose() {
+    this.#stopAutoRefresh();
+    this.#cleanupWindowPersistence();
+    this.#cleanupCustomSortDropdowns();
+    this.unsubscribeTemplateChanges?.();
+    this.unsubscribeTemplateChanges = null;
+    this.windowElement?.remove();
+    this.windowElement = null;
+  }
+
+  /** Refreshes an already-mounted color list without allowing statistics errors to remove controls.
+   * @since 0.99.0
+   */
+  refreshColorList() {
+    const windowElement = this.#getOwnedWindowElement();
+    const colorList = windowElement?.querySelector(`#${this.colorListID}`);
+    if (!colorList) {return;}
+
+    colorList.dataset['statisticsState'] = this.templateManager?.getTemplateStatisticsState?.() ?? 'ready';
+    try {
+      this.updateColorList();
+      delete colorList.dataset['statisticsError'];
+    } catch (error) {
+      colorList.dataset['statisticsState'] = 'error';
+      colorList.dataset['statisticsError'] = error instanceof Error ? error.message : String(error);
+      console.error('Blue Marble: Could not refresh Color Filter statistics.', error);
+      this.#sortColorList(this.sortPrimary, this.sortSecondary, this.showUnused);
+    }
+  }
+
+  /** Returns the connected window owned by this instance.
+   * @returns {HTMLElement | null}
+   * @since 0.99.0
+   */
+  #getOwnedWindowElement() {
+    if (this.windowElement?.isConnected && (this.windowElement.dataset['filterOwner'] == this.ownerID)) {
+      return this.windowElement;
+    }
+
+    const windowElement = document.querySelector(`#${this.windowID}[data-filter-owner="${this.ownerID}"]`);
+    this.windowElement = windowElement instanceof HTMLElement ? windowElement : null;
+    return this.windowElement;
+  }
+
+  /** Serializes close/build mode transitions to prevent duplicate windows.
+   * @param {HTMLElement} button
+   * @param {function():void} buildNext
+   * @since 0.99.0
+   */
+  async #switchWindowMode(button, buildNext) {
+    if (this.modeTransitionPending) {return;}
+    this.modeTransitionPending = true;
+    if (button) {button.disabled = true;}
+
+    try {
+      await this.#closeWindow(true);
+      buildNext();
+    } finally {
+      this.modeTransitionPending = false;
+    }
   }
 
   /** Builds the preferred filter window mode for the user.
@@ -106,13 +178,19 @@ export default class WindowFilter extends Overlay {
   buildWindow() {
 
     // If a color filter wizard window already exists, close it
-    if (document.querySelector(`#${this.windowID}`)) {
-      this.#closeWindow();
-      return;
+    const existingWindow = document.querySelector(`#${this.windowID}`);
+    if (existingWindow) {
+      if (existingWindow == this.#getOwnedWindowElement()) {
+        void this.#closeWindow();
+        return;
+      }
+      existingWindow.remove();
     }
     
     // Creates a new color filter window
     this.window = this.addDiv({'id': this.windowID, 'class': 'bm-window'}, (instance, div) => {
+      div.dataset['filterOwner'] = this.ownerID;
+      this.windowElement = div;
       // div.onclick = (event) => {
       //   if (event.target.closest('button, a, input, select')) {return;} // Exit-early if interactive child was clicked
       //   div.parentElement.appendChild(div); // When the window is clicked on, bring to top
@@ -126,11 +204,10 @@ export default class WindowFilter extends Overlay {
         .buildElement()
         .addDiv({'class': 'bm-flex-center'})
           .addButton({'class': 'bm-button-circle', 'innerHTML': windowedIcon, 'title': 'Switch to windowed mode for "Color Filter"', 'aria-label': 'Switch to windowed mode for "Color Filter"'}, (instance, button) => {
-            button.onclick = async () => {
+            button.onclick = () => this.#switchWindowMode(button, () => {
               this.#setWindowModePreference(true);
-              await this.#closeWindow(true);
               this.buildWindowed();
-            };
+            });
           }).buildElement()
           .addButton({'class': 'bm-button-circle', 'innerHTML': closeIcon, 'title': 'Close window "Color Filter"', 'aria-label': 'Close window "Color Filter"'}, (instance, button) => {
             button.onclick = () => this.#closeWindow();
@@ -260,9 +337,13 @@ export default class WindowFilter extends Overlay {
     const normalizedLayout = layout == 'horizontal' ? 'horizontal' : 'vertical';
 
     // If a color filter wizard window already exists, close it
-    if (document.querySelector(`#${this.windowID}`)) {
-      this.#closeWindow();
-      return;
+    const existingWindow = document.querySelector(`#${this.windowID}`);
+    if (existingWindow) {
+      if (existingWindow == this.#getOwnedWindowElement()) {
+        void this.#closeWindow();
+        return;
+      }
+      existingWindow.remove();
     }
 
     // Creates a new windowed color filter window
@@ -270,6 +351,9 @@ export default class WindowFilter extends Overlay {
       'id': this.windowID,
       'class': 'bm-window bm-windowed',
       'style': `width: 360px; height: min(70vh, 32rem); min-width: ${this.windowMinWidth}px; min-height: ${this.windowMinHeight}px; max-width: min(${this.windowMaxWidth}px, calc(100vw - 16px)); max-height: min(${this.windowMaxHeight}px, calc(100vh - 16px));`
+    }, (instance, div) => {
+      div.dataset['filterOwner'] = this.ownerID;
+      this.windowElement = div;
     })
       .addDragbar()
         .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'title': 'Minimize window "Color Filter"', 'aria-label': 'Minimize window "Color Filter"', 'data-button-status': 'expanded'}, (instance, button) => {
@@ -288,19 +372,17 @@ export default class WindowFilter extends Overlay {
         .buildElement() 
         .addDiv({'class': 'bm-flex-center'})
           .addButton({'id': 'bm-filter-layout-toggle', 'class': 'bm-button-circle bm-filter-layout-toggle', 'innerHTML': horizontalLayoutIcon, 'title': 'Switch color layout', 'aria-label': 'Switch to horizontal color layout'}, (instance, button) => {
-            button.onclick = async () => {
+            button.onclick = () => this.#switchWindowMode(button, () => {
               const nextLayout = normalizedLayout == 'horizontal' ? 'vertical' : 'horizontal';
-              await this.#closeWindow(true);
               this.#setWindowedColorLayoutPreference(nextLayout);
               this.buildWindowed(nextLayout);
-            };
+            });
           }).buildElement()
           .addButton({'class': 'bm-button-circle bm-filter-fullscreen-toggle', 'innerHTML': fullscreenIcon, 'title': 'Switch to fullscreen mode for "Color Filter"', 'aria-label': 'Switch to fullscreen mode for "Color Filter"'}, (instance, button) => {
-            button.onclick = async () => {
+            button.onclick = () => this.#switchWindowMode(button, () => {
               this.#setWindowModePreference(false);
-              await this.#closeWindow(true);
               this.buildWindow();
-            };
+            });
           }).buildElement()
           .addButton({'class': 'bm-button-circle', 'innerHTML': closeIcon, 'title': 'Close window "Color Filter"', 'aria-label': 'Close window "Color Filter"'}, (instance, button) => {
             button.onclick = () => this.#closeWindow();
@@ -828,7 +910,7 @@ export default class WindowFilter extends Overlay {
    * @since 0.92.0
    */
   async #closeWindow(preserveOpenState = false) {
-    const windowElement = document.querySelector(`#${this.windowID}`);
+    const windowElement = this.#getOwnedWindowElement();
     if (windowElement?.classList.contains('bm-windowed')) {
       this.#saveWindowState(windowElement);
     }
@@ -839,6 +921,7 @@ export default class WindowFilter extends Overlay {
     this.#cleanupWindowPersistence();
     this.#cleanupCustomSortDropdowns();
     await this.handleWindowClose(windowElement);
+    if (this.windowElement == windowElement) {this.windowElement = null;}
   }
 
   /** Starts the automatic Color Filter statistics refresh loop.
@@ -847,11 +930,11 @@ export default class WindowFilter extends Overlay {
   #startAutoRefresh() {
     this.#stopAutoRefresh();
     this.colorRefreshInterval = setInterval(() => {
-      if (!document.querySelector(`#${this.windowID}`)) {
+      if (!this.#getOwnedWindowElement()) {
         this.#stopAutoRefresh();
         return;
       }
-      this.updateColorList();
+      this.refreshColorList();
     }, this.colorRefreshIntervalMS);
   }
 
@@ -1082,11 +1165,31 @@ export default class WindowFilter extends Overlay {
     scrollableContainer.addEventListener('wheel', this.windowHorizontalWheelHandler, {passive: false});
   }
 
+  /** Creates placeholder statistics used while template data is unavailable.
+   * @returns {Object.<number, ColorData>}
+   * @since 0.99.0
+   */
+  #createEmptyColorStatistics() {
+    return Object.fromEntries(this.palette.map(color => [color.id, {
+      colorTotal: 0,
+      colorTotalLocalized: '0',
+      colorCorrect: 0,
+      colorCorrectLocalized: '0',
+      colorPercent: '???',
+      colorIncorrect: 0
+    }]));
+  }
+
   /** Creates the color list container.
    * @param {HTMLElement} parentElement - Parent element to add the color list to as a child
    * @since 0.88.222
    */
   #buildColorList(parentElement) {
+
+    if (!parentElement) {
+      console.error('Blue Marble: Color Filter container is missing.');
+      return;
+    }
 
     // Figures out if this window is fullscreen or windowed mode
     const parentWindow = parentElement.closest(`#${this.windowID}`);
@@ -1100,8 +1203,8 @@ export default class WindowFilter extends Overlay {
     colorList.addDiv({'id': this.colorListID})
     // We leave it open so we can add children to the grid
 
-    // Generated by #updateColorList()
-    const colorStatistics = this.updateColorList();
+    // Controls render first; live statistics are applied after mounting.
+    const colorStatistics = this.#createEmptyColorStatistics();
 
     // For each color in the palette...
     for (const color of this.palette) {
@@ -1272,8 +1375,11 @@ export default class WindowFilter extends Overlay {
       }
     }
 
+    parentElement.querySelector(`#${this.colorListID}`)?.remove();
+
     // Adds the colors to the color container in the filter window
     colorList.buildOverlay(parentElement);
+    this.refreshColorList();
   }
 
   /** Sorts the color list & hides unused colors
@@ -1289,13 +1395,16 @@ export default class WindowFilter extends Overlay {
     this.sortSecondary = sortSecondary;
     this.showUnused = showUnused;
 
-    const colorList = document.querySelector(`#${this.colorListID}`);
+    const colorList = this.#getOwnedWindowElement()?.querySelector(`#${this.colorListID}`);
+    if (!colorList) {return;}
 
     const colors = Array.from(colorList.children);
+    const statisticsReady = colorList.dataset['statisticsState'] == 'ready';
+    const hasUsedColors = colors.some(color => Number(color.getAttribute('data-total')) > 0);
 
     const hiddenStates = new Map(colors.map(color => [
       color,
-      !showUnused && !Number(color.getAttribute('data-total'))
+      !showUnused && statisticsReady && hasUsedColors && !Number(color.getAttribute('data-total'))
     ]));
 
     colors.sort((index, nextIndex) => {
@@ -1341,7 +1450,9 @@ export default class WindowFilter extends Overlay {
   #selectColorList(userWantsUnselect) {
 
     // Gets the colors
-    const colorList = document.querySelector(`#${this.colorListID}`);
+    const windowElement = this.#getOwnedWindowElement();
+    const colorList = windowElement?.querySelector(`#${this.colorListID}`);
+    if (!colorList) {return;}
     const colors = Array.from(colorList.children);
 
     const shouldHide = !userWantsUnselect;
@@ -1585,7 +1696,8 @@ export default class WindowFilter extends Overlay {
 
     this.#calculatePixelStatistics(); // Updates the pixel statistics in the class instance variables
 
-    const colorList = document.querySelector(`#${this.colorListID}`);
+    const windowElement = this.#getOwnedWindowElement();
+    const colorList = windowElement?.querySelector(`#${this.colorListID}`);
 
     const colorStatistics = {};
 
@@ -1632,8 +1744,8 @@ export default class WindowFilter extends Overlay {
       }
     }
 
-    const windowedDragbarTotals = document.querySelector('#bm-filter-windowed-color-totals-dragbar');
-    const windowedInlineTotals = document.querySelector('#bm-filter-windowed-color-totals-inline');
+    const windowedDragbarTotals = windowElement?.querySelector('#bm-filter-windowed-color-totals-dragbar');
+    const windowedInlineTotals = windowElement?.querySelector('#bm-filter-windowed-color-totals-inline');
 
     // Returns the number, unlocalized (no space to localize)
     // OR returns the three characters on either end of the string, with the middle replaced with an ellipse.
@@ -1659,6 +1771,7 @@ export default class WindowFilter extends Overlay {
     if (!colorList) {return colorStatistics;}
 
     const colors = Array.from(colorList.children);
+    const emptyColorStatistics = this.#createEmptyColorStatistics();
 
     // For each color...
     for (const color of colors) {
@@ -1673,7 +1786,7 @@ export default class WindowFilter extends Overlay {
         colorTotal: colorTotal,
         colorTotalLocalized: colorTotalLocalized,
         colorIncorrect: colorIncorrect
-      } = colorStatistics[colorID];
+      } = colorStatistics[colorID] ?? emptyColorStatistics[colorID];
 
       // Update the dataset
       color.dataset['correct'] = !Number.isNaN(parseInt(colorCorrect)) ? colorCorrect : '0';
@@ -1682,7 +1795,7 @@ export default class WindowFilter extends Overlay {
       color.dataset['incorrect'] = colorIncorrect || 0;
 
       // Updates the pixel count if it exists
-      const pixelCount = document.querySelector(`#${this.windowID} .bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-cnt`);
+      const pixelCount = windowElement?.querySelector(`.bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-cnt`);
       if (pixelCount) {
         pixelCount.dataset['correctLabel'] = colorCorrectLocalized;
         pixelCount.dataset['totalLabel'] = colorTotalLocalized;
@@ -1700,7 +1813,7 @@ export default class WindowFilter extends Overlay {
       }
 
       // Updates the pixel description if it exists
-      const pixelDesc = document.querySelector(`#${this.windowID} .bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-desc`);
+      const pixelDesc = windowElement?.querySelector(`.bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-desc`);
       if (pixelDesc) {pixelDesc.innerHTML = `${colorPercent} done<br>${((typeof colorIncorrect == 'number') && !isNaN(colorIncorrect)) ? colorIncorrect : '???'} off`;}
     }
 
@@ -1722,52 +1835,80 @@ export default class WindowFilter extends Overlay {
     this.allPixelsCorrect = new Map();
     this.allPixelsColor = new Map();
 
-    // Sum the pixel totals across all templates.
-    // If there is no total for a template, it defaults to zero
-    for (const template of this.templateManager.templatesArray) {
+    const entriesOf = value => {
+      if (value instanceof Map) {return value.entries();}
+      if (Array.isArray(value)) {return value;}
+      if (value && typeof value == 'object') {return Object.entries(value);}
+      return [];
+    };
+    const valuesOf = value => {
+      if (value instanceof Map) {return value.values();}
+      if (value && typeof value == 'object') {return Object.values(value);}
+      return [];
+    };
+    const sizeOf = value => value instanceof Map
+      ? value.size
+      : Object.keys(value ?? {}).length;
+    const templates = Array.isArray(this.templateManager?.templatesArray)
+      ? this.templateManager.templatesArray
+      : [];
 
-      const total = template.pixelCount?.total ?? 0;
-      this.allPixelsTotal += total ?? 0; // Sums the pixels placed as "total" per everything
+    for (const template of templates) {
+      if (!template || typeof template != 'object') {continue;}
 
-      const colors = template.pixelCount?.colors ?? new Map();
+      try {
+        const pixelCount = template.pixelCount ?? template.pixels ?? {};
+        this.allPixelsTotal += Number(pixelCount.total) || 0;
 
-      // Sums the color pixels placed as "total" per color ID
-      for (const [colorID, colorPixels] of colors) {
-        const _colorPixels = Number(colorPixels) || 0; // Boilerplate
-        const allPixelsColorSoFar = this.allPixelsColor.get(colorID) ?? 0; // The total color pixels for this color ID so far, or zero if none counted so far
-        this.allPixelsColor.set(colorID, allPixelsColorSoFar + _colorPixels);
-      }
-
-      // Object that contains the tiles which contain Maps as correct pixels per tile as the value in the key-value pair
-      const correctObject = template.pixelCount?.correct ?? {};
-
-      this.tilesLoadedTotal += Object.keys(correctObject).length; // Sums the total loaded tiles per template
-      this.tilesTotal += Object.keys(template.chunked).length; // Sums the total tiles per template
-
-      // Sums the pixels placed as "correct" per color ID
-      for (const map of Object.values(correctObject)) { // Per (loaded) tile per template
-        for (const [colorID, correctPixels] of map) { // Per color per (loaded) tile per template
-          const _correctPixels = Number(correctPixels) || 0; // Boilerplate
-          this.allPixelsCorrectTotal += _correctPixels; // Sums the pixels placed as "correct" per everything
-          const allPixelsCorrectSoFar = this.allPixelsCorrect.get(colorID) ?? 0; // The total correct pixels for this color ID so far, or zero if none counted so far
-          this.allPixelsCorrect.set(colorID, allPixelsCorrectSoFar + _correctPixels);
+        for (const [colorID, colorPixels] of entriesOf(pixelCount.colors)) {
+          const normalizedColorID = Number(colorID);
+          if (!Number.isFinite(normalizedColorID)) {continue;}
+          this.allPixelsColor.set(
+            normalizedColorID,
+            (this.allPixelsColor.get(normalizedColorID) ?? 0) + (Number(colorPixels) || 0)
+          );
         }
+
+        const correctObject = pixelCount.correct;
+        this.tilesLoadedTotal += sizeOf(correctObject);
+        this.tilesTotal += sizeOf(template.chunked ?? template.tiles);
+
+        for (const colorMap of valuesOf(correctObject)) {
+          for (const [colorID, correctPixels] of entriesOf(colorMap)) {
+            const normalizedColorID = Number(colorID);
+            if (!Number.isFinite(normalizedColorID)) {continue;}
+            const normalizedCorrectPixels = Number(correctPixels) || 0;
+            this.allPixelsCorrectTotal += normalizedCorrectPixels;
+            this.allPixelsCorrect.set(
+              normalizedColorID,
+              (this.allPixelsCorrect.get(normalizedColorID) ?? 0) + normalizedCorrectPixels
+            );
+          }
+        }
+      } catch (error) {
+        console.warn('Blue Marble: Skipping invalid template statistics.', error);
       }
     }
 
     console.log(`Tiles loaded: ${this.tilesLoadedTotal} / ${this.tilesTotal}`);
 
-    // If the template is complete, and the pixel count is non-zero, and at least 1 template exists, and all template tiles have been loaded this session...
-    if ((this.allPixelsCorrectTotal >= this.allPixelsTotal) && !!this.allPixelsTotal && (this.tilesLoadedTotal == this.tilesTotal)) {
+    const templateIsComplete = (this.allPixelsCorrectTotal >= this.allPixelsTotal)
+      && !!this.allPixelsTotal
+      && (this.tilesLoadedTotal == this.tilesTotal);
+
+    // Celebrate only when completion changes from false to true.
+    if (templateIsComplete && !this.templateWasComplete) {
       // Basically, only run if Blue Marble can confirm with 100% certanty that all (>0) templates are complete.
       
       // Create confetti in the color filter window
       const confettiManager = new ConfettiManager();
-      confettiManager.createConfetti(document.querySelector(`#${this.windowID}`));
+      confettiManager.createConfetti(this.#getOwnedWindowElement());
     }
+    this.templateWasComplete = templateIsComplete;
 
     // Calculates the date & time the user will complete the templates
-    this.timeRemaining = new Date(((this.allPixelsTotal - this.allPixelsCorrectTotal) * 30 * 1000) + Date.now());
+    const remainingPixels = Math.max(0, this.allPixelsTotal - this.allPixelsCorrectTotal);
+    this.timeRemaining = new Date(Math.min(Date.now() + (remainingPixels * 30 * 1000), 8640000000000000));
     this.timeRemainingLocalized = localizeCompactDate(this.timeRemaining);
   }
 }

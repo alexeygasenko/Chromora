@@ -218,9 +218,11 @@
     return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
   }
   function colorpaletteForBlueMarble(tolerance) {
-    const colorpaletteBM = colorpalette;
-    colorpaletteBM.unshift({ "id": -1, "premium": false, "name": "Erased", "rgb": [222, 250, 206] });
-    colorpaletteBM.unshift({ "id": -2, "premium": false, "name": "Other", "rgb": [0, 0, 0] });
+    const colorpaletteBM = [
+      { "id": -2, "premium": false, "name": "Other", "rgb": [0, 0, 0] },
+      { "id": -1, "premium": false, "name": "Erased", "rgb": [222, 250, 206] },
+      ...colorpalette.map((color) => ({ ...color, rgb: [...color.rgb] }))
+    ];
     const lookupTable = /* @__PURE__ */ new Map();
     for (const color of colorpaletteBM) {
       if (color.id == 0 || color.id == -2) continue;
@@ -376,15 +378,15 @@
      * @param {ApiManager} apiManager - The apiManager class instance
      * @since 0.41.4
      */
-    setApiManager(apiManager2) {
-      this.apiManager = apiManager2;
+    setApiManager(apiManager) {
+      this.apiManager = apiManager;
     }
     /** Populates the settingsManager variable with the settingsManager class.
      * @param {SettingsManager} settingsManager - The settingsManager class instance
      * @since 0.91.11
      */
-    setSettingsManager(settingsManager2) {
-      this.settingsManager = settingsManager2;
+    setSettingsManager(settingsManager) {
+      this.settingsManager = settingsManager;
     }
     /** Finishes building an element.
      * Call this after you are finished adding children.
@@ -2328,7 +2330,8 @@
       coords: coords2 = null,
       chunked = null,
       chunked32 = {},
-      tileSize = 1e3
+      tileSize = 1e3,
+      pixelCount = null
     } = {}) {
       __privateAdd(this, _Template_instances);
       this.displayName = displayName;
@@ -2340,7 +2343,14 @@
       this.chunked = chunked;
       this.chunked32 = chunked32;
       this.tileSize = tileSize;
-      this.pixelCount = { total: 0, colors: /* @__PURE__ */ new Map() };
+      const colorEntries = pixelCount?.colors instanceof Map ? pixelCount.colors : Object.entries(pixelCount?.colors ?? {});
+      this.pixelCount = {
+        total: Number(pixelCount?.total) || 0,
+        colors: new Map(Array.from(colorEntries, ([colorID, total]) => [Number(colorID), Number(total) || 0]))
+      };
+      if (pixelCount?.correct != null) {
+        this.pixelCount.correct = pixelCount.correct;
+      }
       this.shouldSkipTransTiles = true;
       this.shouldAggSkipTransTiles = false;
     }
@@ -2657,7 +2667,9 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   };
   var BlueMarbleConfettiPiece = class extends HTMLElement {
   };
-  customElements.define("confetti-piece", BlueMarbleConfettiPiece);
+  if (!customElements.get("confetti-piece")) {
+    customElements.define("confetti-piece", BlueMarbleConfettiPiece);
+  }
 
   // src/WindowFilter.js
   var closeIcon2 = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
@@ -2675,7 +2687,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     const minute = String(date.getMinutes()).padStart(2, "0");
     return `${day}.${month}.${year} ${hour}:${minute}`;
   }
-  var _WindowFilter_instances, getWindowState_fn2, setWindowOpenState_fn, prefersWindowedMode_fn, setWindowModePreference_fn, getWindowedColorLayout_fn, setWindowedColorLayoutPreference_fn, getActiveWindowedColorLayout_fn, getWindowedLayoutSize_fn, getWindowLayoutMaxWidth_fn, getWindowLayoutMinHeight_fn, getWindowLayoutMaxHeight_fn, saveWindowLayoutSize_fn, restoreWindowLayoutSize_fn, applyWindowedColorLayout_fn, syncWindowedColorLayoutLabels_fn, syncSortFormControls_fn, initializeCustomSortDropdowns_fn, closeCustomSortDropdowns_fn, cleanupCustomSortDropdowns_fn, closeWindow_fn2, startAutoRefresh_fn, stopAutoRefresh_fn, cleanupWindowPersistence_fn, clampWindowDimension_fn, clampWindowPosition_fn2, restoreWindowState_fn, saveWindowState_fn, scheduleWindowStateSave_fn, initializeWindowedPersistence_fn, initializeHorizontalScrollWheel_fn, buildColorList_fn, sortColorList_fn, selectColorList_fn, syncColorToggleLabel_fn, toggleColorVisibility_fn, toggleIncorrectHighlightColor_fn, getIncorrectHighlightButtonLabel_fn, syncIncorrectHighlightButtons_fn, animateColorToggleIcon_fn, initializeColorBlockToggle_fn, calculatePixelStatistics_fn;
+  var _WindowFilter_instances, getOwnedWindowElement_fn, switchWindowMode_fn, getWindowState_fn2, setWindowOpenState_fn, prefersWindowedMode_fn, setWindowModePreference_fn, getWindowedColorLayout_fn, setWindowedColorLayoutPreference_fn, getActiveWindowedColorLayout_fn, getWindowedLayoutSize_fn, getWindowLayoutMaxWidth_fn, getWindowLayoutMinHeight_fn, getWindowLayoutMaxHeight_fn, saveWindowLayoutSize_fn, restoreWindowLayoutSize_fn, applyWindowedColorLayout_fn, syncWindowedColorLayoutLabels_fn, syncSortFormControls_fn, initializeCustomSortDropdowns_fn, closeCustomSortDropdowns_fn, cleanupCustomSortDropdowns_fn, closeWindow_fn2, startAutoRefresh_fn, stopAutoRefresh_fn, cleanupWindowPersistence_fn, clampWindowDimension_fn, clampWindowPosition_fn2, restoreWindowState_fn, saveWindowState_fn, scheduleWindowStateSave_fn, initializeWindowedPersistence_fn, initializeHorizontalScrollWheel_fn, createEmptyColorStatistics_fn, buildColorList_fn, sortColorList_fn, selectColorList_fn, syncColorToggleLabel_fn, toggleColorVisibility_fn, toggleIncorrectHighlightColor_fn, getIncorrectHighlightButtonLabel_fn, syncIncorrectHighlightButtons_fn, animateColorToggleIcon_fn, initializeColorBlockToggle_fn, calculatePixelStatistics_fn;
   var WindowFilter = class extends Overlay {
     /** Constructor for the color filter window
      * @param {*} executor - The executing class
@@ -2686,6 +2698,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       super(executor.name, executor.version);
       __privateAdd(this, _WindowFilter_instances);
       this.window = null;
+      this.windowElement = null;
       this.windowID = "bm-window-filter";
       this.colorListID = "bm-filter-flex";
       this.windowParent = document.body;
@@ -2702,6 +2715,9 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.colorRefreshInterval = null;
       this.highlightRefreshPending = null;
       this.colorRefreshIntervalMS = 1e4;
+      this.templateWasComplete = false;
+      this.ownerID = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      this.modeTransitionPending = false;
       this.windowMinWidth = 360;
       this.windowMinHeight = 220;
       this.windowHorizontalHeight = 170;
@@ -2710,8 +2726,9 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.templateManager = executor.apiManager?.templateManager;
       this.eyeOpen = '<svg class="bm-filter-eye-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.8 12s3.1-5 8.2-5 8.2 5 8.2 5-3.1 5-8.2 5-8.2-5-8.2-5Z"/><circle cx="12" cy="12" r="2.5"/></svg>';
       this.eyeClosed = '<svg class="bm-filter-eye-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.6 9.8C6.1 8.3 8.6 7 12 7c5.1 0 8.2 5 8.2 5a15.2 15.2 0 0 1-2.2 2.7"/><path d="M14.1 16.7a8.3 8.3 0 0 1-2.1.3c-5.1 0-8.2-5-8.2-5a14.9 14.9 0 0 1 1.8-2.3"/><path d="M5 5l14 14"/><path d="M10.4 10.7a2.5 2.5 0 0 0 2.9 2.9"/></svg>';
-      const { palette, LUT: _ } = this.templateManager.paletteBM;
-      this.palette = palette;
+      const rendererPalette = this.templateManager?.paletteBM?.palette;
+      this.palette = Array.isArray(rendererPalette) && rendererPalette.length ? rendererPalette : colorpaletteForBlueMarble(3).palette;
+      this.unsubscribeTemplateChanges = this.templateManager?.onTemplatesChanged?.(() => this.refreshColorList()) ?? null;
       this.tilesLoadedTotal = 0;
       this.tilesTotal = 0;
       this.allPixelsColor = /* @__PURE__ */ new Map();
@@ -2723,6 +2740,38 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.sortPrimary = "total";
       this.sortSecondary = "descending";
       this.showUnused = false;
+    }
+    /** Releases timers and subscriptions owned by this Color Filter instance.
+     * @since 0.99.0
+     */
+    dispose() {
+      __privateMethod(this, _WindowFilter_instances, stopAutoRefresh_fn).call(this);
+      __privateMethod(this, _WindowFilter_instances, cleanupWindowPersistence_fn).call(this);
+      __privateMethod(this, _WindowFilter_instances, cleanupCustomSortDropdowns_fn).call(this);
+      this.unsubscribeTemplateChanges?.();
+      this.unsubscribeTemplateChanges = null;
+      this.windowElement?.remove();
+      this.windowElement = null;
+    }
+    /** Refreshes an already-mounted color list without allowing statistics errors to remove controls.
+     * @since 0.99.0
+     */
+    refreshColorList() {
+      const windowElement = __privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this);
+      const colorList = windowElement?.querySelector(`#${this.colorListID}`);
+      if (!colorList) {
+        return;
+      }
+      colorList.dataset["statisticsState"] = this.templateManager?.getTemplateStatisticsState?.() ?? "ready";
+      try {
+        this.updateColorList();
+        delete colorList.dataset["statisticsError"];
+      } catch (error) {
+        colorList.dataset["statisticsState"] = "error";
+        colorList.dataset["statisticsError"] = error instanceof Error ? error.message : String(error);
+        console.error("Blue Marble: Could not refresh Color Filter statistics.", error);
+        __privateMethod(this, _WindowFilter_instances, sortColorList_fn).call(this, this.sortPrimary, this.sortSecondary, this.showUnused);
+      }
     }
     /** Builds the preferred filter window mode for the user.
      * @since 0.92.0
@@ -2740,19 +2789,24 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
      * @since 0.88.149
      */
     buildWindow() {
-      if (document.querySelector(`#${this.windowID}`)) {
-        __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
-        return;
+      const existingWindow = document.querySelector(`#${this.windowID}`);
+      if (existingWindow) {
+        if (existingWindow == __privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this)) {
+          void __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
+          return;
+        }
+        existingWindow.remove();
       }
       this.window = this.addDiv({ "id": this.windowID, "class": "bm-window" }, (instance, div) => {
+        div.dataset["filterOwner"] = this.ownerID;
+        this.windowElement = div;
       }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "title": 'Minimize window "Color Filter"', "aria-label": 'Minimize window "Color Filter"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => instance.handleMinimization(button);
       }).buildElement().addDiv({ "class": "bm-filter-drag-title-slot" }).addHeader(1, { "class": "bm-dragbar-title-persistent bm-filter-drag-title", "textContent": "Color Filter" }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "innerHTML": windowedIcon, "title": 'Switch to windowed mode for "Color Filter"', "aria-label": 'Switch to windowed mode for "Color Filter"' }, (instance, button) => {
-        button.onclick = async () => {
+        button.onclick = () => __privateMethod(this, _WindowFilter_instances, switchWindowMode_fn).call(this, button, () => {
           __privateMethod(this, _WindowFilter_instances, setWindowModePreference_fn).call(this, true);
-          await __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
           this.buildWindowed();
-        };
+        });
       }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon2, "title": 'Close window "Color Filter"', "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
       }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addHr({ "class": "bm-window-divider-top" }).buildElement().addDiv({ "class": "bm-container bm-flex-between bm-center-vertically bm-filter-toolbar", "style": "gap: 1.5ch;" }).addButton({ "class": "bm-button-secondary", "textContent": "Hide All Colors" }, (instance, button) => {
@@ -2799,14 +2853,21 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
      */
     buildWindowed(layout = __privateMethod(this, _WindowFilter_instances, getWindowedColorLayout_fn).call(this)) {
       const normalizedLayout = layout == "horizontal" ? "horizontal" : "vertical";
-      if (document.querySelector(`#${this.windowID}`)) {
-        __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
-        return;
+      const existingWindow = document.querySelector(`#${this.windowID}`);
+      if (existingWindow) {
+        if (existingWindow == __privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this)) {
+          void __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
+          return;
+        }
+        existingWindow.remove();
       }
       this.window = this.addDiv({
         "id": this.windowID,
         "class": "bm-window bm-windowed",
         "style": `width: 360px; height: min(70vh, 32rem); min-width: ${this.windowMinWidth}px; min-height: ${this.windowMinHeight}px; max-width: min(${this.windowMaxWidth}px, calc(100vw - 16px)); max-height: min(${this.windowMaxHeight}px, calc(100vh - 16px));`
+      }, (instance, div) => {
+        div.dataset["filterOwner"] = this.ownerID;
+        this.windowElement = div;
       }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "title": 'Minimize window "Color Filter"', "aria-label": 'Minimize window "Color Filter"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => {
           const windowedColorTotals = document.querySelector("#bm-filter-windowed-color-totals-dragbar");
@@ -2816,18 +2877,16 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
           instance.handleMinimization(button);
         };
       }).buildElement().addDiv().addSpan({ "id": "bm-filter-windowed-color-totals-dragbar", "class": "bm-dragbar-text", "style": "font-weight: 700;" }).buildElement().addHeader(1, { "class": "bm-dragbar-title-persistent bm-filter-drag-title bm-filter-horizontal-drag-title", "textContent": "Color Filter" }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "id": "bm-filter-layout-toggle", "class": "bm-button-circle bm-filter-layout-toggle", "innerHTML": horizontalLayoutIcon, "title": "Switch color layout", "aria-label": "Switch to horizontal color layout" }, (instance, button) => {
-        button.onclick = async () => {
+        button.onclick = () => __privateMethod(this, _WindowFilter_instances, switchWindowMode_fn).call(this, button, () => {
           const nextLayout = normalizedLayout == "horizontal" ? "vertical" : "horizontal";
-          await __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
           __privateMethod(this, _WindowFilter_instances, setWindowedColorLayoutPreference_fn).call(this, nextLayout);
           this.buildWindowed(nextLayout);
-        };
+        });
       }).buildElement().addButton({ "class": "bm-button-circle bm-filter-fullscreen-toggle", "innerHTML": fullscreenIcon, "title": 'Switch to fullscreen mode for "Color Filter"', "aria-label": 'Switch to fullscreen mode for "Color Filter"' }, (instance, button) => {
-        button.onclick = async () => {
+        button.onclick = () => __privateMethod(this, _WindowFilter_instances, switchWindowMode_fn).call(this, button, () => {
           __privateMethod(this, _WindowFilter_instances, setWindowModePreference_fn).call(this, false);
-          await __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
           this.buildWindow();
-        };
+        });
       }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon2, "title": 'Close window "Color Filter"', "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
       }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addHr({ "class": "bm-window-divider-top" }).buildElement().addDiv({ "class": "bm-container bm-center-vertically bm-filter-windowed-summary-row" }).addDiv({ "class": "bm-filter-windowed-summary" }).addSpan({ "class": "bm-filter-windowed-summary-label", "textContent": "Painted" }).buildElement().addSpan({ "id": "bm-filter-windowed-color-totals-inline", "class": "bm-filter-windowed-summary-value", "textContent": "0 / ???" }).buildElement().buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container bm-flex-between bm-center-vertically bm-filter-toolbar bm-filter-toolbar-vertical", "style": "gap: 1.5ch;" }).addButton({ "class": "bm-button-secondary", "textContent": "None", "title": "Hide all colors", "aria-label": "Hide all colors" }, (instance, button) => {
@@ -2881,7 +2940,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
      */
     updateColorList() {
       __privateMethod(this, _WindowFilter_instances, calculatePixelStatistics_fn).call(this);
-      const colorList = document.querySelector(`#${this.colorListID}`);
+      const windowElement = __privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this);
+      const colorList = windowElement?.querySelector(`#${this.colorListID}`);
       const colorStatistics = {};
       for (const color of this.palette) {
         const colorTotal = this.allPixelsColor.get(color.id) ?? 0;
@@ -2907,8 +2967,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
           colorIncorrect
         };
       }
-      const windowedDragbarTotals = document.querySelector("#bm-filter-windowed-color-totals-dragbar");
-      const windowedInlineTotals = document.querySelector("#bm-filter-windowed-color-totals-inline");
+      const windowedDragbarTotals = windowElement?.querySelector("#bm-filter-windowed-color-totals-dragbar");
+      const windowedInlineTotals = windowElement?.querySelector("#bm-filter-windowed-color-totals-inline");
       const allCorrectCompact = this.allPixelsCorrectTotal.toString().length > 7 ? this.allPixelsCorrectTotal.toString().slice(0, 2) + "\u2026" + this.allPixelsCorrectTotal.toString().slice(-3) : this.allPixelsCorrectTotal.toString();
       const allTotalCompact = this.allPixelsTotal.toString().length > 7 ? this.allPixelsTotal.toString().slice(0, 2) + "\u2026" + this.allPixelsTotal.toString().slice(-3) : this.allPixelsTotal.toString();
       if (windowedDragbarTotals) {
@@ -2926,6 +2986,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
         return colorStatistics;
       }
       const colors = Array.from(colorList.children);
+      const emptyColorStatistics = __privateMethod(this, _WindowFilter_instances, createEmptyColorStatistics_fn).call(this);
       for (const color of colors) {
         const colorID = parseInt(color.dataset["id"]);
         const {
@@ -2935,12 +2996,12 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
           colorTotal,
           colorTotalLocalized,
           colorIncorrect
-        } = colorStatistics[colorID];
+        } = colorStatistics[colorID] ?? emptyColorStatistics[colorID];
         color.dataset["correct"] = !Number.isNaN(parseInt(colorCorrect)) ? colorCorrect : "0";
         color.dataset["total"] = colorTotal;
         color.dataset["percent"] = colorPercent.slice(-1) == "%" ? colorPercent.slice(0, -1) : "0";
         color.dataset["incorrect"] = colorIncorrect || 0;
-        const pixelCount = document.querySelector(`#${this.windowID} .bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-cnt`);
+        const pixelCount = windowElement?.querySelector(`.bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-cnt`);
         if (pixelCount) {
           pixelCount.dataset["correctLabel"] = colorCorrectLocalized;
           pixelCount.dataset["totalLabel"] = colorTotalLocalized;
@@ -2956,7 +3017,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
             pixelCount.innerHTML = `${colorCorrectLocalized} /<br>${colorTotalLocalized}`;
           }
         }
-        const pixelDesc = document.querySelector(`#${this.windowID} .bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-desc`);
+        const pixelDesc = windowElement?.querySelector(`.bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-desc`);
         if (pixelDesc) {
           pixelDesc.innerHTML = `${colorPercent} done<br>${typeof colorIncorrect == "number" && !isNaN(colorIncorrect) ? colorIncorrect : "???"} off`;
         }
@@ -2965,6 +3026,33 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     }
   };
   _WindowFilter_instances = new WeakSet();
+  /** Returns the connected window owned by this instance.
+   * @returns {HTMLElement | null}
+   * @since 0.99.0
+   */
+  getOwnedWindowElement_fn = function() {
+    if (this.windowElement?.isConnected && this.windowElement.dataset["filterOwner"] == this.ownerID) {
+      return this.windowElement;
+    }
+    const windowElement = document.querySelector(`#${this.windowID}[data-filter-owner="${this.ownerID}"]`);
+    this.windowElement = windowElement instanceof HTMLElement ? windowElement : null;
+    return this.windowElement;
+  };
+  switchWindowMode_fn = async function(button, buildNext) {
+    if (this.modeTransitionPending) {
+      return;
+    }
+    this.modeTransitionPending = true;
+    if (button) {
+      button.disabled = true;
+    }
+    try {
+      await __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this, true);
+      buildNext();
+    } finally {
+      this.modeTransitionPending = false;
+    }
+  };
   /** Retrieves the persisted window state object.
    * @returns {Object | null}
    * @since 0.92.0
@@ -3398,7 +3486,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     }
   };
   closeWindow_fn2 = async function(preserveOpenState = false) {
-    const windowElement = document.querySelector(`#${this.windowID}`);
+    const windowElement = __privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this);
     if (windowElement?.classList.contains("bm-windowed")) {
       __privateMethod(this, _WindowFilter_instances, saveWindowState_fn).call(this, windowElement);
     }
@@ -3409,6 +3497,9 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     __privateMethod(this, _WindowFilter_instances, cleanupWindowPersistence_fn).call(this);
     __privateMethod(this, _WindowFilter_instances, cleanupCustomSortDropdowns_fn).call(this);
     await this.handleWindowClose(windowElement);
+    if (this.windowElement == windowElement) {
+      this.windowElement = null;
+    }
   };
   /** Starts the automatic Color Filter statistics refresh loop.
    * @since 0.92.1
@@ -3416,11 +3507,11 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   startAutoRefresh_fn = function() {
     __privateMethod(this, _WindowFilter_instances, stopAutoRefresh_fn).call(this);
     this.colorRefreshInterval = setInterval(() => {
-      if (!document.querySelector(`#${this.windowID}`)) {
+      if (!__privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this)) {
         __privateMethod(this, _WindowFilter_instances, stopAutoRefresh_fn).call(this);
         return;
       }
-      this.updateColorList();
+      this.refreshColorList();
     }, this.colorRefreshIntervalMS);
   };
   /** Stops the automatic Color Filter statistics refresh loop.
@@ -3640,18 +3731,36 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     };
     scrollableContainer.addEventListener("wheel", this.windowHorizontalWheelHandler, { passive: false });
   };
+  /** Creates placeholder statistics used while template data is unavailable.
+   * @returns {Object.<number, ColorData>}
+   * @since 0.99.0
+   */
+  createEmptyColorStatistics_fn = function() {
+    return Object.fromEntries(this.palette.map((color) => [color.id, {
+      colorTotal: 0,
+      colorTotalLocalized: "0",
+      colorCorrect: 0,
+      colorCorrectLocalized: "0",
+      colorPercent: "???",
+      colorIncorrect: 0
+    }]));
+  };
   /** Creates the color list container.
    * @param {HTMLElement} parentElement - Parent element to add the color list to as a child
    * @since 0.88.222
    */
   buildColorList_fn = function(parentElement) {
+    if (!parentElement) {
+      console.error("Blue Marble: Color Filter container is missing.");
+      return;
+    }
     const parentWindow = parentElement.closest(`#${this.windowID}`);
     const isWindowedMode = parentWindow?.classList.contains("bm-windowed");
     const isHorizontalWindowedMode = isWindowedMode && parentWindow?.classList.contains("bm-filter-layout-horizontal");
     console.log(`Is Windowed Mode: ${isWindowedMode}`);
     const colorList = new Overlay(this.name, this.version);
     colorList.addDiv({ "id": this.colorListID });
-    const colorStatistics = this.updateColorList();
+    const colorStatistics = __privateMethod(this, _WindowFilter_instances, createEmptyColorStatistics_fn).call(this);
     for (const color of this.palette) {
       const lumin = calculateRelativeLuminance(color.rgb);
       let textColorForPaletteColorBackground = 1.05 / (lumin + 0.05) > (lumin + 0.05) / 0.05 ? "white" : "black";
@@ -3781,7 +3890,9 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
         ).buildElement().buildElement().addDiv({ "class": "bm-filter-color-title" }).addHeader(2, { "textContent": color.name }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-filter-color-meta" }).addDiv({ "class": "bm-filter-color-progress" }).addSpan({ "class": "bm-filter-color-pxl-cnt", "innerHTML": hasNoPixels ? "-" : `${colorCorrectLocalized} /<br>${colorTotalLocalized}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-desc", "innerHTML": `${colorPercent} done<br>${typeof colorIncorrect == "number" && !isNaN(colorIncorrect) ? colorIncorrect : "???"} off` }).buildElement().buildElement().buildElement().buildElement();
       }
     }
+    parentElement.querySelector(`#${this.colorListID}`)?.remove();
     colorList.buildOverlay(parentElement);
+    this.refreshColorList();
   };
   /** Sorts the color list & hides unused colors
    * @param {string} sortPrimary - The name of the dataset attribute to sort by.
@@ -3793,11 +3904,16 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     this.sortPrimary = sortPrimary;
     this.sortSecondary = sortSecondary;
     this.showUnused = showUnused;
-    const colorList = document.querySelector(`#${this.colorListID}`);
+    const colorList = __privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this)?.querySelector(`#${this.colorListID}`);
+    if (!colorList) {
+      return;
+    }
     const colors = Array.from(colorList.children);
+    const statisticsReady = colorList.dataset["statisticsState"] == "ready";
+    const hasUsedColors = colors.some((color) => Number(color.getAttribute("data-total")) > 0);
     const hiddenStates = new Map(colors.map((color) => [
       color,
-      !showUnused && !Number(color.getAttribute("data-total"))
+      !showUnused && statisticsReady && hasUsedColors && !Number(color.getAttribute("data-total"))
     ]));
     colors.sort((index, nextIndex) => {
       const indexValue = index.getAttribute("data-" + sortPrimary);
@@ -3839,7 +3955,11 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
    * @since 0.88.222
    */
   selectColorList_fn = function(userWantsUnselect) {
-    const colorList = document.querySelector(`#${this.colorListID}`);
+    const windowElement = __privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this);
+    const colorList = windowElement?.querySelector(`#${this.colorListID}`);
+    if (!colorList) {
+      return;
+    }
     const colors = Array.from(colorList.children);
     const shouldHide = !userWantsUnselect;
     const changedColorIDs = [];
@@ -4054,33 +4174,76 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     this.allPixelsCorrectTotal = 0;
     this.allPixelsCorrect = /* @__PURE__ */ new Map();
     this.allPixelsColor = /* @__PURE__ */ new Map();
-    for (const template of this.templateManager.templatesArray) {
-      const total = template.pixelCount?.total ?? 0;
-      this.allPixelsTotal += total ?? 0;
-      const colors = template.pixelCount?.colors ?? /* @__PURE__ */ new Map();
-      for (const [colorID, colorPixels] of colors) {
-        const _colorPixels = Number(colorPixels) || 0;
-        const allPixelsColorSoFar = this.allPixelsColor.get(colorID) ?? 0;
-        this.allPixelsColor.set(colorID, allPixelsColorSoFar + _colorPixels);
+    const entriesOf = (value) => {
+      if (value instanceof Map) {
+        return value.entries();
       }
-      const correctObject = template.pixelCount?.correct ?? {};
-      this.tilesLoadedTotal += Object.keys(correctObject).length;
-      this.tilesTotal += Object.keys(template.chunked).length;
-      for (const map of Object.values(correctObject)) {
-        for (const [colorID, correctPixels] of map) {
-          const _correctPixels = Number(correctPixels) || 0;
-          this.allPixelsCorrectTotal += _correctPixels;
-          const allPixelsCorrectSoFar = this.allPixelsCorrect.get(colorID) ?? 0;
-          this.allPixelsCorrect.set(colorID, allPixelsCorrectSoFar + _correctPixels);
+      if (Array.isArray(value)) {
+        return value;
+      }
+      if (value && typeof value == "object") {
+        return Object.entries(value);
+      }
+      return [];
+    };
+    const valuesOf = (value) => {
+      if (value instanceof Map) {
+        return value.values();
+      }
+      if (value && typeof value == "object") {
+        return Object.values(value);
+      }
+      return [];
+    };
+    const sizeOf = (value) => value instanceof Map ? value.size : Object.keys(value ?? {}).length;
+    const templates = Array.isArray(this.templateManager?.templatesArray) ? this.templateManager.templatesArray : [];
+    for (const template of templates) {
+      if (!template || typeof template != "object") {
+        continue;
+      }
+      try {
+        const pixelCount = template.pixelCount ?? template.pixels ?? {};
+        this.allPixelsTotal += Number(pixelCount.total) || 0;
+        for (const [colorID, colorPixels] of entriesOf(pixelCount.colors)) {
+          const normalizedColorID = Number(colorID);
+          if (!Number.isFinite(normalizedColorID)) {
+            continue;
+          }
+          this.allPixelsColor.set(
+            normalizedColorID,
+            (this.allPixelsColor.get(normalizedColorID) ?? 0) + (Number(colorPixels) || 0)
+          );
         }
+        const correctObject = pixelCount.correct;
+        this.tilesLoadedTotal += sizeOf(correctObject);
+        this.tilesTotal += sizeOf(template.chunked ?? template.tiles);
+        for (const colorMap of valuesOf(correctObject)) {
+          for (const [colorID, correctPixels] of entriesOf(colorMap)) {
+            const normalizedColorID = Number(colorID);
+            if (!Number.isFinite(normalizedColorID)) {
+              continue;
+            }
+            const normalizedCorrectPixels = Number(correctPixels) || 0;
+            this.allPixelsCorrectTotal += normalizedCorrectPixels;
+            this.allPixelsCorrect.set(
+              normalizedColorID,
+              (this.allPixelsCorrect.get(normalizedColorID) ?? 0) + normalizedCorrectPixels
+            );
+          }
+        }
+      } catch (error) {
+        console.warn("Blue Marble: Skipping invalid template statistics.", error);
       }
     }
     console.log(`Tiles loaded: ${this.tilesLoadedTotal} / ${this.tilesTotal}`);
-    if (this.allPixelsCorrectTotal >= this.allPixelsTotal && !!this.allPixelsTotal && this.tilesLoadedTotal == this.tilesTotal) {
+    const templateIsComplete = this.allPixelsCorrectTotal >= this.allPixelsTotal && !!this.allPixelsTotal && this.tilesLoadedTotal == this.tilesTotal;
+    if (templateIsComplete && !this.templateWasComplete) {
       const confettiManager = new ConfettiManager();
-      confettiManager.createConfetti(document.querySelector(`#${this.windowID}`));
+      confettiManager.createConfetti(__privateMethod(this, _WindowFilter_instances, getOwnedWindowElement_fn).call(this));
     }
-    this.timeRemaining = new Date((this.allPixelsTotal - this.allPixelsCorrectTotal) * 30 * 1e3 + Date.now());
+    this.templateWasComplete = templateIsComplete;
+    const remainingPixels = Math.max(0, this.allPixelsTotal - this.allPixelsCorrectTotal);
+    this.timeRemaining = new Date(Math.min(Date.now() + remainingPixels * 30 * 1e3, 864e13));
     this.timeRemainingLocalized = localizeCompactDate(this.timeRemaining);
   };
 
@@ -4100,6 +4263,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.window = null;
       this.windowID = "bm-window-main";
       this.windowParent = document.body;
+      this.windowFilter = null;
     }
     /** Creates the main Blue Marble window.
      * Parent/child relationships in the DOM structure below are indicated by indentation.
@@ -4170,7 +4334,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
           button.disabled = false;
         };
       }).buildElement().addButton({ "class": "bm-button-primary", "textContent": "Create" }, (instance, button) => {
-        button.onclick = () => {
+        button.onclick = async () => {
           const input = document.querySelector(`#${this.windowID} .bm-input-file`);
           const coordTlX = document.querySelector("#bm-input-tx");
           if (!coordTlX.checkValidity()) {
@@ -4200,8 +4364,16 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
             instance.handleDisplayError(`No file selected!`);
             return;
           }
-          instance?.apiManager?.templateManager.createTemplate(input.files[0], input.files[0]?.name.replace(/\.[^/.]+$/, ""), [Number(coordTlX.value), Number(coordTlY.value), Number(coordPxX.value), Number(coordPxY.value)]);
-          instance.handleDisplayStatus(`Drew to canvas!`);
+          button.disabled = true;
+          try {
+            await instance?.apiManager?.templateManager.createTemplate(input.files[0], input.files[0]?.name.replace(/\.[^/.]+$/, ""), [Number(coordTlX.value), Number(coordTlY.value), Number(coordPxX.value), Number(coordPxY.value)]);
+            instance.handleDisplayStatus(`Drew to canvas!`);
+          } catch (error) {
+            console.error("Blue Marble: Template creation failed.", error);
+            instance.handleDisplayError(`Template creation failed: ${error instanceof Error ? error.message : String(error)}`);
+          } finally {
+            button.disabled = false;
+          }
         };
       }).buildElement().addButton({ "class": "bm-button-secondary", "textContent": "Filter" }, (instance, button) => {
         button.onclick = () => this.buildWindowFilter();
@@ -4215,7 +4387,11 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
      * @since 0.88.330
      */
     buildWindowFilter({ respectSavedVisibility = false } = {}) {
-      const windowFilter = new WindowFilter(this);
+      if (!this.windowFilter || this.windowFilter.templateManager != this.apiManager?.templateManager) {
+        this.windowFilter?.dispose();
+        this.windowFilter = new WindowFilter(this);
+      }
+      const windowFilter = this.windowFilter;
       if (respectSavedVisibility && !windowFilter.shouldAutoOpen()) {
         return;
       }
@@ -4254,7 +4430,7 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
      * @since 0.88.434
      * @see {@link Overlay#constructor} for examples
      */
-    constructor(name2, version2, schemaVersionBleedingEdge, templateManager2 = void 0) {
+    constructor(name2, version2, schemaVersionBleedingEdge, templateManager = void 0) {
       super(name2, version2);
       __privateAdd(this, _WindowWizard_instances);
       this.window = null;
@@ -4265,7 +4441,7 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
       this.schemaVersion = this.currentJSON?.schemaVersion;
       this.schemaHealth = void 0;
       this.schemaVersionBleedingEdge = schemaVersionBleedingEdge;
-      this.templateManager = templateManager2;
+      this.templateManager = templateManager;
     }
     /** Spawns a Template Wizard window.
      * If another template wizard window already exists, we DON'T spawn another!
@@ -4401,7 +4577,7 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
   var WindowWizard = _WindowWizard;
 
   // src/templateManager.js
-  var _TemplateManager_instances, restoreFilteredColorsFromSettings_fn, persistFilteredColors_fn, loadTemplate_fn, storeTemplates_fn, parseBlueMarble_fn, parseOSU_fn, calculateCorrectPixelsOnTile_And_FilterTile_fn, yieldToBrowser_fn, buildMissingHighlightClusters_fn, drawMissingHighlightCluster_fn, getIncorrectHighlightStencil_fn, drawIncorrectHighlightMarker_fn;
+  var _TemplateManager_instances, emitTemplatesChanged_fn, restoreFilteredColorsFromSettings_fn, persistFilteredColors_fn, loadTemplate_fn, storeTemplates_fn, parseBlueMarble_fn, parseOSU_fn, calculateCorrectPixelsOnTile_And_FilterTile_fn, yieldToBrowser_fn, buildMissingHighlightClusters_fn, drawMissingHighlightCluster_fn, getIncorrectHighlightStencil_fn, drawIncorrectHighlightMarker_fn;
   var TemplateManager = class {
     /** The constructor for the {@link TemplateManager} class.
      * @param {string} name - The name of the userscript
@@ -4432,21 +4608,43 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
       this.highlightIncorrectMode = "incorrect";
       this.incorrectHighlightStencilCache = /* @__PURE__ */ new Map();
       this.canvasRefreshRevision = 0;
+      this.templateStatisticsState = "idle";
+      this.templateChangeListeners = /* @__PURE__ */ new Set();
     }
     /** Updates the stored instance of the main window.
      * @param {WindowMain} windowMain - The main window instance
      * @since 0.91.54
      */
-    setWindowMain(windowMain2) {
-      this.windowMain = windowMain2;
+    setWindowMain(windowMain) {
+      this.windowMain = windowMain;
     }
     /** Updates the stored instance of the SettingsManager.
      * @param {SettingsManager} settingsManager - The settings manager instance
      * @since 0.91.54
      */
-    setSettingsManager(settingsManager2) {
-      this.settingsManager = settingsManager2;
+    setSettingsManager(settingsManager) {
+      this.settingsManager = settingsManager;
       __privateMethod(this, _TemplateManager_instances, restoreFilteredColorsFromSettings_fn).call(this);
+    }
+    /** Subscribes to template readiness changes.
+     * @param {function({reason: string, state: string}):void} listener
+     * @returns {function():void} Unsubscribe callback
+     * @since 0.99.0
+     */
+    onTemplatesChanged(listener) {
+      if (typeof listener != "function") {
+        return () => {
+        };
+      }
+      this.templateChangeListeners.add(listener);
+      return () => this.templateChangeListeners.delete(listener);
+    }
+    /** Returns whether template statistics are idle, loading, ready, degraded, or failed.
+     * @returns {'idle' | 'loading' | 'ready' | 'degraded' | 'error'}
+     * @since 0.99.0
+     */
+    getTemplateStatisticsState() {
+      return this.templateStatisticsState;
     }
     /** Updates whether a palette color should be hidden on the canvas.
      * @param {number} colorID
@@ -4612,44 +4810,56 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
      * @since 0.65.77
      */
     async createTemplate(blob, name2, coords2) {
-      if (!this.templatesJSON) {
-        this.templatesJSON = await this.createJSON();
-        console.log(`Creating JSON...`);
+      this.templateStatisticsState = "loading";
+      __privateMethod(this, _TemplateManager_instances, emitTemplatesChanged_fn).call(this, "create-started");
+      try {
+        const hasWritableTemplateStore = this.templatesJSON?.whoami == this.name.replace(" ", "") && this.templatesJSON?.schemaVersion == this.schemaVersion && this.templatesJSON?.templates && typeof this.templatesJSON.templates == "object" && !Array.isArray(this.templatesJSON.templates);
+        if (!hasWritableTemplateStore) {
+          this.templatesJSON = await this.createJSON();
+          console.log(`Creating JSON...`);
+        }
+        this.windowMain.handleDisplayStatus(`Creating template at ${coords2.join(", ")}...`);
+        const template = new Template({
+          displayName: name2,
+          sortID: 0,
+          // Object.keys(this.templatesJSON.templates).length || 0, // Uncomment this to enable multiple templates (1/2)
+          authorID: numberToEncoded(this.userID || 0, this.encodingBase),
+          file: blob,
+          coords: coords2
+        });
+        const shouldSkipTransTiles = !this.settingsManager?.userSettings?.flags?.includes("hl-noSkip");
+        const shouldAggSkipTransTiles = this.settingsManager?.userSettings?.flags?.includes("hl-agSkip");
+        console.log(`Should Skip: ${shouldSkipTransTiles}; Should Agg Skip: ${shouldAggSkipTransTiles}`);
+        const { templateTiles, templateTilesBuffers } = await template.createTemplateTiles(this.tileSize, this.paletteBM, shouldSkipTransTiles, shouldAggSkipTransTiles);
+        template.chunked = templateTiles;
+        const _pixels = { "total": template.pixelCount.total, "colors": Object.fromEntries(template.pixelCount.colors) };
+        this.templatesJSON.templates[`${template.sortID} ${template.authorID}`] = {
+          "name": template.displayName,
+          // Display name of template
+          "coords": coords2.join(", "),
+          // The coords of the template
+          "enabled": true,
+          "pixels": _pixels,
+          // The total pixels in the template
+          "tiles": templateTilesBuffers
+          // Stores the chunked tile buffers
+        };
+        this.templatesArray = [];
+        this.templatesArray.push(template);
+        this.windowMain.handleDisplayStatus(`Template created at ${coords2.join(", ")}!`);
+        console.log(Object.keys(this.templatesJSON.templates).length);
+        console.log(this.templatesJSON);
+        console.log(this.templatesArray);
+        console.log(JSON.stringify(this.templatesJSON));
+        await __privateMethod(this, _TemplateManager_instances, storeTemplates_fn).call(this);
+        this.templateStatisticsState = "ready";
+        __privateMethod(this, _TemplateManager_instances, emitTemplatesChanged_fn).call(this, "created");
+        return template;
+      } catch (error) {
+        this.templateStatisticsState = "error";
+        __privateMethod(this, _TemplateManager_instances, emitTemplatesChanged_fn).call(this, "create-failed");
+        throw error;
       }
-      this.windowMain.handleDisplayStatus(`Creating template at ${coords2.join(", ")}...`);
-      const template = new Template({
-        displayName: name2,
-        sortID: 0,
-        // Object.keys(this.templatesJSON.templates).length || 0, // Uncomment this to enable multiple templates (1/2)
-        authorID: numberToEncoded(this.userID || 0, this.encodingBase),
-        file: blob,
-        coords: coords2
-      });
-      const shouldSkipTransTiles = !this.settingsManager?.userSettings?.flags?.includes("hl-noSkip");
-      const shouldAggSkipTransTiles = this.settingsManager?.userSettings?.flags?.includes("hl-agSkip");
-      console.log(`Should Skip: ${shouldSkipTransTiles}; Should Agg Skip: ${shouldAggSkipTransTiles}`);
-      const { templateTiles, templateTilesBuffers } = await template.createTemplateTiles(this.tileSize, this.paletteBM, shouldSkipTransTiles, shouldAggSkipTransTiles);
-      template.chunked = templateTiles;
-      const _pixels = { "total": template.pixelCount.total, "colors": Object.fromEntries(template.pixelCount.colors) };
-      this.templatesJSON.templates[`${template.sortID} ${template.authorID}`] = {
-        "name": template.displayName,
-        // Display name of template
-        "coords": coords2.join(", "),
-        // The coords of the template
-        "enabled": true,
-        "pixels": _pixels,
-        // The total pixels in the template
-        "tiles": templateTilesBuffers
-        // Stores the chunked tile buffers
-      };
-      this.templatesArray = [];
-      this.templatesArray.push(template);
-      this.windowMain.handleDisplayStatus(`Template created at ${coords2.join(", ")}!`);
-      console.log(Object.keys(this.templatesJSON.templates).length);
-      console.log(this.templatesJSON);
-      console.log(this.templatesArray);
-      console.log(JSON.stringify(this.templatesJSON));
-      await __privateMethod(this, _TemplateManager_instances, storeTemplates_fn).call(this);
     }
     /** Deletes a template from the JSON object.
      * Also delete's the corrosponding {@link Template} class instance
@@ -4933,8 +5143,39 @@ There are ${pixelsCorrectTotal} correct pixels.`);
     async importJSON(json) {
       console.log(`Importing JSON...`);
       console.log(json);
-      if (json?.whoami == "BlueMarble") {
-        await __privateMethod(this, _TemplateManager_instances, parseBlueMarble_fn).call(this, json);
+      this.templateStatisticsState = "loading";
+      __privateMethod(this, _TemplateManager_instances, emitTemplatesChanged_fn).call(this, "import-started");
+      const previousTemplatesJSON = this.templatesJSON;
+      const previousTemplatesArray = this.templatesArray;
+      try {
+        if (json?.whoami == "BlueMarble") {
+          const { templatesArray: importedTemplates, skippedTemplates } = await __privateMethod(this, _TemplateManager_instances, parseBlueMarble_fn).call(this, json);
+          if (Object.keys(json.templates).length && !importedTemplates.length) {
+            throw new AggregateError(
+              skippedTemplates.map(({ error }) => error),
+              "None of the stored templates could be loaded."
+            );
+          }
+          const importedJSON = skippedTemplates.length ? { ...json, templates: { ...json.templates } } : json;
+          for (const { templateKey } of skippedTemplates) {
+            delete importedJSON.templates[templateKey];
+          }
+          this.templatesJSON = importedJSON;
+          this.templatesArray = importedTemplates;
+          this.templateStatisticsState = skippedTemplates.length ? "degraded" : "ready";
+          __privateMethod(this, _TemplateManager_instances, emitTemplatesChanged_fn).call(this, skippedTemplates.length ? "imported-with-errors" : "imported");
+        } else {
+          this.templatesJSON = await this.createJSON();
+          this.templatesArray = [];
+          this.templateStatisticsState = "ready";
+          __privateMethod(this, _TemplateManager_instances, emitTemplatesChanged_fn).call(this, "imported");
+        }
+      } catch (error) {
+        this.templatesJSON = previousTemplatesJSON;
+        this.templatesArray = previousTemplatesArray;
+        this.templateStatisticsState = "error";
+        __privateMethod(this, _TemplateManager_instances, emitTemplatesChanged_fn).call(this, "import-failed");
+        throw error;
       }
     }
     /** Sets the `templatesShouldBeDrawn` boolean to a value.
@@ -4946,6 +5187,20 @@ There are ${pixelsCorrectTotal} correct pixels.`);
     }
   };
   _TemplateManager_instances = new WeakSet();
+  /** Notifies UI owners without coupling TemplateManager to a specific window.
+   * @param {string} reason
+   * @since 0.99.0
+   */
+  emitTemplatesChanged_fn = function(reason) {
+    const detail = { reason, state: this.templateStatisticsState };
+    for (const listener of this.templateChangeListeners) {
+      try {
+        listener(detail);
+      } catch (error) {
+        consoleWarn("A template-change listener failed.", error);
+      }
+    }
+  };
   /** Restores hidden colors from persisted user settings.
    * @since 0.92.1
    */
@@ -4993,13 +5248,19 @@ There are ${pixelsCorrectTotal} correct pixels.`);
     this.templatesArray.push(template);
   };
   storeTemplates_fn = async function() {
-    GM.setValue("bmTemplates", JSON.stringify(this.templatesJSON));
+    await GM.setValue("bmTemplates", JSON.stringify(this.templatesJSON));
   };
   parseBlueMarble_fn = async function(json) {
     console.log(`Parsing BlueMarble...`);
-    const templates = json.templates;
+    const templates = json?.templates;
+    if (!templates || typeof templates != "object" || Array.isArray(templates)) {
+      throw new TypeError("Stored template data has no valid templates object.");
+    }
     console.log(`BlueMarble length: ${Object.keys(templates).length}`);
     const schemaVersion = json?.schemaVersion;
+    if (typeof schemaVersion != "string") {
+      throw new TypeError("Stored template data has no valid schema version.");
+    }
     const schemaVersionArray = schemaVersion.split(/[-\.\+]/);
     const schemaVersionBleedingEdge = this.schemaVersion.split(/[-\.\+]/);
     const scriptVersion = json?.scriptVersion;
@@ -5009,72 +5270,78 @@ There are ${pixelsCorrectTotal} correct pixels.`);
         const windowWizard = new WindowWizard(this.name, this.version, this.schemaVersion, this);
         windowWizard.buildWindow();
       }
-      this.templatesArray = await loadSchema({
+      return await loadSchema({
         tileSize: this.tileSize,
         drawMult: this.drawMult,
-        templatesArray: this.templatesArray
+        templatesArray: []
       });
     } else if (schemaVersionArray[0] < schemaVersionBleedingEdge[0]) {
       const windowWizard = new WindowWizard(this.name, this.version, this.schemaVersion, this);
       windowWizard.buildWindow();
+      throw new Error(`Template schema ${schemaVersion} must be migrated before loading.`);
     } else {
       this.windowMain.handleDisplayError(`Template version ${schemaVersion} is unsupported.
 Use Blue Marble version ${scriptVersion} or load a new template.`);
+      throw new Error(`Template schema ${schemaVersion} is unsupported.`);
     }
     async function loadSchema({
       tileSize,
       drawMult,
       templatesArray
     }) {
-      if (Object.keys(templates).length > 0) {
-        for (const template in templates) {
-          const templateKey = template;
-          const templateValue = templates[template];
-          console.log(`Template Key: ${templateKey}`);
-          if (templates.hasOwnProperty(template)) {
-            const templateKeyArray = templateKey.split(" ");
-            const sortID = Number(templateKeyArray?.[0]);
-            const authorID = templateKeyArray?.[1] || "0";
-            const displayName = templateValue.name || `Template ${sortID || ""}`;
-            const pixelCount = {
-              total: templateValue.pixels?.total,
-              colors: new Map(Object.entries(templateValue.pixels?.colors || {}).map(([key, value]) => [Number(key), value]))
-            };
-            const tilesbase64 = templateValue.tiles;
-            const templateTiles = {};
-            const templateTiles32 = {};
-            const actualTileSize = tileSize * drawMult;
-            for (const tile in tilesbase64) {
-              console.log(tile);
-              if (tilesbase64.hasOwnProperty(tile)) {
-                const encodedTemplateBase64 = tilesbase64[tile];
-                const templateUint8Array = base64ToUint8(encodedTemplateBase64);
-                const templateBlob = new Blob([templateUint8Array], { type: "image/png" });
-                const templateBitmap = await createImageBitmap(templateBlob);
-                templateTiles[tile] = templateBitmap;
-                const canvas = new OffscreenCanvas(actualTileSize, actualTileSize);
-                const context = canvas.getContext("2d");
-                context.drawImage(templateBitmap, 0, 0);
-                const imageData = context.getImageData(0, 0, templateBitmap.width, templateBitmap.height);
-                templateTiles32[tile] = new Uint32Array(imageData.data.buffer);
-              }
-            }
-            const template2 = new Template({
-              displayName,
-              sortID: sortID || this.templatesArray?.length || 0,
-              authorID: authorID || ""
-              //coords: coords,
-            });
-            template2.pixelCount = pixelCount;
-            template2.chunked = templateTiles;
-            template2.chunked32 = templateTiles32;
-            templatesArray.push(template2);
-            console.log(this.templatesArray);
-            console.log(`^^^ This ^^^`);
+      const skippedTemplates = [];
+      for (const [templateKey, templateValue] of Object.entries(templates)) {
+        console.log(`Template Key: ${templateKey}`);
+        try {
+          if (!templateValue || typeof templateValue != "object") {
+            throw new TypeError(`Template "${templateKey}" is not an object.`);
           }
+          const templateKeyArray = templateKey.split(" ");
+          const sortID = Number(templateKeyArray?.[0]);
+          const authorID = templateKeyArray?.[1] || "0";
+          const displayName = templateValue.name || `Template ${sortID || ""}`;
+          const pixelCount = {
+            total: templateValue.pixels?.total,
+            colors: new Map(Object.entries(templateValue.pixels?.colors || {}).map(([key, value]) => [Number(key), value]))
+          };
+          const tilesbase64 = templateValue.tiles ?? {};
+          if (typeof tilesbase64 != "object" || Array.isArray(tilesbase64)) {
+            throw new TypeError(`Template "${templateKey}" has no valid tiles object.`);
+          }
+          const templateTiles = {};
+          const templateTiles32 = {};
+          const actualTileSize = tileSize * drawMult;
+          for (const tile of Object.keys(tilesbase64)) {
+            console.log(tile);
+            const encodedTemplateBase64 = tilesbase64[tile];
+            const templateUint8Array = base64ToUint8(encodedTemplateBase64);
+            const templateBlob = new Blob([templateUint8Array], { type: "image/png" });
+            const templateBitmap = await createImageBitmap(templateBlob);
+            templateTiles[tile] = templateBitmap;
+            const canvas = new OffscreenCanvas(actualTileSize, actualTileSize);
+            const context = canvas.getContext("2d");
+            context.drawImage(templateBitmap, 0, 0);
+            const imageData = context.getImageData(0, 0, templateBitmap.width, templateBitmap.height);
+            templateTiles32[tile] = new Uint32Array(imageData.data.buffer);
+          }
+          const template = new Template({
+            displayName,
+            sortID: Number.isFinite(sortID) ? sortID : templatesArray.length,
+            authorID: authorID || ""
+            //coords: coords,
+          });
+          template.pixelCount = pixelCount;
+          template.chunked = templateTiles;
+          template.chunked32 = templateTiles32;
+          templatesArray.push(template);
+          console.log(templatesArray);
+          console.log(`^^^ This ^^^`);
+        } catch (error) {
+          skippedTemplates.push({ templateKey, error });
+          console.warn(`Blue Marble: Skipping damaged template "${templateKey}".`, error);
         }
       }
-      return templatesArray;
+      return { templatesArray, skippedTemplates };
     }
   };
   /** Parses the OSU! Place JSON object
@@ -5622,12 +5889,13 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
      * @param {TemplateManager} templateManager 
      * @since 0.11.34
      */
-    constructor(templateManager2) {
-      this.templateManager = templateManager2;
+    constructor(templateManager) {
+      this.templateManager = templateManager;
       this.disableAll = false;
       this.chargeRefillTimerID = "";
       this.coordsTilePixel = [];
       this.templateCoordsTilePixel = [];
+      this.spontaneousMessageHandler = null;
     }
     /** Determines if the spontaneously received response is something we want.
      * Otherwise, we can ignore it.
@@ -5637,7 +5905,8 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
      * @since 0.11.1
     */
     spontaneousResponseListener(overlay) {
-      window.addEventListener("message", async (event) => {
+      this.stopSpontaneousResponseListener();
+      const messageHandler = async (event) => {
         const data = event.data;
         const dataJSON = data["jsonData"];
         if (!(data && data["source"] === "blue-marble")) {
@@ -5712,7 +5981,20 @@ Did you try clicking the canvas first?`);
             this.disableAll = dataJSON["userscript"]?.toString().toLowerCase() == "false";
             break;
         }
-      });
+      };
+      this.spontaneousMessageHandler = messageHandler;
+      window.addEventListener("message", messageHandler);
+      return () => this.stopSpontaneousResponseListener();
+    }
+    /** Stops the active spontaneous response listener, if one exists.
+     * @since 0.99.0
+     */
+    stopSpontaneousResponseListener() {
+      if (!this.spontaneousMessageHandler) {
+        return;
+      }
+      window.removeEventListener("message", this.spontaneousMessageHandler);
+      this.spontaneousMessageHandler = null;
     }
     /** Applies user data from the /me endpoint to the current overlay.
      * @param {Overlay} overlay
@@ -5868,13 +6150,13 @@ HTTP ${response.status}`);
      * @since 0.88.339
      * @see {@link Overlay#constructor}
      */
-    constructor(name2, version2, currentTelemetryVersion2, uuid) {
+    constructor(name2, version2, currentTelemetryVersion, uuid) {
       super(name2, version2);
       __privateAdd(this, _WindowTelemetry_instances);
       this.window = null;
       this.windowID = "bm-window-telemetry";
       this.windowParent = document.body;
-      this.currentTelemetryVersion = currentTelemetryVersion2;
+      this.currentTelemetryVersion = currentTelemetryVersion;
       this.uuid = uuid;
     }
     /** Spawns a telemetry window.
@@ -5934,6 +6216,14 @@ HTTP ${response.status}`);
     script.remove();
   }
   inject(() => {
+    if (window["__blueMarblePageHookInstalled"]) {
+      return;
+    }
+    Object.defineProperty(window, "__blueMarblePageHookInstalled", {
+      value: true,
+      configurable: false,
+      writable: false
+    });
     const script = document.currentScript;
     const name2 = script?.getAttribute("bm-name") || "Blue Marble";
     const consoleStyle2 = script?.getAttribute("bm-cStyle") || "";
@@ -6090,75 +6380,139 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   } else {
     appendFontStylesheet("https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap");
   }
-  var userSettings = JSON.parse(GM_getValue("bmUserSettings", "{}"));
-  var observers = new Observers();
-  var windowMain = new WindowMain(name, version);
-  var templateManager = new TemplateManager(name, version);
-  var apiManager = new ApiManager(templateManager);
-  var settingsManager = new SettingsManager(name, version, userSettings);
-  windowMain.setSettingsManager(settingsManager);
-  windowMain.setApiManager(apiManager);
-  templateManager.setWindowMain(windowMain);
-  templateManager.setSettingsManager(settingsManager);
-  var storageTemplates = JSON.parse(GM_getValue("bmTemplates", "{}"));
-  console.log(storageTemplates);
-  console.log(userSettings);
-  console.log(Object.keys(userSettings).length);
-  if (Object.keys(userSettings).length == 0) {
-    const uuid = crypto.randomUUID();
-    console.log(uuid);
-    GM.setValue("bmUserSettings", JSON.stringify({
-      "uuid": uuid
-    }));
+  function readStoredJSON(key, fallback = {}) {
+    try {
+      const storedValue = GM_getValue(key, JSON.stringify(fallback));
+      const parsedValue = typeof storedValue == "string" ? JSON.parse(storedValue) : storedValue;
+      return parsedValue && typeof parsedValue == "object" ? parsedValue : structuredClone(fallback);
+    } catch (error) {
+      consoleWarn(`Could not parse userscript storage "${key}".`, error);
+      return structuredClone(fallback);
+    }
   }
-  setInterval(() => apiManager.sendHeartbeat(version), 1e3 * 60 * 30);
-  var currentTelemetryVersion = 1;
-  var previousTelemetryVersion = userSettings?.telemetry;
-  console.log(`Telemetry is ${!(previousTelemetryVersion == void 0)}`);
-  if (previousTelemetryVersion == void 0 || previousTelemetryVersion > currentTelemetryVersion) {
-    const windowTelemetry = new WindowTelemetry(name, version, currentTelemetryVersion, userSettings?.uuid);
-    windowTelemetry.setApiManager(apiManager);
-    windowTelemetry.buildWindow();
+  var userSettings = readStoredJSON("bmUserSettings");
+  var runtimeMarkerID = "bm-userscript-runtime";
+  var existingRuntimeMarker = document.querySelector("meta[data-blue-marble-runtime]");
+  var shouldInitializeRuntime = !existingRuntimeMarker;
+  if (!shouldInitializeRuntime) {
+    consoleWarn(`%c${name}%c: A userscript runtime is already active; skipping duplicate initialization.`, consoleStyle, "");
   }
-  void initializeBlueMarble();
-  async function initializeBlueMarble() {
-    await templateManager.importJSON(storageTemplates);
-    apiManager.spontaneousResponseListener(windowMain);
-    windowMain.buildWindow();
-    windowMain.buildWindowFilter({ "respectSavedVisibility": true });
-    apiManager.applyCachedUserData(windowMain);
-    void apiManager.requestCurrentUserData(windowMain);
-    observeBlack();
-    consoleLog(`%c${name}%c (${version}) userscript has loaded!`, "color: cornflowerblue;", "");
-  }
-  function observeBlack() {
-    const observer = new MutationObserver((mutations, observer2) => {
-      const black = document.querySelector("#color-1");
-      if (!black) {
-        return;
-      }
-      let move = document.querySelector("#bm-button-move");
-      if (!move) {
-        move = document.createElement("button");
-        move.id = "bm-button-move";
-        move.textContent = "Move \u2191";
-        move.className = "btn btn-soft";
-        move.onclick = function() {
-          const roundedBox = this.parentNode.parentNode.parentNode.parentNode;
-          const shouldMoveUp = this.textContent == "Move \u2191";
-          roundedBox.parentNode.className = roundedBox.parentNode.className.replace(shouldMoveUp ? "bottom" : "top", shouldMoveUp ? "top" : "bottom");
-          roundedBox.style.borderTopLeftRadius = shouldMoveUp ? "0px" : "var(--radius-box)";
-          roundedBox.style.borderTopRightRadius = shouldMoveUp ? "0px" : "var(--radius-box)";
-          roundedBox.style.borderBottomLeftRadius = shouldMoveUp ? "var(--radius-box)" : "0px";
-          roundedBox.style.borderBottomRightRadius = shouldMoveUp ? "var(--radius-box)" : "0px";
-          this.textContent = shouldMoveUp ? "Move \u2193" : "Move \u2191";
+  if (shouldInitializeRuntime) {
+    void (async () => {
+      let runtimeMarker = null;
+      let heartbeatInterval = null;
+      let activeWindowMain = null;
+      let activeTelemetryWindow = null;
+      let stopSpontaneousResponseListener = null;
+      let stopBlackObserver = null;
+      try {
+        let observeBlack = function() {
+          const observer = new MutationObserver((mutations, observer2) => {
+            const black = document.querySelector("#color-1");
+            if (!black) {
+              return;
+            }
+            let move = document.querySelector("#bm-button-move");
+            if (!move) {
+              move = document.createElement("button");
+              move.id = "bm-button-move";
+              move.textContent = "Move \u2191";
+              move.className = "btn btn-soft";
+              move.onclick = function() {
+                const roundedBox = this.parentNode.parentNode.parentNode.parentNode;
+                const shouldMoveUp = this.textContent == "Move \u2191";
+                roundedBox.parentNode.className = roundedBox.parentNode.className.replace(shouldMoveUp ? "bottom" : "top", shouldMoveUp ? "top" : "bottom");
+                roundedBox.style.borderTopLeftRadius = shouldMoveUp ? "0px" : "var(--radius-box)";
+                roundedBox.style.borderTopRightRadius = shouldMoveUp ? "0px" : "var(--radius-box)";
+                roundedBox.style.borderBottomLeftRadius = shouldMoveUp ? "var(--radius-box)" : "0px";
+                roundedBox.style.borderBottomRightRadius = shouldMoveUp ? "var(--radius-box)" : "0px";
+                this.textContent = shouldMoveUp ? "Move \u2193" : "Move \u2191";
+              };
+              const paintPixel = black.parentNode.parentNode.parentNode.parentNode.querySelector("h2");
+              paintPixel.parentNode?.appendChild(move);
+            }
+          });
+          observer.observe(document.body, { childList: true, subtree: true });
+          return () => observer.disconnect();
         };
-        const paintPixel = black.parentNode.parentNode.parentNode.parentNode.querySelector("h2");
-        paintPixel.parentNode?.appendChild(move);
+        const observers = new Observers();
+        const windowMain = new WindowMain(name, version);
+        activeWindowMain = windowMain;
+        const templateManager = new TemplateManager(name, version);
+        const apiManager = new ApiManager(templateManager);
+        const settingsManager = new SettingsManager(name, version, userSettings);
+        windowMain.setSettingsManager(settingsManager);
+        windowMain.setApiManager(apiManager);
+        templateManager.setWindowMain(windowMain);
+        templateManager.setSettingsManager(settingsManager);
+        const storageTemplates = readStoredJSON("bmTemplates");
+        console.log(storageTemplates);
+        runtimeMarker = document.createElement("meta");
+        runtimeMarker.id = runtimeMarkerID;
+        runtimeMarker.dataset["version"] = version;
+        runtimeMarker.dataset["blueMarbleRuntime"] = "true";
+        runtimeMarker.dataset["runtimeState"] = "initializing";
+        document.documentElement.appendChild(runtimeMarker);
+        console.log(userSettings);
+        console.log(Object.keys(userSettings).length);
+        if (Object.keys(userSettings).length == 0) {
+          const uuid = crypto.randomUUID();
+          console.log(uuid);
+          await GM.setValue("bmUserSettings", JSON.stringify({
+            "uuid": uuid
+          }));
+        }
+        heartbeatInterval = setInterval(() => apiManager.sendHeartbeat(version), 1e3 * 60 * 30);
+        const currentTelemetryVersion = 1;
+        const previousTelemetryVersion = userSettings?.telemetry;
+        console.log(`Telemetry is ${!(previousTelemetryVersion == void 0)}`);
+        if (previousTelemetryVersion == void 0 || previousTelemetryVersion > currentTelemetryVersion) {
+          const windowTelemetry = new WindowTelemetry(name, version, currentTelemetryVersion, userSettings?.uuid);
+          activeTelemetryWindow = windowTelemetry;
+          windowTelemetry.setApiManager(apiManager);
+          await windowTelemetry.buildWindow();
+        }
+        await initializeBlueMarble();
+        runtimeMarker.dataset["runtimeState"] = "ready";
+        async function initializeBlueMarble() {
+          let templateImportError = null;
+          let templateImportWarning = null;
+          try {
+            await templateManager.importJSON(storageTemplates);
+            if (templateManager.getTemplateStatisticsState() == "degraded") {
+              templateImportWarning = "Some stored templates were damaged and could not be loaded.";
+            }
+          } catch (error) {
+            templateImportError = error;
+            console.error("Blue Marble: Could not import stored templates.", error);
+          }
+          stopSpontaneousResponseListener = apiManager.spontaneousResponseListener(windowMain);
+          windowMain.buildWindow();
+          windowMain.buildWindowFilter({ "respectSavedVisibility": true });
+          if (templateImportError) {
+            windowMain.handleDisplayError(`Stored templates could not be loaded: ${templateImportError instanceof Error ? templateImportError.message : String(templateImportError)}`);
+          } else if (templateImportWarning) {
+            windowMain.handleDisplayError(templateImportWarning);
+          }
+          apiManager.applyCachedUserData(windowMain);
+          void apiManager.requestCurrentUserData(windowMain);
+          stopBlackObserver = observeBlack();
+          consoleLog(`%c${name}%c (${version}) userscript has loaded!`, "color: cornflowerblue;", "");
+        }
+      } catch (error) {
+        if (heartbeatInterval != null) {
+          clearInterval(heartbeatInterval);
+        }
+        stopBlackObserver?.();
+        stopSpontaneousResponseListener?.();
+        activeWindowMain?.windowFilter?.dispose();
+        document.getElementById(activeWindowMain?.windowID)?.remove();
+        document.getElementById(activeTelemetryWindow?.windowID)?.remove();
+        runtimeMarker?.remove();
+        console.error("Blue Marble: Runtime initialization failed.", error);
       }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+    })();
   }
 })();
 
-// Build Hash: e06b5e38b51f
+// Build Hash: 8fcd608cd370

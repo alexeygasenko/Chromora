@@ -34,6 +34,13 @@ function inject(callback) {
  */
 inject(() => {
 
+  if (window['__blueMarblePageHookInstalled']) {return;}
+  Object.defineProperty(window, '__blueMarblePageHookInstalled', {
+    value: true,
+    configurable: false,
+    writable: false
+  });
+
   const script = document.currentScript; // Gets the current script HTML Script Element
   const name = script?.getAttribute('bm-name') || 'Blue Marble'; // Gets the name value that was passed in. Defaults to "Blue Marble" if nothing was found
   const consoleStyle = script?.getAttribute('bm-cStyle') || ''; // Gets the console style value that was passed in. Defaults to no styling if nothing was found
@@ -259,11 +266,41 @@ if (!!(robotoMonoInjectionPoint.indexOf('@font-face') + 1)) {
   appendFontStylesheet('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
 }
 
-const userSettings = JSON.parse(GM_getValue('bmUserSettings', '{}')); // Loads the user settings
+function readStoredJSON(key, fallback = {}) {
+  try {
+    const storedValue = GM_getValue(key, JSON.stringify(fallback));
+    const parsedValue = typeof storedValue == 'string' ? JSON.parse(storedValue) : storedValue;
+    return parsedValue && typeof parsedValue == 'object' ? parsedValue : structuredClone(fallback);
+  } catch (error) {
+    consoleWarn(`Could not parse userscript storage "${key}".`, error);
+    return structuredClone(fallback);
+  }
+}
+
+const userSettings = readStoredJSON('bmUserSettings'); // Loads the user settings
+const runtimeMarkerID = 'bm-userscript-runtime';
+const existingRuntimeMarker = document.querySelector('meta[data-blue-marble-runtime]');
+const shouldInitializeRuntime = !existingRuntimeMarker;
+
+if (!shouldInitializeRuntime) {
+  consoleWarn(`%c${name}%c: A userscript runtime is already active; skipping duplicate initialization.`, consoleStyle, '');
+}
+
+if (shouldInitializeRuntime) {
+void (async () => {
+let runtimeMarker = null;
+let heartbeatInterval = null;
+let activeWindowMain = null;
+let activeTelemetryWindow = null;
+let stopSpontaneousResponseListener = null;
+let stopBlackObserver = null;
+
+try {
 
 // CONSTRUCTORS
 const observers = new Observers(); // Constructs a new Observers object
 const windowMain = new WindowMain(name, version); // Constructs a new Overlay object for the main overlay
+activeWindowMain = windowMain;
 const templateManager = new TemplateManager(name, version); // Constructs a new TemplateManager object
 const apiManager = new ApiManager(templateManager); // Constructs a new ApiManager object
 const settingsManager = new SettingsManager(name, version, userSettings); // Constructs a new SettingsManager
@@ -274,8 +311,15 @@ windowMain.setApiManager(apiManager); // Sets the API manager
 templateManager.setWindowMain(windowMain);
 templateManager.setSettingsManager(settingsManager); // Sets the settings manager
 
-const storageTemplates = JSON.parse(GM_getValue('bmTemplates', '{}'));
+const storageTemplates = readStoredJSON('bmTemplates');
 console.log(storageTemplates);
+
+runtimeMarker = document.createElement('meta');
+runtimeMarker.id = runtimeMarkerID;
+runtimeMarker.dataset['version'] = version;
+runtimeMarker.dataset['blueMarbleRuntime'] = 'true';
+runtimeMarker.dataset['runtimeState'] = 'initializing';
+document.documentElement.appendChild(runtimeMarker);
 
 
 console.log(userSettings);
@@ -285,12 +329,12 @@ console.log(Object.keys(userSettings).length);
 if (Object.keys(userSettings).length == 0) {
   const uuid = crypto.randomUUID(); // Generates a random UUID
   console.log(uuid);
-  GM.setValue('bmUserSettings', JSON.stringify({
+  await GM.setValue('bmUserSettings', JSON.stringify({
     'uuid': uuid
   }));
 }
 
-setInterval(() => apiManager.sendHeartbeat(version), 1000 * 60 * 30); // Sends a heartbeat every 30 minutes
+heartbeatInterval = setInterval(() => apiManager.sendHeartbeat(version), 1000 * 60 * 30); // Sends a heartbeat every 30 minutes
 
 // The current "version" of the data collection agreement
 // Increment by 1 to retrigger the telemetry window
@@ -303,24 +347,42 @@ console.log(`Telemetry is ${!(previousTelemetryVersion == undefined)}`);
 // If the user has not agreed to the current data collection terms, we need to show the Telemetry window.
 if ((previousTelemetryVersion == undefined) || (previousTelemetryVersion > currentTelemetryVersion)) {
   const windowTelemetry = new WindowTelemetry(name, version, currentTelemetryVersion, userSettings?.uuid);
+  activeTelemetryWindow = windowTelemetry;
   windowTelemetry.setApiManager(apiManager);
-  windowTelemetry.buildWindow(); // Asks the user if they want to enable telemetry
+  await windowTelemetry.buildWindow(); // Asks the user if they want to enable telemetry
 }
 
-void initializeBlueMarble();
+await initializeBlueMarble();
+runtimeMarker.dataset['runtimeState'] = 'ready';
 
 async function initializeBlueMarble() {
-  await templateManager.importJSON(storageTemplates); // Loads the templates
+  let templateImportError = null;
+  let templateImportWarning = null;
+  try {
+    await templateManager.importJSON(storageTemplates); // Loads the templates
+    if (templateManager.getTemplateStatisticsState() == 'degraded') {
+      templateImportWarning = 'Some stored templates were damaged and could not be loaded.';
+    }
+  } catch (error) {
+    templateImportError = error;
+    console.error('Blue Marble: Could not import stored templates.', error);
+  }
 
-  apiManager.spontaneousResponseListener(windowMain); // Reads spontaneous fetch responces
+  stopSpontaneousResponseListener = apiManager.spontaneousResponseListener(windowMain); // Reads spontaneous fetch responces
 
   windowMain.buildWindow(); // Builds the main Blue Marble window
   windowMain.buildWindowFilter({'respectSavedVisibility': true}); // Restores the Color Filter window only if it was open before reload
 
+  if (templateImportError) {
+    windowMain.handleDisplayError(`Stored templates could not be loaded: ${templateImportError instanceof Error ? templateImportError.message : String(templateImportError)}`);
+  } else if (templateImportWarning) {
+    windowMain.handleDisplayError(templateImportWarning);
+  }
+
   apiManager.applyCachedUserData(windowMain); // Hydrates the UI from the earliest cached /me response if it exists
   void apiManager.requestCurrentUserData(windowMain); // Ensures the main window gets current /me data even if startup missed it
 
-  observeBlack(); // Observes the black palette color
+  stopBlackObserver = observeBlack(); // Observes the black palette color
 
   consoleLog(`%c${name}%c (${version}) userscript has loaded!`, 'color: cornflowerblue;', '');
 }
@@ -362,4 +424,18 @@ function observeBlack() {
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
+  return () => observer.disconnect();
+}
+
+} catch (error) {
+  if (heartbeatInterval != null) {clearInterval(heartbeatInterval);}
+  stopBlackObserver?.();
+  stopSpontaneousResponseListener?.();
+  activeWindowMain?.windowFilter?.dispose();
+  document.getElementById(activeWindowMain?.windowID)?.remove();
+  document.getElementById(activeTelemetryWindow?.windowID)?.remove();
+  runtimeMarker?.remove();
+  console.error('Blue Marble: Runtime initialization failed.', error);
+}
+})();
 }

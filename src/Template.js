@@ -31,6 +31,7 @@ export default class Template {
     chunked = null,
     chunked32 = {},
     tileSize = 1000,
+    pixelCount = null,
   } = {}) {
     this.displayName = displayName;
     this.sortID = sortID;
@@ -41,8 +42,15 @@ export default class Template {
     this.chunked = chunked;
     this.chunked32 = chunked32;
     this.tileSize = tileSize;
+    const colorEntries = pixelCount?.colors instanceof Map
+      ? pixelCount.colors
+      : Object.entries(pixelCount?.colors ?? {});
     /** Total pixel count in template @type {{total: number, colors: Map<number, number>, correct?: { [key: string]: Map<number, number> }}} */
-    this.pixelCount = { total: 0, colors: new Map() };
+    this.pixelCount = {
+      total: Number(pixelCount?.total) || 0,
+      colors: new Map(Array.from(colorEntries, ([colorID, total]) => [Number(colorID), Number(total) || 0]))
+    };
+    if (pixelCount?.correct != null) {this.pixelCount.correct = pixelCount.correct;}
 
     this.shouldSkipTransTiles = true; // Should transparent template tiles be skipped during template creation?
     this.shouldAggSkipTransTiles = false; // Should transparent template tiles be aggressively skipped during tempalte creation?

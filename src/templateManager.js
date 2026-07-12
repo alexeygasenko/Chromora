@@ -118,6 +118,8 @@ export default class TemplateManager {
     this.highlightIncorrectMode = 'incorrect'; // Either "incorrect" or "missing" when color-specific highlighting is active
     this.incorrectHighlightStencilCache = new Map();
     this.canvasRefreshRevision = 0;
+    this.templateStatisticsState = 'idle';
+    this.templateChangeListeners = new Set();
   }
 
   /** Updates the stored instance of the main window.
@@ -135,6 +137,40 @@ export default class TemplateManager {
   setSettingsManager(settingsManager) {
     this.settingsManager = settingsManager;
     this.#restoreFilteredColorsFromSettings();
+  }
+
+  /** Subscribes to template readiness changes.
+   * @param {function({reason: string, state: string}):void} listener
+   * @returns {function():void} Unsubscribe callback
+   * @since 0.99.0
+   */
+  onTemplatesChanged(listener) {
+    if (typeof listener != 'function') {return () => {};}
+    this.templateChangeListeners.add(listener);
+    return () => this.templateChangeListeners.delete(listener);
+  }
+
+  /** Returns whether template statistics are idle, loading, ready, degraded, or failed.
+   * @returns {'idle' | 'loading' | 'ready' | 'degraded' | 'error'}
+   * @since 0.99.0
+   */
+  getTemplateStatisticsState() {
+    return this.templateStatisticsState;
+  }
+
+  /** Notifies UI owners without coupling TemplateManager to a specific window.
+   * @param {string} reason
+   * @since 0.99.0
+   */
+  #emitTemplatesChanged(reason) {
+    const detail = {reason: reason, state: this.templateStatisticsState};
+    for (const listener of this.templateChangeListeners) {
+      try {
+        listener(detail);
+      } catch (error) {
+        consoleWarn('A template-change listener failed.', error);
+      }
+    }
   }
 
   /** Restores hidden colors from persisted user settings.
@@ -338,56 +374,74 @@ export default class TemplateManager {
    */
   async createTemplate(blob, name, coords) {
 
-    // Creates the JSON object if it does not already exist
-    if (!this.templatesJSON) {this.templatesJSON = await this.createJSON(); console.log(`Creating JSON...`);}
+    this.templateStatisticsState = 'loading';
+    this.#emitTemplatesChanged('create-started');
 
-    this.windowMain.handleDisplayStatus(`Creating template at ${coords.join(', ')}...`);
+    try {
+      const hasWritableTemplateStore = this.templatesJSON?.whoami == this.name.replace(' ', '')
+        && this.templatesJSON?.schemaVersion == this.schemaVersion
+        && this.templatesJSON?.templates
+        && (typeof this.templatesJSON.templates == 'object')
+        && !Array.isArray(this.templatesJSON.templates);
 
-    // Creates a new template instance
-    const template = new Template({
-      displayName: name,
-      sortID: 0, // Object.keys(this.templatesJSON.templates).length || 0, // Uncomment this to enable multiple templates (1/2)
-      authorID: numberToEncoded(this.userID || 0, this.encodingBase),
-      file: blob,
-      coords: coords
-    });
+      // Rebuilds missing, stale, or damaged storage before writing a new template.
+      if (!hasWritableTemplateStore) {this.templatesJSON = await this.createJSON(); console.log(`Creating JSON...`);}
 
-    // Does the user want to skip transparent tiles while creating templates?
-    const shouldSkipTransTiles = !this.settingsManager?.userSettings?.flags?.includes('hl-noSkip');
+      this.windowMain.handleDisplayStatus(`Creating template at ${coords.join(', ')}...`);
 
-    // Does the user want to aggressively skip transparent tiles while creating templates?
-    const shouldAggSkipTransTiles = this.settingsManager?.userSettings?.flags?.includes('hl-agSkip');
+      // Creates a new template instance
+      const template = new Template({
+        displayName: name,
+        sortID: 0, // Object.keys(this.templatesJSON.templates).length || 0, // Uncomment this to enable multiple templates (1/2)
+        authorID: numberToEncoded(this.userID || 0, this.encodingBase),
+        file: blob,
+        coords: coords
+      });
 
-    console.log(`Should Skip: ${shouldSkipTransTiles}; Should Agg Skip: ${shouldAggSkipTransTiles}`);
+      // Does the user want to skip transparent tiles while creating templates?
+      const shouldSkipTransTiles = !this.settingsManager?.userSettings?.flags?.includes('hl-noSkip');
+
+      // Does the user want to aggressively skip transparent tiles while creating templates?
+      const shouldAggSkipTransTiles = this.settingsManager?.userSettings?.flags?.includes('hl-agSkip');
+
+      console.log(`Should Skip: ${shouldSkipTransTiles}; Should Agg Skip: ${shouldAggSkipTransTiles}`);
+
+      const { templateTiles, templateTilesBuffers } = await template.createTemplateTiles(this.tileSize, this.paletteBM, shouldSkipTransTiles, shouldAggSkipTransTiles); // Chunks the tiles
     
-    const { templateTiles, templateTilesBuffers } = await template.createTemplateTiles(this.tileSize, this.paletteBM, shouldSkipTransTiles, shouldAggSkipTransTiles); // Chunks the tiles
-    
-    template.chunked = templateTiles; // Stores the chunked tile bitmaps
+      template.chunked = templateTiles; // Stores the chunked tile bitmaps
 
-    // Converts total pixel Object/Map variables into JSON-ready format
-    const _pixels = { "total": template.pixelCount.total, "colors": Object.fromEntries(template.pixelCount.colors) }
+      // Converts total pixel Object/Map variables into JSON-ready format
+      const _pixels = { "total": template.pixelCount.total, "colors": Object.fromEntries(template.pixelCount.colors) }
 
-    // Appends a child into the templates object
-    // The child's name is the number of templates already in the list (sort order) plus the encoded player ID
-    this.templatesJSON.templates[`${template.sortID} ${template.authorID}`] = {
-      "name": template.displayName, // Display name of template
-      "coords": coords.join(', '), // The coords of the template
-      "enabled": true,
-      "pixels": _pixels, // The total pixels in the template
-      "tiles": templateTilesBuffers // Stores the chunked tile buffers
-    };
+      // Appends a child into the templates object
+      // The child's name is the number of templates already in the list (sort order) plus the encoded player ID
+      this.templatesJSON.templates[`${template.sortID} ${template.authorID}`] = {
+        "name": template.displayName, // Display name of template
+        "coords": coords.join(', '), // The coords of the template
+        "enabled": true,
+        "pixels": _pixels, // The total pixels in the template
+        "tiles": templateTilesBuffers // Stores the chunked tile buffers
+      };
 
-    this.templatesArray = []; // Remove this to enable multiple templates (2/2)
-    this.templatesArray.push(template); // Pushes the Template object instance to the Template Array
+      this.templatesArray = []; // Remove this to enable multiple templates (2/2)
+      this.templatesArray.push(template); // Pushes the Template object instance to the Template Array
 
-    this.windowMain.handleDisplayStatus(`Template created at ${coords.join(', ')}!`);
+      this.windowMain.handleDisplayStatus(`Template created at ${coords.join(', ')}!`);
 
-    console.log(Object.keys(this.templatesJSON.templates).length);
-    console.log(this.templatesJSON);
-    console.log(this.templatesArray);
-    console.log(JSON.stringify(this.templatesJSON));
+      console.log(Object.keys(this.templatesJSON.templates).length);
+      console.log(this.templatesJSON);
+      console.log(this.templatesArray);
+      console.log(JSON.stringify(this.templatesJSON));
 
-    await this.#storeTemplates();
+      await this.#storeTemplates();
+      this.templateStatisticsState = 'ready';
+      this.#emitTemplatesChanged('created');
+      return template;
+    } catch (error) {
+      this.templateStatisticsState = 'error';
+      this.#emitTemplatesChanged('create-failed');
+      throw error;
+    }
   }
 
   /** Generates a {@link Template} class instance from the JSON object template.
@@ -422,7 +476,7 @@ export default class TemplateManager {
    * @since 0.72.7
    */
   async #storeTemplates() {
-    GM.setValue('bmTemplates', JSON.stringify(this.templatesJSON));
+    await GM.setValue('bmTemplates', JSON.stringify(this.templatesJSON));
   }
 
   /** Deletes a template from the JSON object.
@@ -857,9 +911,43 @@ export default class TemplateManager {
     console.log(`Importing JSON...`);
     console.log(json);
 
-    // If the passed in JSON is a Blue Marble template object...
-    if (json?.whoami == 'BlueMarble') {
-      await this.#parseBlueMarble(json); // ...parse the template object as Blue Marble
+    this.templateStatisticsState = 'loading';
+    this.#emitTemplatesChanged('import-started');
+    const previousTemplatesJSON = this.templatesJSON;
+    const previousTemplatesArray = this.templatesArray;
+
+    try {
+      // If the passed in JSON is a Blue Marble template object...
+      if (json?.whoami == 'BlueMarble') {
+        const {templatesArray: importedTemplates, skippedTemplates} = await this.#parseBlueMarble(json); // ...parse the template object as Blue Marble
+        if (Object.keys(json.templates).length && !importedTemplates.length) {
+          throw new AggregateError(
+            skippedTemplates.map(({error}) => error),
+            'None of the stored templates could be loaded.'
+          );
+        }
+        const importedJSON = skippedTemplates.length
+          ? {...json, templates: {...json.templates}}
+          : json;
+        for (const {templateKey} of skippedTemplates) {
+          delete importedJSON.templates[templateKey];
+        }
+        this.templatesJSON = importedJSON;
+        this.templatesArray = importedTemplates;
+        this.templateStatisticsState = skippedTemplates.length ? 'degraded' : 'ready';
+        this.#emitTemplatesChanged(skippedTemplates.length ? 'imported-with-errors' : 'imported');
+      } else {
+        this.templatesJSON = await this.createJSON();
+        this.templatesArray = [];
+        this.templateStatisticsState = 'ready';
+        this.#emitTemplatesChanged('imported');
+      }
+    } catch (error) {
+      this.templatesJSON = previousTemplatesJSON;
+      this.templatesArray = previousTemplatesArray;
+      this.templateStatisticsState = 'error';
+      this.#emitTemplatesChanged('import-failed');
+      throw error;
     }
   }
 
@@ -871,11 +959,17 @@ export default class TemplateManager {
 
     console.log(`Parsing BlueMarble...`);
 
-    const templates = json.templates;
+    const templates = json?.templates;
+    if (!templates || (typeof templates != 'object') || Array.isArray(templates)) {
+      throw new TypeError('Stored template data has no valid templates object.');
+    }
 
     console.log(`BlueMarble length: ${Object.keys(templates).length}`);
 
     const schemaVersion = json?.schemaVersion;
+    if (typeof schemaVersion != 'string') {
+      throw new TypeError('Stored template data has no valid schema version.');
+    }
     const schemaVersionArray = schemaVersion.split(/[-\.\+]/); // SemVer -> string[]
     const schemaVersionBleedingEdge = this.schemaVersion.split(/[-\.\+]/); // SemVer -> string[]
     const scriptVersion = json?.scriptVersion;
@@ -894,10 +988,10 @@ export default class TemplateManager {
       }
 
       // Load using the latest schema loader. It will be fine, probably...
-      this.templatesArray = await loadSchema({
+      return await loadSchema({
         tileSize: this.tileSize,
         drawMult: this.drawMult,
-        templatesArray: this.templatesArray
+        templatesArray: []
       });
 
     } else if (schemaVersionArray[0] < schemaVersionBleedingEdge[0]) {
@@ -906,11 +1000,13 @@ export default class TemplateManager {
       // Spawns a new Template Wizard
       const windowWizard = new WindowWizard(this.name, this.version, this.schemaVersion, this);
       windowWizard.buildWindow();
+      throw new Error(`Template schema ${schemaVersion} must be migrated before loading.`);
     
     } else {
       // We don't know what the schema is. Unsupported?
 
       this.windowMain.handleDisplayError(`Template version ${schemaVersion} is unsupported.\nUse Blue Marble version ${scriptVersion} or load a new template.`);
+      throw new Error(`Template schema ${schemaVersion} is unsupported.`);
     }
 
     /** Loads schema of Blue Marble template storage
@@ -926,18 +1022,17 @@ export default class TemplateManager {
       templatesArray: templatesArray
     }) {
 
-      // Run only if there are templates saved
-      if (Object.keys(templates).length > 0) {
-  
-        // For each template...
-        for (const template in templates) {
-  
-          const templateKey = template; // The identification key for the template. E.g., "0 $Z"
-          const templateValue = templates[template]; // The actual content of the template
-          console.log(`Template Key: ${templateKey}`);
-  
-          if (templates.hasOwnProperty(template)) {
-  
+      const skippedTemplates = [];
+
+      // Each template is isolated so one damaged tile cannot block all remaining templates.
+      for (const [templateKey, templateValue] of Object.entries(templates)) {
+        console.log(`Template Key: ${templateKey}`);
+
+        try {
+          if (!templateValue || (typeof templateValue != 'object')) {
+            throw new TypeError(`Template "${templateKey}" is not an object.`);
+          }
+
             const templateKeyArray = templateKey.split(' '); // E.g., "0 $Z" -> ["0", "$Z"]
             const sortID = Number(templateKeyArray?.[0]); // Sort ID of the template
             const authorID = templateKeyArray?.[1] || '0'; // User ID of the person who exported the template
@@ -949,15 +1044,17 @@ export default class TemplateManager {
               colors: new Map(Object.entries(templateValue.pixels?.colors || {}).map(([key, value]) => [Number(key), value]))
             };
   
-            const tilesbase64 = templateValue.tiles;
+            const tilesbase64 = templateValue.tiles ?? {};
+            if ((typeof tilesbase64 != 'object') || Array.isArray(tilesbase64)) {
+              throw new TypeError(`Template "${templateKey}" has no valid tiles object.`);
+            }
             const templateTiles = {}; // Stores the template bitmap tiles for each tile.
             const templateTiles32 = {}; // Stores the template Uint32Array tiles for each tile.
   
             const actualTileSize = tileSize * drawMult;
   
-            for (const tile in tilesbase64) {
+            for (const tile of Object.keys(tilesbase64)) {
               console.log(tile);
-              if (tilesbase64.hasOwnProperty(tile)) {
                 const encodedTemplateBase64 = tilesbase64[tile];
                 const templateUint8Array = base64ToUint8(encodedTemplateBase64); // Base 64 -> Uint8Array
   
@@ -971,13 +1068,12 @@ export default class TemplateManager {
                 context.drawImage(templateBitmap, 0, 0);
                 const imageData = context.getImageData(0, 0, templateBitmap.width, templateBitmap.height);
                 templateTiles32[tile] = new Uint32Array(imageData.data.buffer);
-              }
             }
   
             // Creates a new Template class instance
             const template = new Template({
               displayName: displayName,
-              sortID: sortID || this.templatesArray?.length || 0,
+              sortID: Number.isFinite(sortID) ? sortID : templatesArray.length,
               authorID: authorID || '',
               //coords: coords,
             });
@@ -986,13 +1082,15 @@ export default class TemplateManager {
             template.chunked32 = templateTiles32;
             
             templatesArray.push(template);
-            console.log(this.templatesArray);
+            console.log(templatesArray);
             console.log(`^^^ This ^^^`);
-          }
+        } catch (error) {
+          skippedTemplates.push({templateKey, error});
+          console.warn(`Blue Marble: Skipping damaged template "${templateKey}".`, error);
         }
       }
 
-      return templatesArray
+      return {templatesArray, skippedTemplates};
     }
   }
 

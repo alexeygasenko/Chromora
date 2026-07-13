@@ -213,8 +213,10 @@ export default class TemplateManager {
    * Results are compact horizontal runs: [worldY, worldXStart, worldXEnd].
    * @param {{minX:number, minY:number, maxX:number, maxY:number}} bounds
    * @param {number} colorID
-   * @param {{maxPixels?:number, signal?:AbortSignal}} options
-   * @returns {Promise<{runs:Array<[number, number, number]>, pixelCount:number}>}
+   * @param {Object} [options={}] - Scan options
+   * @param {number} [options.maxPixels=100000] - Maximum number of pixels to return
+   * @param {AbortSignal} [options.signal] - Optional cancellation signal
+   * @returns {Promise<Object>} Compact runs and their total pixel count
    * @since 0.99.0
    */
   async findTemplatePixelRuns(bounds, colorID, {maxPixels = 100000, signal} = {}) {

@@ -2,47 +2,41 @@
 
 Chromora is a feature-focused fork of [Blue Marble](https://github.com/SwingTheVine/Wplace-BlueMarble) for [wplace.live](https://wplace.live/).
 
-The project still uses Blue Marble's template engine, storage format, and MPL-2.0 foundation, but its interface and workflow have evolved into a separate liquid-glass toolkit for inspecting, highlighting, and preparing pixel art.
+The project started with Blue Marble, then grew into a separate liquid-glass toolkit for checking artwork, finding unfinished areas, and preparing pixels faster.
 
 ## Features
 
-### Fluid interface
+### Smooth interface
 
-- Y2K liquid-glass design across the main window, Color Filter, and Settings.
-- Fluid minimize, expand, fullscreen, layout-switch, and close animations.
-- Responsive motion designed to avoid layout thrashing and long main-thread stalls.
-- Movable and resizable tools with persisted positions and dimensions.
+- New Y2K liquid-glass look across every window.
+- Windows open, close, minimize, expand, and change shape smoothly.
+- Large templates stay responsive while Chromora works in the background.
+- Windows remember where you placed them and how large they were.
 
 ### Color Filter
 
-- Horizontal, vertical, and fullscreen layouts.
-- Independent saved positions for horizontal and vertical windows.
-- Persistent color visibility and custom sorting.
-- Live per-color totals, correct-pixel counts, and completion progress.
-- Animated loading states that remain active until tile statistics are ready.
+- Switch between horizontal, vertical, and fullscreen views.
+- Horizontal and vertical views remember their own positions.
+- Hide colors you do not need and arrange the list your way.
+- See how many pixels each color needs, how many are already correct, and how much work remains.
+- A loader stays visible until the color information is actually ready.
 
-### Pixel inspection
+### Find unfinished areas
 
-- Immediate highlighting of incorrectly painted pixels for a selected color.
-- Immediate highlighting of transparent pixels that still require the selected color.
-- Lightweight merged-zone outlines without crosses at tile intersections.
-- Stable 16x16 zone geometry across template chunks and map tiles.
-- Chunked rendering and browser yielding to reduce freezes on large templates.
+- Pick a color and immediately see pixels painted with the wrong color.
+- Show empty pixels that still need the selected color.
+- Mark unfinished areas with clean outlines, without crosses or broken corners.
+- Keep highlighted zones even and consistent across the whole artwork.
+- Work with large artworks without the regular freezes older versions had.
 
-### Area drafting
+### Prepare an area for painting
 
-- Hold a configurable hotkey (`Left Alt` by default) and drag over the map to select an area.
-- Adds only transparent template pixels that require the currently selected Wplace color.
-- Prepares pixels in the Wplace draft; the user still presses Wplace's **Paint** button manually.
-- Deduplicates pixels already added by previous selections.
-- Rejects the entire selection when it exceeds available paint charges; no partial draft is created.
-- Liquid-glass loader, success state, and limit alerts.
-
-### Compatibility
-
-- Existing `bmTemplates` and `bmUserSettings` storage remains supported.
-- Blue Marble and Chromora template JSON files can both be imported.
-- Legacy `BlueMarble*.user.js` artifact names remain for update compatibility.
+- Hold `Left Alt` and drag over the part of the artwork you want to paint.
+- Chromora adds only empty pixels that should use your currently selected Wplace color.
+- Check the result, then press Wplace's **Paint** button yourself.
+- Repeated selections do not add the same pixel twice.
+- If the selected area needs more pixels than you have available, Chromora adds nothing and shows a warning.
+- Change the hotkey in Settings whenever you need.
 
 ## Screenshots
 

@@ -209,19 +209,21 @@ export default class TemplateManager {
     this.paintAreaMessageHandler = null;
   }
 
-  /** Finds template pixels of one palette color inside inclusive world-pixel bounds.
-   * Results are compact horizontal runs: [worldY, worldXStart, worldXEnd].
+  /** Finds unpainted template pixels inside inclusive world-pixel bounds.
+   * Results are left-to-right vertical runs: [colorID, worldX, worldYStart, worldYEnd].
    * @param {{minX:number, minY:number, maxX:number, maxY:number}} bounds
-   * @param {number} colorID
+   * @param {number|null} colorID
    * @param {Object} [options={}] - Scan options
+   * @param {'matching'|'template'} [options.mode='matching'] - Selected color only, or every template color
    * @param {number} [options.maxPixels=100000] - Maximum number of pixels to return
    * @param {AbortSignal} [options.signal] - Optional cancellation signal
    * @returns {Promise<Object>} Compact runs and their total pixel count
-   * @since 0.99.0
+   * @since 1.1.0
    */
-  async findTemplatePixelRuns(bounds, colorID, {maxPixels = 100000, signal} = {}) {
+  async findTemplatePixelRuns(bounds, colorID, {mode = 'matching', maxPixels = 100000, signal} = {}) {
+    const normalizedMode = mode == 'template' ? 'template' : 'matching';
     const normalizedColorID = Number(colorID);
-    if (!Number.isInteger(normalizedColorID) || (normalizedColorID <= 0)) {
+    if ((normalizedMode == 'matching') && (!Number.isInteger(normalizedColorID) || (normalizedColorID <= 0))) {
       throw new TypeError('Select a non-transparent Wplace color first.');
     }
 
@@ -236,6 +238,7 @@ export default class TemplateManager {
     }
 
     const pixelLimit = Math.max(1, Math.min(Math.floor(Number(maxPixels) || 1), 100001));
+    const chunkDescriptors = [];
     const runs = [];
     let pixelCount = 0;
     let workSliceStarted = performance.now();
@@ -244,7 +247,9 @@ export default class TemplateManager {
       : Object.entries(value ?? {});
     const centerOffset = Math.floor(this.drawMult / 2);
 
-    for (const template of this.templatesArray) {
+    let chunkOrder = 0;
+    for (let templateOrder = 0; templateOrder < this.templatesArray.length; templateOrder++) {
+      const template = this.templatesArray[templateOrder];
       for (const [chunkKey, pixelBuffer] of chunkEntries(template?.chunked32)) {
         if (signal?.aborted) {throw new DOMException('Area selection cancelled.', 'AbortError');}
         if (!(pixelBuffer instanceof Uint32Array)) {continue;}
@@ -271,34 +276,139 @@ export default class TemplateManager {
         const localMaxY = Math.min(chunkHeight - 1, normalizedBounds.maxY - chunkMinY);
         if ((localMinX > localMaxX) || (localMinY > localMaxY)) {continue;}
 
-        for (let localY = localMinY; localY <= localMaxY; localY++) {
-          let runStart = null;
+        chunkDescriptors.push({
+          templateOrder: templateOrder,
+          chunkOrder: chunkOrder++,
+          pixelBuffer: pixelBuffer,
+          pixelState: pixelState,
+          bitmapWidth: bitmapWidth,
+          chunkWidth: chunkWidth,
+          chunkMinX: chunkMinX,
+          chunkMinY: chunkMinY,
+          localMinY: localMinY,
+          localMaxY: localMaxY,
+          currentWorldX: chunkMinX + localMinX,
+          maxWorldX: chunkMinX + localMaxX
+        });
+      }
+    }
 
-          for (let localX = localMinX; localX <= localMaxX; localX++) {
-            const bufferX = (localX * this.drawMult) + centerOffset;
-            const bufferY = (localY * this.drawMult) + centerOffset;
-            const packedColor = pixelBuffer[(bufferY * bitmapWidth) + bufferX];
-            const matchesColor = (this.paletteBM.LUT.get(packedColor) == normalizedColorID)
-              && (pixelState[(localY * chunkWidth) + localX] == 2);
-
-            if (matchesColor && (runStart == null)) {runStart = localX;}
-            const closesRun = (runStart != null) && (!matchesColor || (localX == localMaxX));
-            if (!closesRun) {continue;}
-
-            const localRunEnd = matchesColor && (localX == localMaxX) ? localX : localX - 1;
-            const remaining = pixelLimit - pixelCount;
-            const runEnd = Math.min(localRunEnd, runStart + remaining - 1);
-            runs.push([chunkMinY + localY, chunkMinX + runStart, chunkMinX + runEnd]);
-            pixelCount += runEnd - runStart + 1;
-            runStart = null;
-            if (pixelCount >= pixelLimit) {return {runs, pixelCount};}
+    const compareDescriptors = (left, right) => (left.currentWorldX - right.currentWorldX)
+      || (left.templateOrder - right.templateOrder)
+      || (left.chunkOrder - right.chunkOrder);
+    const pushHeap = (heap, value, compare) => {
+      heap.push(value);
+      let index = heap.length - 1;
+      while (index > 0) {
+        const parentIndex = Math.floor((index - 1) / 2);
+        if (compare(heap[parentIndex], heap[index]) <= 0) {break;}
+        [heap[parentIndex], heap[index]] = [heap[index], heap[parentIndex]];
+        index = parentIndex;
+      }
+    };
+    const popHeap = (heap, compare) => {
+      const first = heap[0];
+      const last = heap.pop();
+      if (heap.length && last) {
+        heap[0] = last;
+        let index = 0;
+        while (true) {
+          const leftIndex = (index * 2) + 1;
+          const rightIndex = leftIndex + 1;
+          let smallestIndex = index;
+          if ((leftIndex < heap.length) && (compare(heap[leftIndex], heap[smallestIndex]) < 0)) {
+            smallestIndex = leftIndex;
           }
-
-          if ((performance.now() - workSliceStarted) >= 4) {
-            await this.#yieldToBrowser();
-            workSliceStarted = performance.now();
+          if ((rightIndex < heap.length) && (compare(heap[rightIndex], heap[smallestIndex]) < 0)) {
+            smallestIndex = rightIndex;
           }
+          if (smallestIndex == index) {break;}
+          [heap[index], heap[smallestIndex]] = [heap[smallestIndex], heap[index]];
+          index = smallestIndex;
         }
+      }
+      return first;
+    };
+
+    const descriptorHeap = [];
+    for (const descriptor of chunkDescriptors) {pushHeap(descriptorHeap, descriptor, compareDescriptors);}
+
+    while (descriptorHeap.length) {
+      if (signal?.aborted) {throw new DOMException('Area selection cancelled.', 'AbortError');}
+      const worldX = descriptorHeap[0].currentWorldX;
+      const descriptorsAtX = [];
+      while (descriptorHeap.length && (descriptorHeap[0].currentWorldX == worldX)) {
+        descriptorsAtX.push(popHeap(descriptorHeap, compareDescriptors));
+      }
+
+      const compareColumnPixels = (left, right) => (left.worldY - right.worldY)
+        || (left.templateOrder - right.templateOrder)
+        || (left.chunkOrder - right.chunkOrder);
+      const columnPixelHeap = [];
+      const queueNextColumnPixel = stream => {
+        const descriptor = stream.descriptor;
+        while (stream.localY <= descriptor.localMaxY) {
+          const localY = stream.localY++;
+          if (descriptor.pixelState[(localY * descriptor.chunkWidth) + stream.localX] != 2) {continue;}
+          const bufferY = (localY * this.drawMult) + centerOffset;
+          const packedColor = descriptor.pixelBuffer[(bufferY * descriptor.bitmapWidth) + stream.bufferX];
+          const templateColorID = this.paletteBM.LUT.get(packedColor);
+          if (!Number.isInteger(templateColorID) || (templateColorID <= 0)) {continue;}
+          if ((normalizedMode == 'matching') && (templateColorID != normalizedColorID)) {continue;}
+          pushHeap(columnPixelHeap, {
+            worldY: descriptor.chunkMinY + localY,
+            colorID: templateColorID,
+            templateOrder: descriptor.templateOrder,
+            chunkOrder: descriptor.chunkOrder,
+            stream: stream
+          }, compareColumnPixels);
+          return;
+        }
+      };
+
+      for (const descriptor of descriptorsAtX) {
+        const localX = worldX - descriptor.chunkMinX;
+        queueNextColumnPixel({
+          descriptor: descriptor,
+          localX: localX,
+          localY: descriptor.localMinY,
+          bufferX: (localX * this.drawMult) + centerOffset
+        });
+        descriptor.currentWorldX++;
+        if (descriptor.currentWorldX <= descriptor.maxWorldX) {pushHeap(descriptorHeap, descriptor, compareDescriptors);}
+
+        if ((performance.now() - workSliceStarted) >= 4) {
+          await this.#yieldToBrowser();
+          workSliceStarted = performance.now();
+        }
+      }
+
+      let previousWorldY = null;
+      while (columnPixelHeap.length) {
+        const pixel = popHeap(columnPixelHeap, compareColumnPixels);
+        queueNextColumnPixel(pixel.stream);
+        if ((performance.now() - workSliceStarted) >= 4) {
+          await this.#yieldToBrowser();
+          workSliceStarted = performance.now();
+        }
+        if (pixel.worldY == previousWorldY) {continue;}
+        previousWorldY = pixel.worldY;
+        const previousRun = runs[runs.length - 1];
+        if (previousRun
+          && (previousRun[0] == pixel.colorID)
+          && (previousRun[1] == worldX)
+          && ((previousRun[3] + 1) == pixel.worldY)) {
+          previousRun[3] = pixel.worldY;
+        } else {
+          runs.push([pixel.colorID, worldX, pixel.worldY, pixel.worldY]);
+        }
+        pixelCount++;
+        if (pixelCount >= pixelLimit) {return {runs, pixelCount};}
+      }
+
+      if ((performance.now() - workSliceStarted) >= 4) {
+        await this.#yieldToBrowser();
+        workSliceStarted = performance.now();
       }
     }
 
@@ -313,6 +423,7 @@ export default class TemplateManager {
   async #processPaintAreaSelection(data, signal) {
     try {
       const result = await this.findTemplatePixelRuns(data.bounds, data.colorID, {
+        mode: data.mode,
         maxPixels: data.maxPixels,
         signal: signal
       });
@@ -321,6 +432,7 @@ export default class TemplateManager {
         source: 'blue-marble',
         action: 'paint-area-fill',
         requestID: data.requestID,
+        mode: data.mode == 'template' ? 'template' : 'matching',
         colorID: Number(data.colorID),
         runs: result.runs,
         pixelCount: result.pixelCount
@@ -331,6 +443,7 @@ export default class TemplateManager {
         source: 'blue-marble',
         action: 'paint-area-error',
         requestID: data.requestID,
+        mode: data.mode == 'template' ? 'template' : 'matching',
         message: error instanceof Error ? error.message : String(error)
       }, '*');
     }

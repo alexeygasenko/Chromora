@@ -409,7 +409,8 @@ confetti-piece {
   flex: 0 0 auto;
   font-size: 0.74rem;
 }
-.bm-button-circle svg {
+.bm-button-circle svg,
+.bm-button-circle .bm-raster-icon {
   display: block;
   width: 70%;
   height: 70%;
@@ -419,6 +420,20 @@ confetti-piece {
   pointer-events: none;
   transform: translateZ(0);
   overflow: visible;
+  user-select: none;
+}
+.bm-raster-icon {
+  display: block;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-image: var(--bm-icon-image);
+  mask-image: var(--bm-icon-image);
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 .bm-button-circle .bm-button-icon-settings {
   width: 68%;
@@ -863,6 +878,8 @@ input[type=file] {
   display: block;
   width: 1.28em;
   height: 1.28em;
+  pointer-events: none;
+  user-select: none;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.9;
@@ -1507,6 +1524,8 @@ input[type=file] {
   display: block;
   width: 1.42rem;
   height: 1.42rem;
+  pointer-events: none;
+  user-select: none;
 }
 #bm-window-filter .bm-filter-color-highlight {
   position: relative;
@@ -1531,6 +1550,7 @@ input[type=file] {
   opacity: 1;
   cursor: progress;
   transform: none;
+  filter: none !important;
 }
 #bm-window-filter .bm-filter-color-highlight[data-loading=true]::before,
 #bm-window-filter .bm-filter-color-highlight[data-loading=true]::after {
@@ -1542,63 +1562,42 @@ input[type=file] {
 }
 #bm-window-filter .bm-filter-color-highlight[data-loading=true]::before {
   inset: 0.16rem;
-  background:
-    conic-gradient(
-      from 20deg,
-      transparent 0deg,
-      rgba(255, 255, 255, 0.2) 72deg,
-      currentColor 138deg,
-      rgba(255, 255, 255, 0.98) 188deg,
-      currentColor 238deg,
-      transparent 318deg);
-  -webkit-mask:
-    radial-gradient(
-      farthest-side,
-      transparent calc(100% - 2px),
-      #000 calc(100% - 1px));
-  mask:
-    radial-gradient(
-      farthest-side,
-      transparent calc(100% - 2px),
-      #000 calc(100% - 1px));
-  filter: drop-shadow(0 0 4px currentColor);
-  animation: bm-filter-highlight-loader-spin 900ms linear infinite;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  animation: bm-filter-highlight-loader-orbit 720ms linear infinite;
+  will-change: transform;
 }
 #bm-window-filter .bm-filter-color-highlight[data-loading=true]::after {
-  inset: 0.42rem;
-  border: 1px solid rgba(255, 255, 255, 0.46);
-  box-shadow: inset 0 0 5px rgba(255, 255, 255, 0.3), 0 0 7px rgba(116, 231, 255, 0.22);
-  animation: bm-filter-highlight-loader-pulse 780ms ease-in-out infinite alternate;
+  inset: 0.34rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-bottom-color: currentColor;
+  border-left-color: currentColor;
+  opacity: 0.72;
+  animation: bm-filter-highlight-loader-orbit 1080ms linear infinite reverse;
+  will-change: transform;
 }
 #bm-window-filter .bm-filter-color-highlight[data-loading=true] .bm-filter-highlight-icon {
-  opacity: 0.22;
-  transform: scale(0.68) rotate(18deg);
-  filter: blur(0.35px) drop-shadow(0 0 5px currentColor);
-  animation: bm-filter-highlight-icon-breathe 900ms ease-in-out infinite alternate;
+  opacity: 0.54;
+  transform: scale(0.68);
+  filter: none;
+  animation: bm-filter-highlight-loader-breathe 860ms ease-in-out infinite alternate;
+  will-change: transform, opacity;
 }
-@keyframes bm-filter-highlight-loader-spin {
+@keyframes bm-filter-highlight-loader-orbit {
   to {
     transform: rotate(1turn);
   }
 }
-@keyframes bm-filter-highlight-loader-pulse {
+@keyframes bm-filter-highlight-loader-breathe {
   from {
-    opacity: 0.28;
-    transform: scale(0.82);
+    opacity: 0.38;
+    transform: scale(0.62);
   }
   to {
-    opacity: 0.82;
-    transform: scale(1);
-  }
-}
-@keyframes bm-filter-highlight-icon-breathe {
-  from {
-    opacity: 0.14;
-    transform: scale(0.62) rotate(10deg);
-  }
-  to {
-    opacity: 0.34;
-    transform: scale(0.76) rotate(24deg);
+    opacity: 0.72;
+    transform: scale(0.74);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1606,6 +1605,12 @@ input[type=file] {
   #bm-window-filter .bm-filter-color-highlight[data-loading=true]::after,
   #bm-window-filter .bm-filter-color-highlight[data-loading=true] .bm-filter-highlight-icon {
     animation: none;
+  }
+  #bm-window-filter .bm-filter-color-highlight[data-loading=true]::before {
+    transform: rotate(35deg);
+  }
+  #bm-window-filter .bm-filter-color-highlight[data-loading=true]::after {
+    transform: rotate(-35deg);
   }
 }
 #bm-window-filter .bm-filter-color-highlight[data-mode=inactive]:hover,
@@ -1644,10 +1649,6 @@ input[type=file] {
 #bm-window-filter .bm-filter-color-highlight:disabled {
   opacity: 0.38;
   cursor: not-allowed;
-}
-#bm-window-filter .bm-filter-color-highlight:disabled[data-loading=true] {
-  opacity: 1;
-  cursor: progress;
 }
 #bm-window-filter:not(.bm-windowed) .bm-filter-container-rgb {
   position: absolute;
@@ -1739,9 +1740,6 @@ input[type=file] {
   width: 1.65rem;
   height: 1.65rem;
   filter: none;
-}
-#bm-window-filter .bm-filter-color-visibility .bm-filter-eye-icon path:nth-of-type(3) {
-  stroke-dasharray: 20;
 }
 #bm-window-filter .bm-filter-color > .bm-flex-between {
   flex-direction: column;
@@ -2104,6 +2102,15 @@ input[type=file] {
   display: block;
   content: "";
   margin-top: 2px;
+}
+#bm-window-filter:not(.bm-windowed) .bm-filter-color .bm-filter-color-pxl-cnt br {
+  display: block;
+  content: "";
+  margin-top: 2px;
+}
+#bm-window-filter .bm-filter-color-total-line {
+  display: inline-block;
+  white-space: nowrap;
 }
 #bm-window-filter.bm-windowed .bm-dragbar h1 {
   margin-left: 0.35rem;
@@ -2529,4 +2536,4 @@ input[type=file] {
 
 /* src/main.css */
 
-/* Build Hash: 08b1a9b872e5 */
+/* Build Hash: 91fd9966103e */

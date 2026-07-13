@@ -7,7 +7,6 @@ import ApiManager from './apiManager.js';
 import TemplateManager from './templateManager.js';
 import { consoleLog, consoleWarn } from './utils.js';
 import WindowMain from './WindowMain.js';
-import WindowTelemetry from './WindowTelemetry.js';
 import SettingsManager from './settingsManager.js';
 import paintSelectedIcon from './assets/paint-selected.png';
 import paintAllIcon from './assets/paint-all.png';
@@ -1091,6 +1090,9 @@ function readStoredJSON(key, fallback = {}) {
 }
 
 const userSettings = readStoredJSON('bmUserSettings'); // Loads the user settings
+const hasLegacyTelemetrySettings = Object.hasOwn(userSettings, 'telemetry') || Object.hasOwn(userSettings, 'uuid');
+delete userSettings['telemetry'];
+delete userSettings['uuid'];
 const runtimeMarkerID = 'bm-userscript-runtime';
 const existingRuntimeMarker = document.querySelector('meta[data-blue-marble-runtime]');
 const shouldInitializeRuntime = !existingRuntimeMarker;
@@ -1102,14 +1104,20 @@ if (!shouldInitializeRuntime) {
 if (shouldInitializeRuntime) {
 void (async () => {
 let runtimeMarker = null;
-let heartbeatInterval = null;
 let activeWindowMain = null;
-let activeTelemetryWindow = null;
 let stopSpontaneousResponseListener = null;
 let stopBlackObserver = null;
 let stopPaintAreaSelectionBridge = null;
 
 try {
+
+if (hasLegacyTelemetrySettings) {
+  try {
+    await GM.setValue('bmUserSettings', JSON.stringify(userSettings));
+  } catch (error) {
+    consoleWarn('Could not remove legacy telemetry settings.', error);
+  }
+}
 
 // CONSTRUCTORS
 const observers = new Observers(); // Constructs a new Observers object
@@ -1136,36 +1144,6 @@ runtimeMarker.dataset['blueMarbleRuntime'] = 'true';
 runtimeMarker.dataset['runtimeState'] = 'initializing';
 document.documentElement.appendChild(runtimeMarker);
 
-
-console.log(userSettings);
-console.log(Object.keys(userSettings).length);
-
-// If the user does not have a UUID yet, make a new one.
-if (Object.keys(userSettings).length == 0) {
-  const uuid = crypto.randomUUID(); // Generates a random UUID
-  console.log(uuid);
-  await GM.setValue('bmUserSettings', JSON.stringify({
-    'uuid': uuid
-  }));
-}
-
-heartbeatInterval = setInterval(() => apiManager.sendHeartbeat(version), 1000 * 60 * 30); // Sends a heartbeat every 30 minutes
-
-// The current "version" of the data collection agreement
-// Increment by 1 to retrigger the telemetry window
-const currentTelemetryVersion = 1;
-
-// The last "version" of the data collection agreement that the user agreed too
-const previousTelemetryVersion = userSettings?.telemetry;
-console.log(`Telemetry is ${!(previousTelemetryVersion == undefined)}`);
-
-// If the user has not agreed to the current data collection terms, we need to show the Telemetry window.
-if ((previousTelemetryVersion == undefined) || (previousTelemetryVersion > currentTelemetryVersion)) {
-  const windowTelemetry = new WindowTelemetry(name, version, currentTelemetryVersion, userSettings?.uuid);
-  activeTelemetryWindow = windowTelemetry;
-  windowTelemetry.setApiManager(apiManager);
-  await windowTelemetry.buildWindow(); // Asks the user if they want to enable telemetry
-}
 
 await initializeBlueMarble();
 runtimeMarker.dataset['runtimeState'] = 'ready';
@@ -1244,13 +1222,11 @@ function observeBlack() {
 }
 
 } catch (error) {
-  if (heartbeatInterval != null) {clearInterval(heartbeatInterval);}
   stopBlackObserver?.();
   stopSpontaneousResponseListener?.();
   stopPaintAreaSelectionBridge?.();
   activeWindowMain?.windowFilter?.dispose();
   document.getElementById(activeWindowMain?.windowID)?.remove();
-  document.getElementById(activeTelemetryWindow?.windowID)?.remove();
   runtimeMarker?.remove();
   console.error('Blue Marble: Runtime initialization failed.', error);
 }

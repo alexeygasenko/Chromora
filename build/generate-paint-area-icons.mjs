@@ -50,6 +50,31 @@ function line(canvas, x1, y1, x2, y2, width, color) {
   }
 }
 
+function circle(canvas, centerX, centerY, radius, color, strokeColor = null, strokeWidth = 0) {
+  centerX *= scale; centerY *= scale; radius *= scale; strokeWidth *= scale;
+  const outerRadius = radius + strokeWidth;
+  for (let y = Math.floor(centerY - outerRadius); y <= Math.ceil(centerY + outerRadius); y++) {
+    for (let x = Math.floor(centerX - outerRadius); x <= Math.ceil(centerX + outerRadius); x++) {
+      const distance = Math.hypot(x - centerX, y - centerY);
+      if (distance <= outerRadius) {
+        blendPixel(canvas, x, y, strokeColor && (distance >= radius) ? strokeColor : color);
+      }
+    }
+  }
+}
+
+function circleStroke(canvas, centerX, centerY, radius, width, color) {
+  centerX *= scale; centerY *= scale; radius *= scale; width *= scale;
+  const innerRadius = radius - (width / 2);
+  const outerRadius = radius + (width / 2);
+  for (let y = Math.floor(centerY - outerRadius); y <= Math.ceil(centerY + outerRadius); y++) {
+    for (let x = Math.floor(centerX - outerRadius); x <= Math.ceil(centerX + outerRadius); x++) {
+      const distance = Math.hypot(x - centerX, y - centerY);
+      if ((distance >= innerRadius) && (distance <= outerRadius)) {blendPixel(canvas, x, y, color);}
+    }
+  }
+}
+
 function roundedRect(canvas, x, y, width, height, radius, color, strokeColor = null, strokeWidth = 0) {
   x *= scale; y *= scale; width *= scale; height *= scale; radius *= scale; strokeWidth *= scale;
   const centerX = x + (width / 2);
@@ -94,6 +119,88 @@ function drawAllColors(canvas) {
   drawSelectionCorners(canvas);
   drawColorGrid(canvas);
 }
+
+function drawClose(canvas) {
+  line(canvas, 18, 18, 46, 46, 4, colors.white);
+  line(canvas, 46, 18, 18, 46, 4, colors.white);
+}
+
+function drawSettings(canvas) {
+  for (let index = 0; index < 8; index++) {
+    const angle = (Math.PI * index) / 4;
+    line(
+      canvas,
+      32 + (Math.cos(angle) * 19),
+      32 + (Math.sin(angle) * 19),
+      32 + (Math.cos(angle) * 25),
+      32 + (Math.sin(angle) * 25),
+      5,
+      colors.white
+    );
+  }
+  circleStroke(canvas, 32, 32, 17, 4, colors.white);
+  circleStroke(canvas, 32, 32, 7, 3.5, colors.white);
+}
+
+function drawFullscreen(canvas) {
+  const corners = [
+    [[27, 14], [14, 14], [14, 27]],
+    [[37, 14], [50, 14], [50, 27]],
+    [[50, 37], [50, 50], [37, 50]],
+    [[27, 50], [14, 50], [14, 37]]
+  ];
+  for (const points of corners) {
+    for (let index = 1; index < points.length; index++) {line(canvas, ...points[index - 1], ...points[index], 3.8, colors.white);}
+  }
+}
+
+function drawWindowed(canvas) {
+  const corners = [
+    [[12, 24], [24, 24], [24, 12]],
+    [[40, 12], [40, 24], [52, 24]],
+    [[52, 40], [40, 40], [40, 52]],
+    [[24, 52], [24, 40], [12, 40]]
+  ];
+  for (const points of corners) {
+    for (let index = 1; index < points.length; index++) {line(canvas, ...points[index - 1], ...points[index], 3.8, colors.white);}
+  }
+}
+
+function drawHorizontalLayout(canvas) {
+  roundedRect(canvas, 8, 14, 48, 14, 4, colors.white);
+  roundedRect(canvas, 8, 36, 48, 14, 4, colors.white);
+}
+
+function drawVerticalLayout(canvas) {
+  roundedRect(canvas, 12, 8, 16, 48, 4, colors.white);
+  roundedRect(canvas, 36, 8, 16, 48, 4, colors.white);
+}
+
+function drawHighlight(canvas) {
+  roundedRect(canvas, 27, 27, 10, 10, 2, colors.white);
+  const corners = [
+    [[14, 24], [14, 14], [24, 14]],
+    [[40, 14], [50, 14], [50, 24]],
+    [[50, 40], [50, 50], [40, 50]],
+    [[24, 50], [14, 50], [14, 40]]
+  ];
+  for (const points of corners) {
+    for (let index = 1; index < points.length; index++) {line(canvas, ...points[index - 1], ...points[index], 3.4, colors.white);}
+  }
+}
+
+function drawEye(canvas, hidden = false) {
+  const upper = [[9, 32], [16, 24], [24, 20], [32, 19], [40, 20], [48, 24], [55, 32]];
+  const lower = [[9, 32], [16, 40], [24, 44], [32, 45], [40, 44], [48, 40], [55, 32]];
+  for (const points of [upper, lower]) {
+    for (let index = 1; index < points.length; index++) {line(canvas, ...points[index - 1], ...points[index], 3.3, colors.white);}
+  }
+  circleStroke(canvas, 32, 32, 7, 3.4, colors.white);
+  if (hidden) {line(canvas, 13, 13, 51, 51, 4, colors.white);}
+}
+
+function drawEyeVisible(canvas) {drawEye(canvas, false);}
+function drawEyeHidden(canvas) {drawEye(canvas, true);}
 
 function downsample(source) {
   const output = new Uint8Array(outputSize * outputSize * 4);
@@ -155,7 +262,16 @@ const outputDirectory = path.resolve('src/assets');
 fs.mkdirSync(outputDirectory, {recursive: true});
 for (const [filename, draw] of [
   ['paint-selected.png', drawSingleColor],
-  ['paint-all.png', drawAllColors]
+  ['paint-all.png', drawAllColors],
+  ['window-close.png', drawClose],
+  ['settings.png', drawSettings],
+  ['enter-fullscreen.png', drawFullscreen],
+  ['exit-fullscreen.png', drawWindowed],
+  ['layout-horizontal.png', drawHorizontalLayout],
+  ['layout-vertical.png', drawVerticalLayout],
+  ['highlight-pixels.png', drawHighlight],
+  ['color-visible.png', drawEyeVisible],
+  ['color-hidden.png', drawEyeHidden]
 ]) {
   const canvas = createCanvas();
   draw(canvas);

@@ -1,8 +1,7 @@
 import Overlay, { minimizeIconExpanded } from "./Overlay";
+import { settingsIcon } from "./uiIcons";
 import { getClipboardData } from "./utils";
 import WindowFilter from "./WindowFilter";
-
-const settingsIcon = '<svg class="bm-button-icon bm-button-icon-settings" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.7" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="11" cy="17" r="1.7" fill="currentColor" stroke="none"/></g></svg>';
 
 /** The overlay builder for the main Blue Marble window.
  * @description This class handles the overlay UI for the main window of the Blue Marble userscript.

@@ -1,13 +1,17 @@
 import ConfettiManager from "./confetttiManager";
 import Overlay, { minimizeIconExpanded } from "./Overlay";
+import {
+  closeIcon,
+  colorHiddenIcon,
+  colorVisibleIcon,
+  enterFullscreenIcon,
+  exitFullscreenIcon,
+  highlightPixelsIcon,
+  horizontalLayoutIcon,
+  verticalLayoutIcon
+} from "./uiIcons";
 import { calculateRelativeLuminance, colorpaletteForBlueMarble, localizeNumber, localizePercent } from "./utils";
 
-const closeIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
-const fullscreenIcon = '<svg class="bm-button-icon bm-button-icon-fullscreen" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.5H4.5V8M16 4.5h3.5V8M19.5 16v3.5H16M8 19.5H4.5V16"/><path d="M4.8 4.8l5.1 5.1M19.2 4.8l-5.1 5.1M19.2 19.2l-5.1-5.1M4.8 19.2l5.1-5.1"/></g></svg>';
-const windowedIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.8 4.8l5.2 5.2M19.2 4.8L14 10M19.2 19.2L14 14M4.8 19.2L10 14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M10 7.5V10H7.5M16.5 10H14V7.5M14 16.5V14h2.5M7.5 14H10v2.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const horizontalLayoutIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15M4.5 16.5h15"/><path d="M7.5 5v5M12 5v5M16.5 5v5M7.5 14v5M12 14v5M16.5 14v5"/></g></svg>';
-const verticalLayoutIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.5v15M16 4.5v15"/><path d="M5.5 7.5h5M5.5 12h5M5.5 16.5h5M13.5 7.5h5M13.5 12h5M13.5 16.5h5"/></g></svg>';
-const incorrectHighlightIcon = '<svg class="bm-filter-highlight-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6.4"/><path d="M12 3.8V7M12 17v3.2M3.8 12H7M17 12h3.2"/><path d="m9.3 9.3 5.4 5.4M14.7 9.3l-5.4 5.4"/></g></svg>';
 const colorToggleAnimations = new WeakMap();
 
 function localizeCompactDate(date) {
@@ -18,6 +22,10 @@ function localizeCompactDate(date) {
   const minute = String(date.getMinutes()).padStart(2, '0');
 
   return `${day}.${month}.${year} ${hour}:${minute}`;
+}
+
+function formatColorPixelCount(correct, total) {
+  return `${correct}<br><span class="bm-filter-color-total-line">out of ${total}</span>`;
 }
 
 /** The overlay builder for the color filter Blue Marble window.
@@ -51,7 +59,7 @@ export default class WindowFilter extends Overlay {
     this.sortDropdownPointerHandler = null; // Outside-click handler for custom sort dropdowns
     this.sortDropdownKeyHandler = null; // Keyboard handler for custom sort dropdowns
     this.colorRefreshInterval = null; // Auto-refresh timer for live color statistics
-    this.highlightRefreshPending = null; // Active map refresh triggered by a highlight-mode change
+    this.highlightRefreshPending = null; // Latest map refresh triggered by a highlight-mode change
     this.colorRefreshIntervalMS = 10000; // Refresh Color Filter statistics every 10 seconds
     this.templateWasComplete = false; // Prevent repeated completion effects on every statistics refresh
     this.ownerID = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -65,9 +73,9 @@ export default class WindowFilter extends Overlay {
     /** The templateManager instance currently being used. @type {TemplateManager} */
     this.templateManager = executor.apiManager?.templateManager;
 
-    // Eye icons
-    this.eyeOpen = '<svg class="bm-filter-eye-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.8 12s3.1-5 8.2-5 8.2 5 8.2 5-3.1 5-8.2 5-8.2-5-8.2-5Z"/><circle cx="12" cy="12" r="2.5"/></svg>';
-    this.eyeClosed = '<svg class="bm-filter-eye-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.6 9.8C6.1 8.3 8.6 7 12 7c5.1 0 8.2 5 8.2 5a15.2 15.2 0 0 1-2.2 2.7"/><path d="M14.1 16.7a8.3 8.3 0 0 1-2.1.3c-5.1 0-8.2-5-8.2-5a14.9 14.9 0 0 1 1.8-2.3"/><path d="M5 5l14 14"/><path d="M10.4 10.7a2.5 2.5 0 0 0 2.9 2.9"/></svg>';
+    // Color visibility icons
+    this.eyeOpen = colorVisibleIcon;
+    this.eyeClosed = colorHiddenIcon;
 
     // Obtains the color palette Blue Marble currently uses
     const rendererPalette = this.templateManager?.paletteBM?.palette;
@@ -203,7 +211,7 @@ export default class WindowFilter extends Overlay {
           .addHeader(1, {'class': 'bm-dragbar-title-persistent bm-filter-drag-title', 'textContent': 'Color Filter'}).buildElement()
         .buildElement()
         .addDiv({'class': 'bm-flex-center'})
-          .addButton({'class': 'bm-button-circle', 'innerHTML': windowedIcon, 'title': 'Switch to windowed mode for "Color Filter"', 'aria-label': 'Switch to windowed mode for "Color Filter"'}, (instance, button) => {
+          .addButton({'class': 'bm-button-circle', 'innerHTML': exitFullscreenIcon, 'title': 'Switch to windowed mode for "Color Filter"', 'aria-label': 'Switch to windowed mode for "Color Filter"'}, (instance, button) => {
             button.onclick = () => this.#switchWindowMode(button, () => {
               this.#setWindowModePreference(true);
               this.buildWindowed();
@@ -378,7 +386,7 @@ export default class WindowFilter extends Overlay {
               this.buildWindowed(nextLayout);
             });
           }).buildElement()
-          .addButton({'class': 'bm-button-circle bm-filter-fullscreen-toggle', 'innerHTML': fullscreenIcon, 'title': 'Switch to fullscreen mode for "Color Filter"', 'aria-label': 'Switch to fullscreen mode for "Color Filter"'}, (instance, button) => {
+          .addButton({'class': 'bm-button-circle bm-filter-fullscreen-toggle', 'innerHTML': enterFullscreenIcon, 'title': 'Switch to fullscreen mode for "Color Filter"', 'aria-label': 'Switch to fullscreen mode for "Color Filter"'}, (instance, button) => {
             button.onclick = () => this.#switchWindowMode(button, () => {
               this.#setWindowModePreference(false);
               this.buildWindow();
@@ -686,7 +694,7 @@ export default class WindowFilter extends Overlay {
       if (correct == null || total == null || Number(pixelCount.closest('.bm-filter-color')?.dataset['total']) === 0) {continue;}
 
       if (isHorizontal) {
-        pixelCount.innerHTML = `${correct}<br>out of ${total}`;
+        pixelCount.innerHTML = formatColorPixelCount(correct, total);
       } else {
         pixelCount.textContent = `${correct} / ${total}`;
       }
@@ -1291,7 +1299,7 @@ export default class WindowFilter extends Overlay {
               'aria-pressed': isIncorrectHighlightActive ? 'true' : 'false',
               'title': incorrectHighlightLabel.replace(/\.$/, ''),
               'data-mode': incorrectHighlightMode,
-              'innerHTML': incorrectHighlightIcon,
+              'innerHTML': highlightPixelsIcon,
               'style': `color: ${textColorForPaletteColorBackground};`},
               (instance, button) => {
                 button.onclick = event => {
@@ -1303,7 +1311,7 @@ export default class WindowFilter extends Overlay {
               }
             ).buildElement()
             .addHeader(2, {'textContent': color.name, 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}`}).buildElement()
-            .addSmall({'class': 'bm-filter-color-pxl-cnt', 'data-correct-label': colorCorrectLocalized, 'data-total-label': colorTotalLocalized, 'innerHTML': hasNoPixels ? '-' : (isHorizontalWindowedMode ? `${colorCorrectLocalized}<br>out of ${colorTotalLocalized}` : `${colorCorrectLocalized} / ${colorTotalLocalized}`), 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;`}).buildElement()
+            .addSmall({'class': 'bm-filter-color-pxl-cnt', 'data-correct-label': colorCorrectLocalized, 'data-total-label': colorTotalLocalized, 'innerHTML': hasNoPixels ? '-' : (isHorizontalWindowedMode ? formatColorPixelCount(colorCorrectLocalized, colorTotalLocalized) : `${colorCorrectLocalized} / ${colorTotalLocalized}`), 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;`}).buildElement()
           .buildElement()
         .buildElement();
       } else {
@@ -1350,7 +1358,7 @@ export default class WindowFilter extends Overlay {
                 'aria-pressed': isIncorrectHighlightActive ? 'true' : 'false',
                 'title': incorrectHighlightLabel.replace(/\.$/, ''),
                 'data-mode': incorrectHighlightMode,
-                'innerHTML': incorrectHighlightIcon},
+                'innerHTML': highlightPixelsIcon},
                 (instance, button) => {
                   button.onclick = event => {
                     event.stopPropagation();
@@ -1367,7 +1375,7 @@ export default class WindowFilter extends Overlay {
           .buildElement()
           .addDiv({'class': 'bm-filter-color-meta'})
             .addDiv({'class': 'bm-filter-color-progress'})
-              .addSpan({'class': 'bm-filter-color-pxl-cnt', 'innerHTML': hasNoPixels ? '-' : `${colorCorrectLocalized} /<br>${colorTotalLocalized}`}).buildElement()
+              .addSpan({'class': 'bm-filter-color-pxl-cnt', 'innerHTML': hasNoPixels ? '-' : formatColorPixelCount(colorCorrectLocalized, colorTotalLocalized)}).buildElement()
               .addSmall({'class': 'bm-filter-color-pxl-desc', 'innerHTML': `${colorPercent} done<br>${((typeof colorIncorrect == 'number') && !isNaN(colorIncorrect)) ? colorIncorrect : '???'} off`}).buildElement()
             .buildElement()
           .buildElement()
@@ -1474,6 +1482,8 @@ export default class WindowFilter extends Overlay {
       if ((button.dataset['state'] == 'hidden') && !userWantsUnselect) {continue;} // If the button is selected, and the user wants to select all buttons, then skip this one
       if ((button.dataset['state'] == 'shown') && userWantsUnselect) {continue;} // If the button is not selected, and the user wants to unselect all buttons, then skip this one
       
+      colorToggleAnimations.get(button)?.cancel();
+      colorToggleAnimations.delete(button);
       button.dataset['state'] = shouldHide ? 'hidden' : 'shown';
       button.innerHTML = shouldHide ? this.eyeClosed : this.eyeOpen;
       this.#syncColorToggleLabel(button, {name: color.dataset['name'] || ''});
@@ -1515,7 +1525,6 @@ export default class WindowFilter extends Overlay {
     button.disabled = true;
 
     if (button.dataset['state'] == 'shown') {
-      button.innerHTML = this.eyeClosed;
       button.dataset['state'] = 'hidden';
       this.templateManager.setColorFiltered(color.id, true);
       this.#animateColorToggleIcon(button, 'hide');
@@ -1536,35 +1545,30 @@ export default class WindowFilter extends Overlay {
    * @since 0.97.0
    */
   async #toggleIncorrectHighlightColor(button, color) {
-    if (!button || button.disabled || !color.id || this.highlightRefreshPending) {return;}
+    if (!button || button.disabled || !color.id) {return;}
 
     this.templateManager.toggleIncorrectHighlightColor(color.id);
     this.#syncIncorrectHighlightButtons();
 
-    const highlightButtons = document.querySelectorAll(`#${this.windowID} .bm-filter-color-highlight`);
-    for (const highlightButton of highlightButtons) {
-      highlightButton.setAttribute('aria-disabled', 'true');
+    const previousPending = this.highlightRefreshPending;
+    if (previousPending?.button?.isConnected) {
+      delete previousPending.button.dataset['loading'];
+      previousPending.button.removeAttribute('aria-busy');
     }
-    button.disabled = true;
     button.dataset['loading'] = 'true';
     button.setAttribute('aria-busy', 'true');
 
     const refreshPromise = this.templateManager.requestCanvasRefresh();
-    this.highlightRefreshPending = refreshPromise;
+    const pendingRefresh = {button: button, promise: refreshPromise};
+    this.highlightRefreshPending = pendingRefresh;
     try {
       await refreshPromise;
     } finally {
-      if (this.highlightRefreshPending == refreshPromise) {
-        this.highlightRefreshPending = null;
-      }
-      for (const highlightButton of highlightButtons) {
-        highlightButton.removeAttribute('aria-disabled');
-      }
-      if (button.isConnected) {
-        button.disabled = false;
-        delete button.dataset['loading'];
-        button.removeAttribute('aria-busy');
-      }
+      if (this.highlightRefreshPending != pendingRefresh) {return;}
+      this.highlightRefreshPending = null;
+      if (!button.isConnected) {return;}
+      delete button.dataset['loading'];
+      button.removeAttribute('aria-busy');
     }
   }
 
@@ -1608,7 +1612,7 @@ export default class WindowFilter extends Overlay {
     }
   }
 
-  /** Animates the eye slash only for direct visibility toggles.
+  /** Animates the raster eye swap for direct visibility toggles.
    * @param {HTMLButtonElement} button - The color visibility button
    * @param {'hide' | 'show'} direction - Which slash animation to play
    * @since 0.95.0
@@ -1619,32 +1623,47 @@ export default class WindowFilter extends Overlay {
     const previousAnimation = colorToggleAnimations.get(button);
     colorToggleAnimations.delete(button);
     previousAnimation?.cancel();
-    const slash = button.querySelector('.bm-filter-eye-icon path:nth-of-type(3)');
-    const finishAnimation = () => {
-      if ((direction == 'show') && (button.dataset['state'] == 'shown')) {
-        button.innerHTML = this.eyeOpen;
-      }
-    };
+    const icon = button.querySelector('.bm-filter-eye-icon');
+    const targetIcon = direction == 'hide' ? this.eyeClosed : this.eyeOpen;
 
-    if (!slash || window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof slash.animate != 'function') {
-      finishAnimation();
+    if (!icon || window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof icon.animate != 'function') {
+      button.innerHTML = targetIcon;
       return;
     }
 
-    const animation = slash.animate([
-      {strokeDashoffset: direction == 'hide' ? 20 : 0},
-      {strokeDashoffset: direction == 'hide' ? 0 : 20}
+    const animation = icon.animate([
+      {opacity: 1, transform: 'scale(1) rotate(0deg)'},
+      {opacity: 0, transform: `scale(0.72) rotate(${direction == 'hide' ? 8 : -8}deg)`}
     ], {
-      duration: 220,
-      easing: direction == 'hide' ? 'ease-out' : 'ease-in',
+      duration: 110,
+      easing: 'cubic-bezier(.4, 0, 1, 1)',
       fill: 'forwards'
     });
     colorToggleAnimations.set(button, animation);
     void animation.finished.catch(() => {}).then(() => {
       if (colorToggleAnimations.get(button) != animation) {return;}
-      colorToggleAnimations.delete(button);
       animation.cancel();
-      finishAnimation();
+      button.innerHTML = targetIcon;
+
+      const nextIcon = button.querySelector('.bm-filter-eye-icon');
+      if (!nextIcon || typeof nextIcon.animate != 'function') {
+        colorToggleAnimations.delete(button);
+        return;
+      }
+      const enterAnimation = nextIcon.animate([
+        {opacity: 0, transform: `scale(0.72) rotate(${direction == 'hide' ? -8 : 8}deg)`},
+        {opacity: 1, transform: 'scale(1) rotate(0deg)'}
+      ], {
+        duration: 170,
+        easing: 'cubic-bezier(.16, 1, .3, 1)',
+        fill: 'forwards'
+      });
+      colorToggleAnimations.set(button, enterAnimation);
+      void enterAnimation.finished.catch(() => {}).then(() => {
+        if (colorToggleAnimations.get(button) != enterAnimation) {return;}
+        colorToggleAnimations.delete(button);
+        enterAnimation.cancel();
+      });
     });
   }
 
@@ -1804,11 +1823,11 @@ export default class WindowFilter extends Overlay {
         if (Number(colorTotal) === 0) {
           pixelCount.textContent = '-';
         } else if (isHorizontalWindowedPixelCount) {
-          pixelCount.innerHTML = `${colorCorrectLocalized}<br>out of ${colorTotalLocalized}`;
+          pixelCount.innerHTML = formatColorPixelCount(colorCorrectLocalized, colorTotalLocalized);
         } else if (isWindowedPixelCount) {
           pixelCount.textContent = `${colorCorrectLocalized} / ${colorTotalLocalized}`;
         } else {
-          pixelCount.innerHTML = `${colorCorrectLocalized} /<br>${colorTotalLocalized}`;
+          pixelCount.innerHTML = formatColorPixelCount(colorCorrectLocalized, colorTotalLocalized);
         }
       }
 

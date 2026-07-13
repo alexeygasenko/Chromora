@@ -17,11 +17,8 @@
 // @grant           GM.setValue
 // @grant           GM_getValue
 // @grant           GM_deleteValue
-// @grant           GM_xmlhttpRequest
 // @grant           GM.download
-// @connect         telemetry.thebluecorner.net
 // @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/34041aef63a7354063db8d6c8881dc5327671ef0/dist/BlueMarble-For-GreasyFork.user.css
-// @antifeature     tracking Anonymous opt-in telemetry data
 // @noframes
 // ==/UserScript==
 
@@ -1944,8 +1941,48 @@
     }
   };
 
+  // src/assets/window-close.png
+  var window_close_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABRElEQVR42u2ZMQ6CQBBFuYFcxMg9TAy1heEYVobKzlBZGhpb4x2sTbiCvQUHsMBssYkhIIg7y8zwX0JiB++BK+MGAQAAAAAAAAAAAMCPzBdRdL5cr7d7USxXcaztfJ2YiylfVWWP9SZJKOUfz7K05zKfRw9g7sRnAKoIdXl7zMIwHDWAeQzrF+U6Qpv8/pBlLNYBI0sVoU3+eMpzVoshRQQx8hQRxMm7jCBW3kUE8fL/RFAjPySCOvlfIqiV7xNBvXxXhEnId0WYhHyfCOrlvy141KM0e3n1EfrIq43w7aeOcpRmL+/j/wT28mojDHnDUxPhn9db8RFcvNuLjeBysBEXgWKqExOBcqRlH8HHPM86Qn1vkGqqa4rAcm+QcqRtisBib9B+BXzs1ZkI9nzbXZqyWQh934nR7zwAAAAAAAAAACCXNzzaCbJi4vmRAAAAAElFTkSuQmCC";
+
+  // src/assets/settings.png
+  var settings_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADmUlEQVR42u2avWqVQRCGcweeK9DcgJgLEEwvSGoLSWsTUqaSVHaSylLS2IYUtkLAWgj2gdinOBdgEXmKhWWYnZ39zv6ccHZgCYec8+2+7/zuzLe3N2XKlCmD5PWbw8O3746Onq1Wq50D/+v37e363+Mj68/d/f1OkYDmA/iwzj6dn+8MAYCdBEwCJgGTgCdJwMtXBwekLQ794+fNDZ9HEUDq/Prt8pLf/31Yr99/OD5uTkAAHxYbe0jgsBQ9AJXPCLXA5y8XF4B4/mJ/3/O8uJYIy/PbjURumCOBnP/96vpa+521AJfSaAo8i/2aEoDZe0jgIKnvliwsIybCAs8ZmleUgGSj1AEAjilvClyuEG9S4FldYkCOhJw2g59DVLxCfLAAWqsb+CUkEKlLfJNABlHe53cH7yUBbW4SlCAiF0CHgbdudkHrtQLSx5PTU22PrSietIAH+Nr7oGnNwrZO+y3AWyQMtQKZ59GIx+yJHRychQXxlyzg2TOUvl1zv1f7uYAHSK0MjsHkNApYGXiHWIGMzjnTl5rLlcGWVqUrQEhX8ByuRPsl4D0kaFbgdaEqwmaywvN+N1hLfGsDEGYsQREfvKRa323e0LA2lz5vFS5aYZW63kpiCcjVg1yI1HJ5QQGoNEVK/6YISlWJWkrUVvHwpfRCkvJ/aSneZkVMsKXZkjNiWa79U6VtDQKW1Be1CHCnSy1oLSVAlslLCLDK3dJzugKllmJqWYDXD2MXrGkB7pspvsLh2Vxb3hwsrcljgtIFU1rTapHUeXlG1V6hNG0LWExWroOs9fusZuuwm6FMVdbm0g1S/XsASfCW+UsltLyFunKwlWK0tEqqCyaq/T+XtkoKrCYiD21FWKuVXTpnSGWq7ldi7UZmaYwDetrlWESuYJFkdjV/ywy5Invch/I2Nv8QqT0jNq0/2HwcVtKiStXutbrQPVtwi0dlLQKSdlMc1g7LaaU2Can5Q0trc3eGrOheYzaQmgmUjOaHgJeFTykRpDrv87uTUJrXw0GxCIBpUZtnhsmy1TkeTkIO/CYT3hxI3MEazXchwerwxoFPa3IuXXEssQayVnO2mpRMaVPd3hLgmrtYJDR/RUbb2JPy8H3823ptBtcBtCdopkho7gZx9bf01TTtNbklbe34lb2uVSFmiaktzfG1CIh7CcPqgW0g4MnJJGASsOMEaC2trtPd0aINX5oXMNsmYfhSfWgxZcqUKQXyH/x37dOutJnzAAAAAElFTkSuQmCC";
+
+  // src/assets/enter-fullscreen.png
+  var enter_fullscreen_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA8UlEQVR42u2aMQ6CUAyGuYHvIkbO42C4FKNhcTUMriacwd0Edod3AAZITUhYQBHsK/p9SdemfBCS/mkUAQAAAAAAvMHGOZces+xyLYqpdTrn+XYXxyF6L4YM6Oum+bRu97IM0XsxxPacIauH90O95S3O6S1lWoA8/P6QJEO95ROWt7gqAaH/SerzIAABCEAAAhCAAAQg4F8F9BeWscVGC/V5uoXl1WKjhbV5AADgp+mia7UY2to8/ehaJYa2Ng+7AAIQgAAEIAABCEAAAhDwrNA3QpIFruZC5Ns3QuqxuLUbIdVY3NqNELE4AAAAAABMoQXpZ5SF8tJJHwAAAABJRU5ErkJggg==";
+
+  // src/assets/exit-fullscreen.png
+  var exit_fullscreen_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA7klEQVR42u2ZMQ7CMAwA+wPyEUTfw1D1U4yoCyvqwIrUN3RHKjtDHsBQ5KFSN9okdoO4kzxGdk4ZYrsoAAAAAACSsnPOnc5Nc7m27f5QltbnN0eK9+9xlOgfw2B9fnNu966bLiBhfR4BCEAAAhCAAAQgAAGp//ZS2JJ4vrxPKWBpXrXeYf43D4lYAWtCpXcQs6EFyWvIPd9X5FmJ2ZBijlVd554PAAAAAAAgyTwgtj+3zqc6D4jdDf78PMB6IJLVPMBaQDbzAKbCCEAAAhCAAAQgAAH/KmDeO8TuBlX+9tpMvUPsbpBdHwAAAADo8AEa1R9dMnfA0QAAAABJRU5ErkJggg==";
+
+  // src/assets/layout-horizontal.png
+  var layout_horizontal_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAA6UlEQVR42u3YMQrCQBCF4dzAPYHmAmIOIJhekBzHSnIJS8khbIWAtRDshdin2ANYJEwRkCAWzhY78n8wrTAvUcaXJAAAAAAAfDRzzu0PZXm+1LV/9X3Mc701zfFUVfNFmgZbXj409sWn8+y8X66yTB2APHlry48jb6w6AAuv/bdRB2B5eZn1Js8JgAAIgAAI4FcWj6D3kUNOFYCclVaXvz/aVn0HyE0tZ6XFALa7ogjyf0BuaksXoTz5YMtPyY9KzKP+zgMAAFphWmFaYVphChECIAACIABaYVphWmFaYVphWmEAAAAA+C8DhIxuiUp61uUAAAAASUVORK5CYII=";
+
+  // src/assets/layout-vertical.png
+  var layout_vertical_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABA0lEQVR42u3asQnCUBCA4WxgJtAsIGYAwfSCZBwryRKWkiFshYC1EOyF2Kd4A1hErhBEMPpyCSf4/3Dt+fwSrV4QEBEREXk0CsNwvcmy/aEo3K1p2uZ4KsvtLs/Hkyj6lf3qLy8f+ulgr3OtnZvO4th6vzp5Mr6He4w8Uev96r55LdvGer86zeFk5osksdwPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAvK/LNdbnkauwlvvVycXkroc7X6rKer86uZUtF5O7HHC5SlPr/b0kt7J97vTKk/E53ND7e03+dNpG+5scej8REdEfdweg5WCipR4vGAAAAABJRU5ErkJggg==";
+
+  // src/assets/highlight-pixels.png
+  var highlight_pixels_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABJklEQVR42u2aMQrCMBRAewN7EbEHEOwuSK/hIh2dpIdxlQ6uQsFZKO5C3R16AIfKH4QO2iYWkpi+B3/t/3kp9Kf5QQAAAAAAAKDIepOm212WqcYkDEOX82gXVT+bRif2hzx3NY82Ylq3sOOpKFzNM0jA/VHXkrQvprMo0s0jr7PsaN+zr7eqsibASELX6kEAAhCAAAQgAAHjFdDu0H7p8HyvB7qQHZLd+naYOV/KcrlKEm8FdC2+fcDyVoDqsXa+iGMEIAABCECAb8h3XkWAkd/bNpAmR77zXYuX3t77jlBe8U/xNzv/vrFxpWCj9bRvbIzcxLhWDz9EEIAABCAAAQhAgIQMJ9ieEZJFWxPg2oyQswK8mhFSnd0xNSM0NA8AAAAAAIyTF5PzBBnomabXAAAAAElFTkSuQmCC";
+
+  // src/assets/color-visible.png
+  var color_visible_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAACg0lEQVR42u1ZsUoDQRDNH5gv0PyAmA8QTC9IagtJayMprSSVnaSylDS2IYWtELAWgr0Qe4t8gEXkFQfLsHc7M3s5LuE9WAi52717b2ffzO51OgRBEARBEARBEARBEMRucdTtds8vBoPLq+Hw/mEyQbu+GY3w3/FJr3dQZEHs8Wk6fXtfLj8+V6vN33araV/f6zX6PL/MZrd34zFE2zviIKElnGo/v5sNIqX1QliJ415LZLRWiCriIIhQTq116Q3F0mm1EFXE8fIglPsMiAUBWycEZshL/PSs34e5FVkALdWnSghEWeMz7yGO62VhXXgCxvYIgf8aIY81KsNQE+qYZa3Zvc4Xi1RYQwhpoIjKnZJH6IJw+NAc8lVZAJGiKark+6QiKMuMPA+DQJJczLgwlhwf93kmBVFae/kqZ0rzcoBc81WiSTL4rXF4KTL6YazaBJDktYaDl7CKJskgW3iMGSLUsreQjqtZmwXw8mFfbb4OBYchap8nvQbjZNUIUlXrgOELwfA8olsEj01YVnqUM2gdLBTAUqyERZZVADlplghSmZ8l18qQ1PYLjdMiQKxGyTbDnFwrDU3TD8blyTbeGsVdAGlzbbhZSs1ILOI0Tu6tUUzw5tpYeorNTKy01XhOTo2SnRW0uRZGVHZOULbvR+RoMo63RnHDk2txvWoXGCOvia6cGqXW4kh7MIF75FqNbWtT48QOYrKLHitiM6oRAtdQX2BZYIyioV9qOZWdQGn3DLVvkJo6qkodvdW68an7zA4mZ/nwIQ9Hd33m2IgQVR8+rB9OWkc8RwhLaz3xMiEsHz5ikQKz3Cvi2rVdhH6xFA76IylBEARBEARBEARBEESb8A+sptGanwTI4AAAAABJRU5ErkJggg==";
+
+  // src/assets/color-hidden.png
+  var color_hidden_default = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAC0UlEQVR42u2asUoEMRCG7w28J1BfQLwHELQXxNpCrrURSyu5yk6sLMXGVq6wFQ6sBbEXtLe4B7BQviIQhmQzSXZxz50fgqLuXvLNZGYycTQymUwmk8lkMplMKW1tTyb3D/P588vr6/7B4eHgALD45ffPjxtHx9PpoABgeR/A4CDg9hLA4CCwWINgEMohrI3H453dvT220/nFbMbgGX62vrG5+a8g8PXy6vr68WmxCAXQ2Hh7//jgmZvbu7uT07MzoK0cBBahXXBqfH4tl3hKb0HEIGgsneMZvQUBACYXmzSunNrrMja4rdNrECxI4+o12QFYAOwdCCwUmlTMpX0InCkIbi4LMLB+KQg+88/3PO7qFhGLCSw05tYuJqS8JQaCn/1JOYwbhqxXGhgZHLpSbg0I6W14ZefHYRnsmlw3BaEpC+ApqfkASc6ns2oU4iUfhtuHFkgMSGUSni0xSuu9CkhLS2kmh5r2vAQoF8P3mgiPF8ptybs66wNoAw6TyE2RcjHSU7TbDQitnC1kxNXsTScmLxejgeADJyBqP09uN95TVSNIqrkv9CdEwNOeIn3oOcBDBqtKj9JiuS/zAfjFSgqCX2TlApDvzvEgVfDLybXSJbVHaT9w5gAI1SjVwbAm18qAJp/TFEvabJNbo1QXQNpc6x+WQhZJQdBE8tIaJUuluTaUnqRlYhA0+7emRqnOCtpcKy9UXFAkqDad+zWWLK1RilWSa/l90yJL+wk1NUqrxZG2McHfxDpHvtunIIQaMdVFT65CFtWA4HfUFyyUd7jBc247xWIC2yXUgdKeGVo/IHXZqtL2E4DX6sGn7Z4dVsu5+PCbo00dY78D1Qs1gWi6+Ci5OOn1NVwOiNrR67tIByLXstJTCJa4+spfyMYuPtxW0FyS2q20QTAIBiEFgdpjNCSFIPT6Hyq6guAOWZ31AlYl1Y5MJpPJZDKZTCaVfgGeHXzJF9rXTgAAAABJRU5ErkJggg==";
+
+  // src/uiIcons.js
+  function iconMarkup(source, className = "bm-button-icon") {
+    return `<span class="bm-raster-icon ${className}" style="--bm-icon-image: url('${source}')" aria-hidden="true"></span>`;
+  }
+  var closeIcon = iconMarkup(window_close_default);
+  var settingsIcon = iconMarkup(settings_default, "bm-button-icon bm-button-icon-settings");
+  var enterFullscreenIcon = iconMarkup(enter_fullscreen_default, "bm-button-icon bm-button-icon-fullscreen");
+  var exitFullscreenIcon = iconMarkup(exit_fullscreen_default);
+  var horizontalLayoutIcon = iconMarkup(layout_horizontal_default);
+  var verticalLayoutIcon = iconMarkup(layout_vertical_default);
+  var highlightPixelsIcon = iconMarkup(highlight_pixels_default, "bm-filter-highlight-icon");
+  var colorVisibleIcon = iconMarkup(color_visible_default, "bm-filter-eye-icon");
+  var colorHiddenIcon = iconMarkup(color_hidden_default, "bm-filter-eye-icon");
+
   // src/WindowSettings.js
-  var closeIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
   var _WindowSettings_instances, getWindowState_fn, closeWindow_fn, clampWindowPosition_fn, restoreWindowPosition_fn, saveWindowPosition_fn, initializeWindowPositionPersistence_fn, errorOverrideFailure_fn;
   var WindowSettings = class extends Overlay {
     /** Constructor for the Settings window
@@ -2144,12 +2181,12 @@
      * @since 0.99.0
      */
     async setPaintAreaHotkey(settingKey, code) {
-      const hotkeyDefaults = {
-        paintArea: "AltLeft",
-        paintAllArea: "ControlLeft"
-      };
-      const normalizedSettingKey = Object.hasOwn(hotkeyDefaults, settingKey) ? settingKey : "paintArea";
-      const fallbackCode = hotkeyDefaults[normalizedSettingKey];
+      const hotkeyDefaults = /* @__PURE__ */ new Map([
+        ["paintArea", "AltLeft"],
+        ["paintAllArea", "ControlLeft"]
+      ]);
+      const normalizedSettingKey = hotkeyDefaults.has(settingKey) ? settingKey : "paintArea";
+      const fallbackCode = hotkeyDefaults.get(normalizedSettingKey);
       this.userSettings.hotkeys[normalizedSettingKey] = __privateMethod(this, _SettingsManager_instances, normalizeHotkeyCode_fn).call(this, code, fallbackCode);
       __privateMethod(this, _SettingsManager_instances, broadcastPaintAreaHotkeys_fn).call(this);
       await this.saveUserStorageNow();
@@ -2203,24 +2240,15 @@
     buildHotkeys() {
       const configureHotkeyButton = (button, settingKey, label) => {
         let recording = false;
-        const stopRecording = () => {
-          recording = false;
-          button.dataset["recording"] = "false";
-          button.textContent = __privateMethod(this, _SettingsManager_instances, formatHotkeyCode_fn).call(this, this.userSettings.hotkeys[settingKey]);
-          document.body?.classList.remove("bm-hotkey-recording");
-        };
-        button.onclick = () => {
-          recording = true;
-          button.dataset["recording"] = "true";
-          button.textContent = "...";
-          document.body?.classList.add("bm-hotkey-recording");
-        };
-        button.onkeydown = (event) => {
+        const handleRecordingKeyDown = (event) => {
           if (!recording) {
             return;
           }
           event.preventDefault();
           event.stopImmediatePropagation();
+          if (event.repeat) {
+            return;
+          }
           if (event.code == "Escape") {
             stopRecording();
             return;
@@ -2233,6 +2261,30 @@
             const formattedCode = __privateMethod(this, _SettingsManager_instances, formatHotkeyCode_fn).call(this, this.userSettings.hotkeys[settingKey]);
             button.setAttribute("aria-label", `${label} hotkey: ${formattedCode}`);
           });
+        };
+        const stopRecording = () => {
+          if (!recording) {
+            return;
+          }
+          recording = false;
+          window.removeEventListener("keydown", handleRecordingKeyDown, true);
+          button.dataset["recording"] = "false";
+          button.textContent = __privateMethod(this, _SettingsManager_instances, formatHotkeyCode_fn).call(this, this.userSettings.hotkeys[settingKey]);
+          if (!document.querySelector('.bm-settings-hotkey-button[data-recording="true"]')) {
+            document.body?.classList.remove("bm-hotkey-recording");
+          }
+        };
+        button.onclick = (event) => {
+          event.preventDefault();
+          if (recording) {
+            return;
+          }
+          recording = true;
+          button.dataset["recording"] = "true";
+          button.textContent = "...";
+          document.body?.classList.add("bm-hotkey-recording");
+          button.focus({ preventScroll: true });
+          window.addEventListener("keydown", handleRecordingKeyDown, true);
         };
         button.onblur = stopRecording;
       };
@@ -2823,12 +2875,6 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   }
 
   // src/WindowFilter.js
-  var closeIcon2 = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
-  var fullscreenIcon = '<svg class="bm-button-icon bm-button-icon-fullscreen" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.5H4.5V8M16 4.5h3.5V8M19.5 16v3.5H16M8 19.5H4.5V16"/><path d="M4.8 4.8l5.1 5.1M19.2 4.8l-5.1 5.1M19.2 19.2l-5.1-5.1M4.8 19.2l5.1-5.1"/></g></svg>';
-  var windowedIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.8 4.8l5.2 5.2M19.2 4.8L14 10M19.2 19.2L14 14M4.8 19.2L10 14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M10 7.5V10H7.5M16.5 10H14V7.5M14 16.5V14h2.5M7.5 14H10v2.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var horizontalLayoutIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5h15M4.5 16.5h15"/><path d="M7.5 5v5M12 5v5M16.5 5v5M7.5 14v5M12 14v5M16.5 14v5"/></g></svg>';
-  var verticalLayoutIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.5v15M16 4.5v15"/><path d="M5.5 7.5h5M5.5 12h5M5.5 16.5h5M13.5 7.5h5M13.5 12h5M13.5 16.5h5"/></g></svg>';
-  var incorrectHighlightIcon = '<svg class="bm-filter-highlight-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6.4"/><path d="M12 3.8V7M12 17v3.2M3.8 12H7M17 12h3.2"/><path d="m9.3 9.3 5.4 5.4M14.7 9.3l-5.4 5.4"/></g></svg>';
   var colorToggleAnimations = /* @__PURE__ */ new WeakMap();
   function localizeCompactDate(date) {
     const day = String(date.getDate()).padStart(2, "0");
@@ -2837,6 +2883,9 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     const hour = String(date.getHours()).padStart(2, "0");
     const minute = String(date.getMinutes()).padStart(2, "0");
     return `${day}.${month}.${year} ${hour}:${minute}`;
+  }
+  function formatColorPixelCount(correct, total) {
+    return `${correct}<br><span class="bm-filter-color-total-line">out of ${total}</span>`;
   }
   var _WindowFilter_instances, getOwnedWindowElement_fn, switchWindowMode_fn, getWindowState_fn2, setWindowOpenState_fn, prefersWindowedMode_fn, setWindowModePreference_fn, getWindowedColorLayout_fn, setWindowedColorLayoutPreference_fn, getActiveWindowedColorLayout_fn, getWindowedLayoutSize_fn, getWindowLayoutMaxWidth_fn, getWindowLayoutMinHeight_fn, getWindowLayoutMaxHeight_fn, saveWindowLayoutSize_fn, restoreWindowLayoutSize_fn, applyWindowedColorLayout_fn, syncWindowedColorLayoutLabels_fn, syncSortFormControls_fn, initializeCustomSortDropdowns_fn, closeCustomSortDropdowns_fn, cleanupCustomSortDropdowns_fn, closeWindow_fn2, startAutoRefresh_fn, stopAutoRefresh_fn, cleanupWindowPersistence_fn, clampWindowDimension_fn, clampWindowPosition_fn2, restoreWindowState_fn, saveWindowState_fn, scheduleWindowStateSave_fn, initializeWindowedPersistence_fn, initializeHorizontalScrollWheel_fn, createEmptyColorStatistics_fn, buildColorList_fn, sortColorList_fn, selectColorList_fn, syncColorToggleLabel_fn, toggleColorVisibility_fn, toggleIncorrectHighlightColor_fn, getIncorrectHighlightButtonLabel_fn, syncIncorrectHighlightButtons_fn, animateColorToggleIcon_fn, initializeColorBlockToggle_fn, calculatePixelStatistics_fn;
   var WindowFilter = class extends Overlay {
@@ -2875,8 +2924,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.windowMaxWidth = 1e3;
       this.windowMaxHeight = 1400;
       this.templateManager = executor.apiManager?.templateManager;
-      this.eyeOpen = '<svg class="bm-filter-eye-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.8 12s3.1-5 8.2-5 8.2 5 8.2 5-3.1 5-8.2 5-8.2-5-8.2-5Z"/><circle cx="12" cy="12" r="2.5"/></svg>';
-      this.eyeClosed = '<svg class="bm-filter-eye-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.6 9.8C6.1 8.3 8.6 7 12 7c5.1 0 8.2 5 8.2 5a15.2 15.2 0 0 1-2.2 2.7"/><path d="M14.1 16.7a8.3 8.3 0 0 1-2.1.3c-5.1 0-8.2-5-8.2-5a14.9 14.9 0 0 1 1.8-2.3"/><path d="M5 5l14 14"/><path d="M10.4 10.7a2.5 2.5 0 0 0 2.9 2.9"/></svg>';
+      this.eyeOpen = colorVisibleIcon;
+      this.eyeClosed = colorHiddenIcon;
       const rendererPalette = this.templateManager?.paletteBM?.palette;
       this.palette = Array.isArray(rendererPalette) && rendererPalette.length ? rendererPalette : colorpaletteForBlueMarble(3).palette;
       this.unsubscribeTemplateChanges = this.templateManager?.onTemplatesChanged?.(() => this.refreshColorList()) ?? null;
@@ -2953,12 +3002,12 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
         this.windowElement = div;
       }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "title": 'Minimize window "Color Filter"', "aria-label": 'Minimize window "Color Filter"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => instance.handleMinimization(button);
-      }).buildElement().addDiv({ "class": "bm-filter-drag-title-slot" }).addHeader(1, { "class": "bm-dragbar-title-persistent bm-filter-drag-title", "textContent": "Color Filter" }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "innerHTML": windowedIcon, "title": 'Switch to windowed mode for "Color Filter"', "aria-label": 'Switch to windowed mode for "Color Filter"' }, (instance, button) => {
+      }).buildElement().addDiv({ "class": "bm-filter-drag-title-slot" }).addHeader(1, { "class": "bm-dragbar-title-persistent bm-filter-drag-title", "textContent": "Color Filter" }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "innerHTML": exitFullscreenIcon, "title": 'Switch to windowed mode for "Color Filter"', "aria-label": 'Switch to windowed mode for "Color Filter"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, switchWindowMode_fn).call(this, button, () => {
           __privateMethod(this, _WindowFilter_instances, setWindowModePreference_fn).call(this, true);
           this.buildWindowed();
         });
-      }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon2, "title": 'Close window "Color Filter"', "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
+      }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon, "title": 'Close window "Color Filter"', "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
       }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addHr({ "class": "bm-window-divider-top" }).buildElement().addDiv({ "class": "bm-container bm-flex-between bm-center-vertically bm-filter-toolbar", "style": "gap: 1.5ch;" }).addButton({ "class": "bm-button-secondary", "textContent": "Hide All Colors" }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, selectColorList_fn).call(this, false);
@@ -3033,12 +3082,12 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
           __privateMethod(this, _WindowFilter_instances, setWindowedColorLayoutPreference_fn).call(this, nextLayout);
           this.buildWindowed(nextLayout);
         });
-      }).buildElement().addButton({ "class": "bm-button-circle bm-filter-fullscreen-toggle", "innerHTML": fullscreenIcon, "title": 'Switch to fullscreen mode for "Color Filter"', "aria-label": 'Switch to fullscreen mode for "Color Filter"' }, (instance, button) => {
+      }).buildElement().addButton({ "class": "bm-button-circle bm-filter-fullscreen-toggle", "innerHTML": enterFullscreenIcon, "title": 'Switch to fullscreen mode for "Color Filter"', "aria-label": 'Switch to fullscreen mode for "Color Filter"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, switchWindowMode_fn).call(this, button, () => {
           __privateMethod(this, _WindowFilter_instances, setWindowModePreference_fn).call(this, false);
           this.buildWindow();
         });
-      }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon2, "title": 'Close window "Color Filter"', "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
+      }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon, "title": 'Close window "Color Filter"', "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, closeWindow_fn2).call(this);
       }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addHr({ "class": "bm-window-divider-top" }).buildElement().addDiv({ "class": "bm-container bm-center-vertically bm-filter-windowed-summary-row" }).addDiv({ "class": "bm-filter-windowed-summary" }).addSpan({ "class": "bm-filter-windowed-summary-label", "textContent": "Painted" }).buildElement().addSpan({ "id": "bm-filter-windowed-color-totals-inline", "class": "bm-filter-windowed-summary-value", "textContent": "0 / ???" }).buildElement().buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container bm-flex-between bm-center-vertically bm-filter-toolbar bm-filter-toolbar-vertical", "style": "gap: 1.5ch;" }).addButton({ "class": "bm-button-secondary", "textContent": "None", "title": "Hide all colors", "aria-label": "Hide all colors" }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowFilter_instances, selectColorList_fn).call(this, false);
@@ -3161,11 +3210,11 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
           if (Number(colorTotal) === 0) {
             pixelCount.textContent = "-";
           } else if (isHorizontalWindowedPixelCount) {
-            pixelCount.innerHTML = `${colorCorrectLocalized}<br>out of ${colorTotalLocalized}`;
+            pixelCount.innerHTML = formatColorPixelCount(colorCorrectLocalized, colorTotalLocalized);
           } else if (isWindowedPixelCount) {
             pixelCount.textContent = `${colorCorrectLocalized} / ${colorTotalLocalized}`;
           } else {
-            pixelCount.innerHTML = `${colorCorrectLocalized} /<br>${colorTotalLocalized}`;
+            pixelCount.innerHTML = formatColorPixelCount(colorCorrectLocalized, colorTotalLocalized);
           }
         }
         const pixelDesc = windowElement?.querySelector(`.bm-filter-color[data-id="${colorID}"] .bm-filter-color-pxl-desc`);
@@ -3432,7 +3481,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
         continue;
       }
       if (isHorizontal) {
-        pixelCount.innerHTML = `${correct}<br>out of ${total}`;
+        pixelCount.innerHTML = formatColorPixelCount(correct, total);
       } else {
         pixelCount.textContent = `${correct} / ${total}`;
       }
@@ -3974,7 +4023,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
             "aria-pressed": isIncorrectHighlightActive ? "true" : "false",
             "title": incorrectHighlightLabel.replace(/\.$/, ""),
             "data-mode": incorrectHighlightMode,
-            "innerHTML": incorrectHighlightIcon,
+            "innerHTML": highlightPixelsIcon,
             "style": `color: ${textColorForPaletteColorBackground};`
           },
           (instance, button) => {
@@ -3987,7 +4036,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
               button.disabled = true;
             }
           }
-        ).buildElement().addHeader(2, { "textContent": color.name, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-cnt", "data-correct-label": colorCorrectLocalized, "data-total-label": colorTotalLocalized, "innerHTML": hasNoPixels ? "-" : isHorizontalWindowedMode ? `${colorCorrectLocalized}<br>out of ${colorTotalLocalized}` : `${colorCorrectLocalized} / ${colorTotalLocalized}`, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;` }).buildElement().buildElement().buildElement();
+        ).buildElement().addHeader(2, { "textContent": color.name, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-cnt", "data-correct-label": colorCorrectLocalized, "data-total-label": colorTotalLocalized, "innerHTML": hasNoPixels ? "-" : isHorizontalWindowedMode ? formatColorPixelCount(colorCorrectLocalized, colorTotalLocalized) : `${colorCorrectLocalized} / ${colorTotalLocalized}`, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;` }).buildElement().buildElement().buildElement();
       } else {
         colorList.addDiv({
           "class": "bm-container bm-filter-color bm-flex-between",
@@ -4026,7 +4075,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
             "aria-pressed": isIncorrectHighlightActive ? "true" : "false",
             "title": incorrectHighlightLabel.replace(/\.$/, ""),
             "data-mode": incorrectHighlightMode,
-            "innerHTML": incorrectHighlightIcon
+            "innerHTML": highlightPixelsIcon
           },
           (instance, button) => {
             button.onclick = (event) => {
@@ -4038,7 +4087,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
               button.disabled = true;
             }
           }
-        ).buildElement().buildElement().addDiv({ "class": "bm-filter-color-title" }).addHeader(2, { "textContent": color.name }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-filter-color-meta" }).addDiv({ "class": "bm-filter-color-progress" }).addSpan({ "class": "bm-filter-color-pxl-cnt", "innerHTML": hasNoPixels ? "-" : `${colorCorrectLocalized} /<br>${colorTotalLocalized}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-desc", "innerHTML": `${colorPercent} done<br>${typeof colorIncorrect == "number" && !isNaN(colorIncorrect) ? colorIncorrect : "???"} off` }).buildElement().buildElement().buildElement().buildElement();
+        ).buildElement().buildElement().addDiv({ "class": "bm-filter-color-title" }).addHeader(2, { "textContent": color.name }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-filter-color-meta" }).addDiv({ "class": "bm-filter-color-progress" }).addSpan({ "class": "bm-filter-color-pxl-cnt", "innerHTML": hasNoPixels ? "-" : formatColorPixelCount(colorCorrectLocalized, colorTotalLocalized) }).buildElement().addSmall({ "class": "bm-filter-color-pxl-desc", "innerHTML": `${colorPercent} done<br>${typeof colorIncorrect == "number" && !isNaN(colorIncorrect) ? colorIncorrect : "???"} off` }).buildElement().buildElement().buildElement().buildElement();
       }
     }
     parentElement.querySelector(`#${this.colorListID}`)?.remove();
@@ -4129,6 +4178,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       if (button.dataset["state"] == "shown" && userWantsUnselect) {
         continue;
       }
+      colorToggleAnimations.get(button)?.cancel();
+      colorToggleAnimations.delete(button);
       button.dataset["state"] = shouldHide ? "hidden" : "shown";
       button.innerHTML = shouldHide ? this.eyeClosed : this.eyeOpen;
       __privateMethod(this, _WindowFilter_instances, syncColorToggleLabel_fn).call(this, button, { name: color.dataset["name"] || "" });
@@ -4164,7 +4215,6 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     button.style.textDecoration = "none";
     button.disabled = true;
     if (button.dataset["state"] == "shown") {
-      button.innerHTML = this.eyeClosed;
       button.dataset["state"] = "hidden";
       this.templateManager.setColorFiltered(color.id, true);
       __privateMethod(this, _WindowFilter_instances, animateColorToggleIcon_fn).call(this, button, "hide");
@@ -4178,34 +4228,33 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     button.style.textDecoration = "";
   };
   toggleIncorrectHighlightColor_fn = async function(button, color) {
-    if (!button || button.disabled || !color.id || this.highlightRefreshPending) {
+    if (!button || button.disabled || !color.id) {
       return;
     }
     this.templateManager.toggleIncorrectHighlightColor(color.id);
     __privateMethod(this, _WindowFilter_instances, syncIncorrectHighlightButtons_fn).call(this);
-    const highlightButtons = document.querySelectorAll(`#${this.windowID} .bm-filter-color-highlight`);
-    for (const highlightButton of highlightButtons) {
-      highlightButton.setAttribute("aria-disabled", "true");
+    const previousPending = this.highlightRefreshPending;
+    if (previousPending?.button?.isConnected) {
+      delete previousPending.button.dataset["loading"];
+      previousPending.button.removeAttribute("aria-busy");
     }
-    button.disabled = true;
     button.dataset["loading"] = "true";
     button.setAttribute("aria-busy", "true");
     const refreshPromise = this.templateManager.requestCanvasRefresh();
-    this.highlightRefreshPending = refreshPromise;
+    const pendingRefresh = { button, promise: refreshPromise };
+    this.highlightRefreshPending = pendingRefresh;
     try {
       await refreshPromise;
     } finally {
-      if (this.highlightRefreshPending == refreshPromise) {
-        this.highlightRefreshPending = null;
+      if (this.highlightRefreshPending != pendingRefresh) {
+        return;
       }
-      for (const highlightButton of highlightButtons) {
-        highlightButton.removeAttribute("aria-disabled");
+      this.highlightRefreshPending = null;
+      if (!button.isConnected) {
+        return;
       }
-      if (button.isConnected) {
-        button.disabled = false;
-        delete button.dataset["loading"];
-        button.removeAttribute("aria-busy");
-      }
+      delete button.dataset["loading"];
+      button.removeAttribute("aria-busy");
     }
   };
   /** Returns the next-action label for the color highlight button.
@@ -4244,7 +4293,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       colorElement?.setAttribute("data-highlight", mode);
     }
   };
-  /** Animates the eye slash only for direct visibility toggles.
+  /** Animates the raster eye swap for direct visibility toggles.
    * @param {HTMLButtonElement} button - The color visibility button
    * @param {'hide' | 'show'} direction - Which slash animation to play
    * @since 0.95.0
@@ -4256,22 +4305,18 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     const previousAnimation = colorToggleAnimations.get(button);
     colorToggleAnimations.delete(button);
     previousAnimation?.cancel();
-    const slash = button.querySelector(".bm-filter-eye-icon path:nth-of-type(3)");
-    const finishAnimation = () => {
-      if (direction == "show" && button.dataset["state"] == "shown") {
-        button.innerHTML = this.eyeOpen;
-      }
-    };
-    if (!slash || window.matchMedia("(prefers-reduced-motion: reduce)").matches || typeof slash.animate != "function") {
-      finishAnimation();
+    const icon = button.querySelector(".bm-filter-eye-icon");
+    const targetIcon = direction == "hide" ? this.eyeClosed : this.eyeOpen;
+    if (!icon || window.matchMedia("(prefers-reduced-motion: reduce)").matches || typeof icon.animate != "function") {
+      button.innerHTML = targetIcon;
       return;
     }
-    const animation = slash.animate([
-      { strokeDashoffset: direction == "hide" ? 20 : 0 },
-      { strokeDashoffset: direction == "hide" ? 0 : 20 }
+    const animation = icon.animate([
+      { opacity: 1, transform: "scale(1) rotate(0deg)" },
+      { opacity: 0, transform: `scale(0.72) rotate(${direction == "hide" ? 8 : -8}deg)` }
     ], {
-      duration: 220,
-      easing: direction == "hide" ? "ease-out" : "ease-in",
+      duration: 110,
+      easing: "cubic-bezier(.4, 0, 1, 1)",
       fill: "forwards"
     });
     colorToggleAnimations.set(button, animation);
@@ -4280,9 +4325,30 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       if (colorToggleAnimations.get(button) != animation) {
         return;
       }
-      colorToggleAnimations.delete(button);
       animation.cancel();
-      finishAnimation();
+      button.innerHTML = targetIcon;
+      const nextIcon = button.querySelector(".bm-filter-eye-icon");
+      if (!nextIcon || typeof nextIcon.animate != "function") {
+        colorToggleAnimations.delete(button);
+        return;
+      }
+      const enterAnimation = nextIcon.animate([
+        { opacity: 0, transform: `scale(0.72) rotate(${direction == "hide" ? -8 : 8}deg)` },
+        { opacity: 1, transform: "scale(1) rotate(0deg)" }
+      ], {
+        duration: 170,
+        easing: "cubic-bezier(.16, 1, .3, 1)",
+        fill: "forwards"
+      });
+      colorToggleAnimations.set(button, enterAnimation);
+      void enterAnimation.finished.catch(() => {
+      }).then(() => {
+        if (colorToggleAnimations.get(button) != enterAnimation) {
+          return;
+        }
+        colorToggleAnimations.delete(button);
+        enterAnimation.cancel();
+      });
     });
   };
   /** Makes a color block toggleable by pointer or keyboard.
@@ -4399,7 +4465,6 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   };
 
   // src/WindowMain.js
-  var settingsIcon = '<svg class="bm-button-icon bm-button-icon-settings" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.7" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="11" cy="17" r="1.7" fill="currentColor" stroke="none"/></g></svg>';
   var _WindowMain_instances, coordinateInputPaste_fn;
   var WindowMain = class extends Overlay {
     /** Constructor for the main Blue Marble window
@@ -4600,7 +4665,7 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
       this.window = this.addDiv({ "id": this.windowID, "class": "bm-window", "style": style }, (instance, div) => {
       }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "aria-label": 'Minimize window "Template Wizard"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => instance.handleMinimization(button);
-      }).buildElement().addDiv().buildElement().addButton({ "class": "bm-button-circle", "textContent": "\u2716", "aria-label": 'Close window "Template Wizard"' }, (instance, button) => {
+      }).buildElement().addDiv().buildElement().addButton({ "class": "bm-button-circle", "innerHTML": closeIcon, "aria-label": 'Close window "Template Wizard"' }, (instance, button) => {
         button.onclick = () => this.handleWindowClose(document.querySelector(`#${this.windowID}`));
       }).buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container bm-center-vertically" }).addHeader(1, { "textContent": "Template Wizard" }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Status" }).buildElement().addP({ "id": "bm-wizard-status", "textContent": "Loading template storage status..." }).buildElement().buildElement().addDiv({ "class": "bm-container bm-scrollable" }).addHeader(2, { "textContent": "Detected templates:" }).buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
       this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
@@ -6498,141 +6563,6 @@ HTTP ${response.status}`);
         return false;
       }
     }
-    // Sends a heartbeat to the telemetry server
-    async sendHeartbeat(version2) {
-      console.log("Sending heartbeat to telemetry server...");
-      let userSettings2 = GM_getValue("bmUserSettings", "{}");
-      userSettings2 = JSON.parse(userSettings2);
-      if (!userSettings2 || !userSettings2.telemetry || !userSettings2.uuid) {
-        console.log("Telemetry is disabled, not sending heartbeat.");
-        return;
-      }
-      const ua = navigator.userAgent;
-      let browser = await this.getBrowserFromUA(ua);
-      let os = this.getOS(ua);
-      GM_xmlhttpRequest({
-        method: "POST",
-        url: "https://telemetry.thebluecorner.net/heartbeat",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        data: JSON.stringify({
-          uuid: userSettings2.uuid,
-          version: version2,
-          browser,
-          os
-        }),
-        onload: (response) => {
-          if (response.status !== 200) {
-            consoleError("Failed to send heartbeat:", response.statusText);
-          }
-        },
-        onerror: (error) => {
-          consoleError("Error sending heartbeat:", error);
-        }
-      });
-    }
-    async getBrowserFromUA(ua = navigator.userAgent) {
-      ua = ua || "";
-      if (ua.includes("OPR/") || ua.includes("Opera")) return "Opera";
-      if (ua.includes("Edg/")) return "Edge";
-      if (ua.includes("Vivaldi")) return "Vivaldi";
-      if (ua.includes("YaBrowser")) return "Yandex";
-      if (ua.includes("Kiwi")) return "Kiwi";
-      if (ua.includes("Brave")) return "Brave";
-      if (ua.includes("Firefox/")) return "Firefox";
-      if (ua.includes("Chrome/")) return "Chrome";
-      if (ua.includes("Safari/")) return "Safari";
-      if (navigator.brave && typeof navigator.brave.isBrave === "function") {
-        if (await navigator.brave.isBrave()) return "Brave";
-      }
-      return "Unknown";
-    }
-    getOS(ua = navigator.userAgent) {
-      ua = ua || "";
-      if (/Windows NT 11/i.test(ua)) return "Windows 11";
-      if (/Windows NT 10/i.test(ua)) return "Windows 10";
-      if (/Windows NT 6\.3/i.test(ua)) return "Windows 8.1";
-      if (/Windows NT 6\.2/i.test(ua)) return "Windows 8";
-      if (/Windows NT 6\.1/i.test(ua)) return "Windows 7";
-      if (/Windows NT 6\.0/i.test(ua)) return "Windows Vista";
-      if (/Windows NT 5\.1|Windows XP/i.test(ua)) return "Windows XP";
-      if (/Mac OS X 10[_\.]15/i.test(ua)) return "macOS Catalina";
-      if (/Mac OS X 10[_\.]14/i.test(ua)) return "macOS Mojave";
-      if (/Mac OS X 10[_\.]13/i.test(ua)) return "macOS High Sierra";
-      if (/Mac OS X 10[_\.]12/i.test(ua)) return "macOS Sierra";
-      if (/Mac OS X 10[_\.]11/i.test(ua)) return "OS X El Capitan";
-      if (/Mac OS X 10[_\.]10/i.test(ua)) return "OS X Yosemite";
-      if (/Mac OS X 10[_\.]/i.test(ua)) return "macOS";
-      if (/Android/i.test(ua)) return "Android";
-      if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";
-      if (/Linux/i.test(ua)) return "Linux";
-      return "Unknown";
-    }
-  };
-
-  // src/WindowTelemetry.js
-  var _WindowTelemetry_instances, setTelemetryValue_fn;
-  var WindowTelemetry = class extends Overlay {
-    /** Constructor for the telemetry window
-     * @param {string} name - The name of the userscript
-     * @param {string} version - The version of the userscript
-     * @param {number} currentTelemetryVersion - The current "version" of the data collection agreement
-     * @param {string} uuid - The UUID of the user
-     * @since 0.88.339
-     * @see {@link Overlay#constructor}
-     */
-    constructor(name2, version2, currentTelemetryVersion, uuid) {
-      super(name2, version2);
-      __privateAdd(this, _WindowTelemetry_instances);
-      this.window = null;
-      this.windowID = "bm-window-telemetry";
-      this.windowParent = document.body;
-      this.currentTelemetryVersion = currentTelemetryVersion;
-      this.uuid = uuid;
-    }
-    /** Spawns a telemetry window.
-     * If another telemetry window already exists, we DON'T spawn another!
-     * Parent/child relationships in the DOM structure below are indicated by indentation.
-     * @since 0.88.339
-     */
-    async buildWindow() {
-      if (document.querySelector(`#${this.windowID}`)) {
-        this.handleDisplayError("Telemetry window already exists!");
-        return;
-      }
-      const browser = await this.apiManager.getBrowserFromUA(navigator.userAgent);
-      const os = this.apiManager.getOS(navigator.userAgent);
-      this.window = this.addDiv({ "id": this.windowID, "class": "bm-window", "style": "height: 80vh; z-index: 9998;" }).addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container bm-center-vertically" }).addHeader(1, { "textContent": `${this.name} Telemetry` }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container bm-flex-center", "style": "gap: 1.5ch; flex-wrap: wrap;" }).addButton({ "textContent": "Enable Telemetry" }, (instance, button) => {
-        button.onclick = async () => {
-          __privateMethod(this, _WindowTelemetry_instances, setTelemetryValue_fn).call(this, this.currentTelemetryVersion);
-          const element = document.getElementById(this.windowID);
-          await this.handleWindowClose(element);
-        };
-      }).buildElement().addButton({ "textContent": "Disable Telemetry" }, (instance, button) => {
-        button.onclick = async () => {
-          __privateMethod(this, _WindowTelemetry_instances, setTelemetryValue_fn).call(this, 0);
-          const element = document.getElementById(this.windowID);
-          await this.handleWindowClose(element);
-        };
-      }).buildElement().addButton({ "textContent": "More Information" }, (instance, button) => {
-        button.onclick = () => {
-          window.open("https://github.com/SwingTheVine/Wplace-TelemetryServer#telemetry-data", "_blank", "noopener noreferrer");
-        };
-      }).buildElement().buildElement().addDiv({ "class": "bm-container bm-scrollable" }).addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Legal" }).buildElement().addP({ "textContent": `We collect anonymous telemetry data such as your browser, OS, and script version to make the experience better for everyone. The data is never shared personally. The data is never sold. You can turn this off by pressing the "Disable" button, but keeping it on helps us improve features and reliability faster. Thank you for supporting ${this.name}!` }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Non-Legal Summary" }).buildElement().addP({ "innerHTML": `You can disable telemetry by pressing the "Disable" button. If you would like to read more about what information we collect, press the "More Information" button.<br>This is the data <em>stored</em> on our servers:` }).buildElement().addUl().addLi({ "innerHTML": `A unique identifier (UUIDv4) generated by ${escapeHTML(this.name)}. This enables telemetry without tracking your actual user ID.<br>Your UUID is: <b>${escapeHTML(this.uuid)}</b>` }).buildElement().addLi({ "innerHTML": `The version of ${escapeHTML(this.name)} you are using.<br>Your version is: <b>${escapeHTML(this.version)}</b>` }).buildElement().addLi({ "innerHTML": `Your browser type, used to determine ${escapeHTML(this.name)} outages and browser popularity.<br>Your browser type is: <b>${escapeHTML(browser)}</b>` }).buildElement().addLi({ "innerHTML": `Your OS type, used to determine ${escapeHTML(this.name)} outages and platform usage.<br>Your OS type is: <b>${escapeHTML(os)}</b>` }).buildElement().addLi({ "innerHTML": `The date and time that ${escapeHTML(this.name)} sent the telemetry information.` }).buildElement().buildElement().addP({ "innerHTML": `All data above is <b>aggregated every hour</b>. Anything that could be considered personal is deleted from the server. Aggregated data means totals such as "42 people used ${escapeHTML(this.name)} on Google Chrome this hour", which cannot identify anyone.` }).buildElement().buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
-    }
-  };
-  _WindowTelemetry_instances = new WeakSet();
-  /** Enables or disables telemetry based on the value passed in.
-   * A value of zero will always disable telemetry.
-   * A numeric, non-zero value will enable telemetry until the telemetry agreement is changed.
-   * @param {number} value - The value to set the telemetry to
-   * @since 0.88.339
-   */
-  setTelemetryValue_fn = function(value) {
-    const userSettings2 = JSON.parse(GM_getValue("bmUserSettings", "{}"));
-    userSettings2.telemetry = value;
-    GM.setValue("bmUserSettings", JSON.stringify(userSettings2));
   };
 
   // src/assets/paint-selected.png
@@ -7663,6 +7593,9 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
     }
   }
   var userSettings = readStoredJSON("bmUserSettings");
+  var hasLegacyTelemetrySettings = Object.hasOwn(userSettings, "telemetry") || Object.hasOwn(userSettings, "uuid");
+  delete userSettings["telemetry"];
+  delete userSettings["uuid"];
   var runtimeMarkerID = "bm-userscript-runtime";
   var existingRuntimeMarker = document.querySelector("meta[data-blue-marble-runtime]");
   var shouldInitializeRuntime = !existingRuntimeMarker;
@@ -7672,9 +7605,7 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   if (shouldInitializeRuntime) {
     void (async () => {
       let runtimeMarker = null;
-      let heartbeatInterval = null;
       let activeWindowMain = null;
-      let activeTelemetryWindow = null;
       let stopSpontaneousResponseListener = null;
       let stopBlackObserver = null;
       let stopPaintAreaSelectionBridge = null;
@@ -7709,6 +7640,13 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
           observer.observe(document.body, { childList: true, subtree: true });
           return () => observer.disconnect();
         };
+        if (hasLegacyTelemetrySettings) {
+          try {
+            await GM.setValue("bmUserSettings", JSON.stringify(userSettings));
+          } catch (error) {
+            consoleWarn("Could not remove legacy telemetry settings.", error);
+          }
+        }
         const observers = new Observers();
         const windowMain = new WindowMain(name, version);
         activeWindowMain = windowMain;
@@ -7728,25 +7666,6 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
         runtimeMarker.dataset["blueMarbleRuntime"] = "true";
         runtimeMarker.dataset["runtimeState"] = "initializing";
         document.documentElement.appendChild(runtimeMarker);
-        console.log(userSettings);
-        console.log(Object.keys(userSettings).length);
-        if (Object.keys(userSettings).length == 0) {
-          const uuid = crypto.randomUUID();
-          console.log(uuid);
-          await GM.setValue("bmUserSettings", JSON.stringify({
-            "uuid": uuid
-          }));
-        }
-        heartbeatInterval = setInterval(() => apiManager.sendHeartbeat(version), 1e3 * 60 * 30);
-        const currentTelemetryVersion = 1;
-        const previousTelemetryVersion = userSettings?.telemetry;
-        console.log(`Telemetry is ${!(previousTelemetryVersion == void 0)}`);
-        if (previousTelemetryVersion == void 0 || previousTelemetryVersion > currentTelemetryVersion) {
-          const windowTelemetry = new WindowTelemetry(name, version, currentTelemetryVersion, userSettings?.uuid);
-          activeTelemetryWindow = windowTelemetry;
-          windowTelemetry.setApiManager(apiManager);
-          await windowTelemetry.buildWindow();
-        }
         await initializeBlueMarble();
         runtimeMarker.dataset["runtimeState"] = "ready";
         async function initializeBlueMarble() {
@@ -7775,15 +7694,11 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
           consoleLog(`%c${name}%c (${version}) userscript has loaded!`, "color: cornflowerblue;", "");
         }
       } catch (error) {
-        if (heartbeatInterval != null) {
-          clearInterval(heartbeatInterval);
-        }
         stopBlackObserver?.();
         stopSpontaneousResponseListener?.();
         stopPaintAreaSelectionBridge?.();
         activeWindowMain?.windowFilter?.dispose();
         document.getElementById(activeWindowMain?.windowID)?.remove();
-        document.getElementById(activeTelemetryWindow?.windowID)?.remove();
         runtimeMarker?.remove();
         console.error("Blue Marble: Runtime initialization failed.", error);
       }
@@ -7791,4 +7706,4 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   }
 })();
 
-// Build Hash: 76dcc8bc35c8
+// Build Hash: 9b5eafb2f42d

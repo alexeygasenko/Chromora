@@ -1,6 +1,5 @@
 import Overlay, { minimizeIconExpanded } from "./Overlay";
-
-const closeIcon = '<svg class="bm-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+import { closeIcon } from "./uiIcons";
 
 /** The overlay builder for the settings window in Blue Marble.
  * The logic for this window is managed in {@link SettingsManager}

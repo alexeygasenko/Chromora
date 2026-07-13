@@ -12,8 +12,6 @@ import WindowSettings from "./WindowSettings";
  * @since 0.91.11
  * @example
  * {
- *   "uuid": "497dcba3-ecbf-4587-a2dd-5eb0665e6880",
- *   "telemetry": 1,
  *   "flags": ["hl-noTrans", "ftr-oWin", "te-noSkip"],
  *   "highlight": [[1,0,-1],[1,-1,0],[2,1,0],[1,0,1]],
  *   "filter": [-2,0,4,5,6,29,63],
@@ -109,12 +107,12 @@ export default class SettingsManager extends WindowSettings {
    * @since 0.99.0
    */
   async setPaintAreaHotkey(settingKey, code) {
-    const hotkeyDefaults = {
-      paintArea: 'AltLeft',
-      paintAllArea: 'ControlLeft'
-    };
-    const normalizedSettingKey = Object.hasOwn(hotkeyDefaults, settingKey) ? settingKey : 'paintArea';
-    const fallbackCode = hotkeyDefaults[normalizedSettingKey];
+    const hotkeyDefaults = new Map([
+      ['paintArea', 'AltLeft'],
+      ['paintAllArea', 'ControlLeft']
+    ]);
+    const normalizedSettingKey = hotkeyDefaults.has(settingKey) ? settingKey : 'paintArea';
+    const fallbackCode = hotkeyDefaults.get(normalizedSettingKey);
     this.userSettings.hotkeys[normalizedSettingKey] = this.#normalizeHotkeyCode(code, fallbackCode);
     this.#broadcastPaintAreaHotkeys();
     await this.saveUserStorageNow();
@@ -183,23 +181,11 @@ export default class SettingsManager extends WindowSettings {
   buildHotkeys() {
     const configureHotkeyButton = (button, settingKey, label) => {
       let recording = false;
-      const stopRecording = () => {
-        recording = false;
-        button.dataset['recording'] = 'false';
-        button.textContent = this.#formatHotkeyCode(this.userSettings.hotkeys[settingKey]);
-        document.body?.classList.remove('bm-hotkey-recording');
-      };
-
-      button.onclick = () => {
-        recording = true;
-        button.dataset['recording'] = 'true';
-        button.textContent = '...';
-        document.body?.classList.add('bm-hotkey-recording');
-      };
-      button.onkeydown = event => {
+      const handleRecordingKeyDown = event => {
         if (!recording) {return;}
         event.preventDefault();
         event.stopImmediatePropagation();
+        if (event.repeat) {return;}
         if (event.code == 'Escape') {
           stopRecording();
           return;
@@ -210,6 +196,27 @@ export default class SettingsManager extends WindowSettings {
           const formattedCode = this.#formatHotkeyCode(this.userSettings.hotkeys[settingKey]);
           button.setAttribute('aria-label', `${label} hotkey: ${formattedCode}`);
         });
+      };
+      const stopRecording = () => {
+        if (!recording) {return;}
+        recording = false;
+        window.removeEventListener('keydown', handleRecordingKeyDown, true);
+        button.dataset['recording'] = 'false';
+        button.textContent = this.#formatHotkeyCode(this.userSettings.hotkeys[settingKey]);
+        if (!document.querySelector('.bm-settings-hotkey-button[data-recording="true"]')) {
+          document.body?.classList.remove('bm-hotkey-recording');
+        }
+      };
+
+      button.onclick = event => {
+        event.preventDefault();
+        if (recording) {return;}
+        recording = true;
+        button.dataset['recording'] = 'true';
+        button.textContent = '...';
+        document.body?.classList.add('bm-hotkey-recording');
+        button.focus({preventScroll: true});
+        window.addEventListener('keydown', handleRecordingKeyDown, true);
       };
       button.onblur = stopRecording;
     };

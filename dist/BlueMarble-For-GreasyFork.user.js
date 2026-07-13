@@ -20,7 +20,7 @@
 // @grant           GM_xmlhttpRequest
 // @grant           GM.download
 // @connect         telemetry.thebluecorner.net
-// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/BlueMarble-For-GreasyFork.user.css
+// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/95675edf1025ddb5f0dbea6204fecf514e3abbe9/dist/BlueMarble-For-GreasyFork.user.css
 // @antifeature     tracking Anonymous opt-in telemetry data
 // @noframes
 // ==/UserScript==
@@ -1413,7 +1413,8 @@
     /** Runs a compositor-only FLIP animation around a layout change.
      * @param {HTMLElement} element - Element whose bounds will change
      * @param {function():void} updateLayout - Synchronous DOM update
-     * @param {{duration?: number}} [options={}]
+     * @param {Object} [options={}] - Animation options
+     * @param {number} [options.duration] - Animation duration in milliseconds
      * @since 0.99.0
      */
     animateLayoutChange(element, updateLayout, options = {}) {
@@ -1734,7 +1735,12 @@
     /** Handles resizing of an overlay window from a resize handle.
      * @param {string} resizeMeSelector - The element to resize
      * @param {string} iResizeThingsSelector - The resize handle element
-     * @param {{onEnd?: function({element: HTMLElement, width: number, height: number}): void, minWidth?: number | function(): number, minHeight?: number | function(): number, maxWidth?: number | function(): number, maxHeight?: number | function(): number}} [options={}]
+     * @param {Object} [options={}] - Resize options
+     * @param {function(Object):void} [options.onEnd] - Callback after resize ends
+     * @param {number|function():number} [options.minWidth] - Minimum width
+     * @param {number|function():number} [options.minHeight] - Minimum height
+     * @param {number|function():number} [options.maxWidth] - Maximum width
+     * @param {number|function():number} [options.maxHeight] - Maximum height
      * @since 0.92.0
      */
     handleResize(resizeMeSelector, iResizeThingsSelector, options = {}) {
@@ -3254,7 +3260,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   };
   /** Returns the per-layout geometry object for the windowed filter.
    * @param {'vertical' | 'horizontal'} layout
-   * @returns {{x?: number, y?: number, width?: number, height?: number} | null}
+   * @returns {Object|null} Persisted geometry for the requested layout
    * @since 0.95.0
    */
   getWindowedLayoutSize_fn = function(layout) {
@@ -4791,8 +4797,10 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
      * Results are compact horizontal runs: [worldY, worldXStart, worldXEnd].
      * @param {{minX:number, minY:number, maxX:number, maxY:number}} bounds
      * @param {number} colorID
-     * @param {{maxPixels?:number, signal?:AbortSignal}} options
-     * @returns {Promise<{runs:Array<[number, number, number]>, pixelCount:number}>}
+     * @param {Object} [options={}] - Scan options
+     * @param {number} [options.maxPixels=100000] - Maximum number of pixels to return
+     * @param {AbortSignal} [options.signal] - Optional cancellation signal
+     * @returns {Promise<Object>} Compact runs and their total pixel count
      * @since 0.99.0
      */
     async findTemplatePixelRuns(bounds, colorID, { maxPixels = 1e5, signal } = {}) {
@@ -7409,4 +7417,4 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   }
 })();
 
-// Build Hash: 46648fa61213
+// Build Hash: 61ce0feef796

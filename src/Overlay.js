@@ -1320,7 +1320,8 @@ export default class Overlay {
   /** Runs a compositor-only FLIP animation around a layout change.
    * @param {HTMLElement} element - Element whose bounds will change
    * @param {function():void} updateLayout - Synchronous DOM update
-   * @param {{duration?: number}} [options={}]
+   * @param {Object} [options={}] - Animation options
+   * @param {number} [options.duration] - Animation duration in milliseconds
    * @since 0.99.0
    */
   animateLayoutChange(element, updateLayout, options = {}) {
@@ -1677,7 +1678,12 @@ export default class Overlay {
   /** Handles resizing of an overlay window from a resize handle.
    * @param {string} resizeMeSelector - The element to resize
    * @param {string} iResizeThingsSelector - The resize handle element
-   * @param {{onEnd?: function({element: HTMLElement, width: number, height: number}): void, minWidth?: number | function(): number, minHeight?: number | function(): number, maxWidth?: number | function(): number, maxHeight?: number | function(): number}} [options={}]
+   * @param {Object} [options={}] - Resize options
+   * @param {function(Object):void} [options.onEnd] - Callback after resize ends
+   * @param {number|function():number} [options.minWidth] - Minimum width
+   * @param {number|function():number} [options.minHeight] - Minimum height
+   * @param {number|function():number} [options.maxWidth] - Maximum width
+   * @param {number|function():number} [options.maxHeight] - Maximum height
    * @since 0.92.0
    */
   handleResize(resizeMeSelector, iResizeThingsSelector, options = {}) {

@@ -531,7 +531,7 @@ export default class WindowFilter extends Overlay {
 
   /** Returns the per-layout geometry object for the windowed filter.
    * @param {'vertical' | 'horizontal'} layout
-   * @returns {{x?: number, y?: number, width?: number, height?: number} | null}
+   * @returns {Object|null} Persisted geometry for the requested layout
    * @since 0.95.0
    */
   #getWindowedLayoutSize(layout) {

@@ -68,9 +68,7 @@ jobs:
         run: sudo apt-get install -y jq
 
       - name: Update userscript version
-        run: |
-          npm version minor --no-git-tag-version
-          node build/update-version.js
+        run: node build/update-version.js
 
       - name: Build userscript
         run: npm run build
@@ -188,10 +186,8 @@ jobs:
       - name: Update Resource Link SHA
         run: |
           echo "Auto SHA: $AUTO_SHA"
-          sed -i "/@icon/ s#/[a-f0-9]\{40\}/#/${AUTO_SHA}/#g" dist/BlueMarble.user.js src/BlueMarble.meta.js
           sed -i "/@resource/ s#/[a-f0-9]\{40\}/#/${AUTO_SHA}/#g" dist/BlueMarble.user.js src/BlueMarble.meta.js
           echo "Updated resourceLinkSHA:"
-          grep "@icon" dist/BlueMarble.user.js src/BlueMarble.meta.js
           grep "@resource" dist/BlueMarble.user.js src/BlueMarble.meta.js
         env:
           AUTO_SHA: ${{ env.AUTO_SHA }}

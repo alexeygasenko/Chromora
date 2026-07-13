@@ -1,4 +1,3 @@
-import ConfettiManager from "./confetttiManager";
 import Overlay, { minimizeIconExpanded } from "./Overlay";
 import { getClipboardData } from "./utils";
 import WindowFilter from "./WindowFilter";
@@ -24,6 +23,7 @@ export default class WindowMain extends Overlay {
     this.window = null; // Contains the *window* DOM tree
     this.windowID = 'bm-window-main'; // The ID attribute for this window
     this.windowParent = document.body; // The parent of the window DOM tree
+    this.windowFilter = null; // Single owner for Color Filter timers and DOM
   }
 
   /** Creates the main Blue Marble window.
@@ -45,24 +45,10 @@ export default class WindowMain extends Overlay {
       //   div.parentElement.appendChild(div); // When the window is clicked on, bring to top
       // }
     }).addDragbar()
-        .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'aria-label': 'Minimize window "Blue Marble"', 'data-button-status': 'expanded'}, (instance, button) => {
+        .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'aria-label': 'Minimize window "Chromora"', 'data-button-status': 'expanded'}, (instance, button) => {
           button.onclick = () => instance.handleMinimization(button);
-          button.ontouchend = () => {button.click();}; // Needed ONLY to negate weird interaction with dragbar
         }).buildElement()
         .addDiv({'class': 'bm-main-drag-brand'})
-          .addImg({'class': 'bm-favicon', 'src': 'https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/assets/Favicon.png'}, (instance, img) => {
-            // Adds a birthday hat & confetti to the window if it is Blue Marble's birthday
-            const date = new Date();
-            const dayOfTheYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 1)) / (1000 * 60 * 60 * 24)) + 1;
-            if (dayOfTheYear == 204) {
-              img.parentNode.style.position = 'relative';
-              img.parentNode.innerHTML = img.parentNode.innerHTML + `<svg class="bm-main-birthday-hat" viewBox="0 0 9 7"><path d="M0,3L9,0L2,7" fill="#0af"/><path d="M0,3A.4,.4 0 1 1 1,5" fill="#a00"/><path d="M1.5,6A1,1 0 0 1 3,6L2,7" fill="#a0f"/><path d="M4,5A.6,.6 0 1 1 5,4" fill="#0a0"/><path d="M6,3A.8,.8 0 1 1 7,2" fill="#fa0"/><path d="M4.5,1.5A1,1 0 0 1 3,2" fill="#aa0"/></svg>`;
-              img.onload = () => {
-                const confettiManager = new ConfettiManager();
-                confettiManager.createConfetti(document.querySelector(`#${this.windowID}`));
-              };
-            }
-          }).buildElement()
           .addHeader(1, {'class': 'bm-dragbar-title-persistent', 'textContent': this.name}).buildElement()
         .buildElement()
         .addDiv({'class': 'bm-flex-center'})
@@ -144,7 +130,7 @@ export default class WindowMain extends Overlay {
               }
             }).buildElement()
             .addButton({'class': 'bm-button-primary', 'textContent': 'Create'}, (instance, button) => {
-              button.onclick = () => {
+              button.onclick = async () => {
                 const input = document.querySelector(`#${this.windowID} .bm-input-file`);
 
                 // Checks to see if the coordinates are valid. Throws an error if they are not
@@ -160,8 +146,16 @@ export default class WindowMain extends Overlay {
                 // Kills itself if there is no file
                 if (!input?.files[0]) {instance.handleDisplayError(`No file selected!`); return;}
 
-                instance?.apiManager?.templateManager.createTemplate(input.files[0], input.files[0]?.name.replace(/\.[^/.]+$/, ''), [Number(coordTlX.value), Number(coordTlY.value), Number(coordPxX.value), Number(coordPxY.value)]);
-                instance.handleDisplayStatus(`Drew to canvas!`);
+                button.disabled = true;
+                try {
+                  await instance?.apiManager?.templateManager.createTemplate(input.files[0], input.files[0]?.name.replace(/\.[^/.]+$/, ''), [Number(coordTlX.value), Number(coordTlY.value), Number(coordPxX.value), Number(coordPxY.value)]);
+                  instance.handleDisplayStatus(`Drew to canvas!`);
+                } catch (error) {
+                  console.error('Blue Marble: Template creation failed.', error);
+                  instance.handleDisplayError(`Template creation failed: ${error instanceof Error ? error.message : String(error)}`);
+                } finally {
+                  button.disabled = false;
+                }
               }
             }).buildElement()
             .addButton({'class': 'bm-button-secondary', 'textContent': 'Filter'}, (instance, button) => {
@@ -185,7 +179,11 @@ export default class WindowMain extends Overlay {
    * @since 0.88.330
    */
   buildWindowFilter({respectSavedVisibility = false} = {}) {
-    const windowFilter = new WindowFilter(this); // Creates a new color filter window instance
+    if (!this.windowFilter || (this.windowFilter.templateManager != this.apiManager?.templateManager)) {
+      this.windowFilter?.dispose();
+      this.windowFilter = new WindowFilter(this);
+    }
+    const windowFilter = this.windowFilter;
     if (respectSavedVisibility && !windowFilter.shouldAutoOpen()) {
       return;
     }

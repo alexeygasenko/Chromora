@@ -1,6 +1,46 @@
 export const minimizeIconExpanded = '<svg class="bm-button-icon bm-button-icon-minimize" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 9.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 export const minimizeIconCollapsed = '<svg class="bm-button-icon bm-button-icon-minimize" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9.5 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+const motionAnimations = new WeakMap();
+const motionTiming = Object.freeze({
+  fast: 180,
+  window: 300,
+  ease: 'cubic-bezier(.2, .8, .2, 1)',
+  spring: 'cubic-bezier(.16, 1, .3, 1)'
+});
+
+function shouldReduceMotion() {
+  return typeof window != 'undefined' && typeof window.matchMedia == 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function cancelMotion(element) {
+  const animations = motionAnimations.get(element);
+  animations?.forEach(animation => animation.cancel());
+  motionAnimations.delete(element);
+}
+
+function startMotion(element, keyframes, options) {
+  if (!element || shouldReduceMotion() || typeof element.animate != 'function') {return null;}
+
+  cancelMotion(element);
+  const animation = element.animate(keyframes, {fill: 'both', ...options});
+  motionAnimations.set(element, new Set([animation]));
+  void animation.finished.catch(() => {}).finally(() => {
+    const animations = motionAnimations.get(element);
+    animations?.delete(animation);
+    if (!animations?.size) {motionAnimations.delete(element);}
+  });
+  return animation;
+}
+
+async function waitForMotion(animations) {
+  await Promise.all(animations.filter(Boolean).map(animation => animation.finished.catch(() => {})));
+}
+
+function releaseMotion(animations) {
+  animations.filter(Boolean).forEach(animation => animation.cancel());
+}
+
 /** The overlay builder for the Blue Marble script.
  * @description This class handles the overlay UI for the Blue Marble script.
  * @class Overlay
@@ -161,7 +201,12 @@ export default class Overlay {
    * // <div><p></p></div>
    */
   buildOverlay(parent) {
-    parent?.appendChild(this.overlay);
+    const overlay = this.overlay;
+    parent?.appendChild(overlay);
+
+    if (overlay?.classList.contains('bm-window')) {
+      this.handleWindowOpen(overlay);
+    }
 
     // Resets the class-bound variables of this class instance back to default so overlay can be build again later
     this.overlay = null;
@@ -1207,11 +1252,166 @@ export default class Overlay {
     }
   }
 
+  /** Animates a newly-mounted window without changing its final visual state.
+   * @param {HTMLElement} windowElement - Window that was added to the document
+   * @since 0.99.0
+   */
+  handleWindowOpen(windowElement) {
+    if (!windowElement) {return;}
+
+    const content = windowElement.querySelector('.bm-window-content');
+    const dragbar = windowElement.querySelector('.bm-dragbar');
+    windowElement.classList.add('bm-window-motion');
+
+    const animations = [
+      startMotion(windowElement, [
+        {opacity: 0.32, clipPath: 'inset(0 0 86% 0 round 16px)'},
+        {opacity: 1, clipPath: 'inset(0 0 0 0 round 16px)'}
+      ], {duration: motionTiming.window, easing: motionTiming.spring}),
+      startMotion(content, [
+        {opacity: 0, transform: 'translateY(-10px) scaleY(.97)'},
+        {opacity: 1, transform: 'translateY(0) scaleY(1)'}
+      ], {duration: motionTiming.window, delay: 24, easing: motionTiming.spring}),
+      startMotion(dragbar, [
+        {opacity: 0.7, transform: 'translateY(-4px) scale(.985)'},
+        {opacity: 1, transform: 'translateY(0) scale(1)'}
+      ], {duration: 240, easing: motionTiming.spring})
+    ];
+
+    void waitForMotion(animations).then(() => {
+      releaseMotion(animations);
+      windowElement.classList.remove('bm-window-motion');
+    });
+  }
+
+  /** Animates and removes a window.
+   * @param {HTMLElement} windowElement - Window to remove
+   * @returns {Promise<void>}
+   * @since 0.99.0
+   */
+  async handleWindowClose(windowElement) {
+    if (!windowElement?.isConnected) {return;}
+
+    const content = windowElement.querySelector('.bm-window-content');
+    const dragbar = windowElement.querySelector('.bm-dragbar');
+    windowElement.classList.add('bm-window-motion', 'bm-window-closing');
+    windowElement.setAttribute('aria-hidden', 'true');
+
+    const animations = [
+      startMotion(windowElement, [
+        {opacity: 1, clipPath: 'inset(0 0 0 0 round 16px)'},
+        {opacity: 0, clipPath: 'inset(0 0 88% 0 round 16px)'}
+      ], {duration: 220, easing: motionTiming.ease}),
+      startMotion(content, [
+        {opacity: 1, transform: 'translateY(0) scaleY(1)'},
+        {opacity: 0, transform: 'translateY(-8px) scaleY(.97)'}
+      ], {duration: motionTiming.fast, easing: motionTiming.ease}),
+      startMotion(dragbar, [
+        {opacity: 1, transform: 'scale(1)'},
+        {opacity: 0.72, transform: 'scale(.98)'}
+      ], {duration: 200, easing: motionTiming.ease})
+    ];
+
+    await waitForMotion(animations);
+    windowElement.remove();
+    releaseMotion(animations);
+  }
+
+  /** Runs a compositor-only FLIP animation around a layout change.
+   * @param {HTMLElement} element - Element whose bounds will change
+   * @param {function():void} updateLayout - Synchronous DOM update
+   * @param {{duration?: number}} [options={}]
+   * @since 0.99.0
+   */
+  animateLayoutChange(element, updateLayout, options = {}) {
+    if (!element || typeof updateLayout != 'function' || shouldReduceMotion()) {
+      updateLayout?.();
+      return;
+    }
+
+    const first = element.getBoundingClientRect();
+    updateLayout();
+    const last = element.getBoundingClientRect();
+    if (!first.width || !first.height || !last.width || !last.height) {return;}
+
+    const animation = startMotion(element, [
+      {
+        scale: `${first.width / last.width} ${first.height / last.height}`,
+        transformOrigin: 'top left'
+      },
+      {scale: '1 1', transformOrigin: 'top left'}
+    ], {duration: options.duration ?? 280, easing: motionTiming.spring});
+
+    if (!animation) {return;}
+    element.classList.add('bm-window-motion');
+    void waitForMotion([animation]).then(() => {
+      animation.cancel();
+      element.classList.remove('bm-window-motion');
+    });
+  }
+
+  /** Animates visible list items from their previous positions after a reorder.
+   * @param {HTMLElement[]} elements - Items being reordered
+   * @param {function():void} updateList - Synchronous DOM update
+   * @since 0.99.0
+   */
+  animateListReorder(elements, updateList) {
+    if (!Array.isArray(elements) || typeof updateList != 'function' || shouldReduceMotion()) {
+      updateList?.();
+      return;
+    }
+
+    if (elements[0]?.closest('.bm-window')?.classList.contains('bm-window-motion')) {
+      updateList();
+      return;
+    }
+
+    const viewport = elements[0]?.closest('.bm-scrollable')?.getBoundingClientRect()
+      ?? elements[0]?.parentElement?.getBoundingClientRect();
+    const isVisible = rect => rect.width > 0 && rect.height > 0 && (!viewport || (rect.bottom >= viewport.top && rect.top <= viewport.bottom && rect.right >= viewport.left && rect.left <= viewport.right));
+    const first = new Map();
+
+    for (const element of elements) {
+      const rect = element.getBoundingClientRect();
+      if (isVisible(rect)) {first.set(element, rect);}
+    }
+
+    updateList();
+
+    for (const element of elements) {
+      const previous = first.get(element);
+      if (!previous) {continue;}
+      const next = element.getBoundingClientRect();
+      if (!isVisible(next)) {continue;}
+      const deltaX = previous.left - next.left;
+      const deltaY = previous.top - next.top;
+      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {continue;}
+
+      const animation = startMotion(element, [
+        {translate: `${deltaX}px ${deltaY}px`},
+        {translate: '0 0'}
+      ], {duration: 260, easing: motionTiming.spring});
+      if (animation) {void animation.finished.catch(() => {}).then(() => animation.cancel());}
+    }
+  }
+
+  /** Gives a changed control group a short liquid settle animation.
+   * @param {HTMLElement} element - Updated group
+   * @since 0.99.0
+   */
+  animateStateChange(element) {
+    const animation = startMotion(element, [
+      {opacity: 0.76, scale: '.992 .985'},
+      {opacity: 1, scale: '1 1'}
+    ], {duration: 220, easing: motionTiming.spring});
+    if (animation) {void animation.finished.catch(() => {}).then(() => animation.cancel());}
+  }
+
   /** Handles the minimization logic for windows spawned by Blue Marble
    * @param {HTMLButtonElement} button - The UI button that triggered this minimization event
    * @since 0.88.142
   */
-  handleMinimization(button) {
+  async handleMinimization(button) {
 
     if (button.disabled) {return;} // Don't minimize if the window is currently minimizing
 
@@ -1231,29 +1431,6 @@ export default class Overlay {
       return;
     }
 
-    const finishMinimizeTransition = (callback) => {
-      let isFinished = false;
-      let fallbackTimer;
-
-      const finish = () => {
-        if (isFinished) {return;}
-        isFinished = true;
-        clearTimeout(fallbackTimer);
-        windowContent.removeEventListener('transitionend', handler);
-        callback();
-        button.disabled = false;
-        button.style.textDecoration = '';
-      };
-
-      const handler = event => {
-        if (event.target != windowContent || event.propertyName != 'height') {return;}
-        finish();
-      };
-
-      windowContent.addEventListener('transitionend', handler);
-      fallbackTimer = setTimeout(finish, 360);
-    };
-
     const getCollapsedHeight = () => {
       const windowStyle = getComputedStyle(window);
       const toPixels = value => parseFloat(value) || 0;
@@ -1269,6 +1446,18 @@ export default class Overlay {
 
     window.parentElement.append(window); // Moves the window to the top
 
+    const animateMinimizeIcon = () => {
+      const icon = button.querySelector('svg');
+      const animation = startMotion(icon, [
+        {opacity: 0.3, transform: 'rotate(-28deg) scale(.72)'},
+        {opacity: 1, transform: 'rotate(0) scale(1)'}
+      ], {duration: 240, easing: motionTiming.spring});
+      if (animation) {void animation.finished.catch(() => {}).then(() => animation.cancel());}
+    };
+
+    const collapsedHeight = getCollapsedHeight();
+    window.classList.add('bm-window-motion');
+
     // If window content is open...
     if (button.dataset['buttonStatus'] == 'expanded') {
       // ...we want to close it
@@ -1277,20 +1466,16 @@ export default class Overlay {
       window.dataset['widthBeforeMinimize'] = window.style.width;
       window.dataset['heightBeforeMinimize'] = window.style.height;
       window.dataset['minHeightBeforeMinimize'] = window.style.minHeight;
-      windowContent.style.height = windowContent.scrollHeight + 'px';
-      void windowContent.offsetHeight; // Force layout so the height transition always has a real start value
+      const expandedRect = window.getBoundingClientRect();
       if (!window.style.width) {
-        window.style.width = window.scrollWidth + 'px'; // So the width of the window does not change due to the lack of content
+        const style = getComputedStyle(window);
+        const horizontalExtras = (parseFloat(style.paddingLeft) || 0) +
+          (parseFloat(style.paddingRight) || 0) +
+          (parseFloat(style.borderLeftWidth) || 0) +
+          (parseFloat(style.borderRightWidth) || 0);
+        const width = style.boxSizing == 'border-box' ? expandedRect.width : expandedRect.width - horizontalExtras;
+        window.style.width = `${Math.max(0, width)}px`; // Keep collapsed dragbar width stable
       }
-      finishMinimizeTransition(() => {
-        windowContent.style.display = 'none'; // Changes "display" to "none" for screen readers
-      });
-      windowContent.style.height = '0'; // Set the height to 0px
-      if (window.style.height || window.classList.contains('bm-windowed')) {
-        window.style.minHeight = '0px';
-        window.style.height = getCollapsedHeight() + 'px';
-      }
-      window.classList.add('bm-window-collapsed');
       
       // Makes a clone of the h1 element inside the window, and adds it to the dragbar
       const dragbarHeader1 = persistentDragbarHeader ?? header?.cloneNode(true) ?? document.createElement('h1');
@@ -1301,9 +1486,38 @@ export default class Overlay {
       }
       
       button.innerHTML = minimizeIconCollapsed; // Swap button icon
+      animateMinimizeIcon();
       button.dataset['buttonStatus'] = 'collapsed'; // Swap button status tracker
       button.ariaLabel = `Unminimize window "${dragbarHeader1Text}"`; // Screen reader label
       button.title = button.ariaLabel; // Tooltip label
+
+      const clipBottom = Math.max(0, expandedRect.height - collapsedHeight);
+      const animations = [
+        startMotion(window, [
+          {clipPath: 'inset(0 0 0 0 round 16px)'},
+          {clipPath: `inset(0 0 ${clipBottom}px 0 round 16px)`}
+        ], {duration: motionTiming.window, easing: motionTiming.spring}),
+        startMotion(windowContent, [
+          {opacity: 1, transform: 'translateY(0) scaleY(1)'},
+          {opacity: 0, transform: 'translateY(-10px) scaleY(.96)'}
+        ], {duration: 220, easing: motionTiming.ease})
+      ];
+
+      await waitForMotion(animations);
+      windowContent.hidden = true;
+      windowContent.setAttribute('aria-hidden', 'true');
+      window.classList.add('bm-window-collapsed');
+      window.style.minHeight = '0px';
+      if (window.dataset['heightBeforeMinimize'] || window.classList.contains('bm-windowed')) {
+        const windowStyle = getComputedStyle(window);
+        const height = windowStyle.boxSizing == 'border-box'
+          ? collapsedHeight
+          : Math.max(0, collapsedHeight - ((parseFloat(windowStyle.paddingTop) || 0) + (parseFloat(windowStyle.paddingBottom) || 0) + (parseFloat(windowStyle.borderTopWidth) || 0) + (parseFloat(windowStyle.borderBottomWidth) || 0)));
+        window.style.height = `${height}px`;
+      } else {
+        window.style.height = '';
+      }
+      releaseMotion(animations);
     } else {
       // Else, the window is closed, and we want to open it
 
@@ -1318,26 +1532,43 @@ export default class Overlay {
       }
 
       // Logic for the transition animation to expand the window
-      windowContent.style.display = ''; // Resets display to default
-      windowContent.style.height = '0'; // Sets the height to 0
+      const collapsedRect = window.getBoundingClientRect();
+      windowContent.hidden = false;
+      windowContent.removeAttribute('aria-hidden');
       window.classList.remove('bm-window-collapsed');
       window.style.width = window.dataset['widthBeforeMinimize'] ?? ''; // Restores width to the pre-minimized value
       window.style.minHeight = window.dataset['minHeightBeforeMinimize'] ?? ''; // Restores resizable windows
       window.style.height = window.dataset['heightBeforeMinimize'] ?? ''; // Restores height to the pre-minimized value
-      void windowContent.offsetHeight; // Force layout before expanding from 0px
-      finishMinimizeTransition(() => {
-        windowContent.style.height = ''; // Changes the height back to default
-        delete window.dataset['widthBeforeMinimize'];
-        delete window.dataset['heightBeforeMinimize'];
-        delete window.dataset['minHeightBeforeMinimize'];
-      });
-      windowContent.style.height = windowContent.scrollHeight + 'px'; // Change the height back to normal
+      const expandedRect = window.getBoundingClientRect();
 
       button.innerHTML = minimizeIconExpanded; // Swap button icon
+      animateMinimizeIcon();
       button.dataset['buttonStatus'] = 'expanded'; // Swap button status tracker
       button.ariaLabel = `Minimize window "${dragbarHeader1Text}"`; // Screen reader label
       button.title = button.ariaLabel; // Tooltip label
+
+      const clipBottom = Math.max(0, expandedRect.height - collapsedRect.height);
+      const animations = [
+        startMotion(window, [
+          {clipPath: `inset(0 0 ${clipBottom}px 0 round 16px)`},
+          {clipPath: 'inset(0 0 0 0 round 16px)'}
+        ], {duration: motionTiming.window, easing: motionTiming.spring}),
+        startMotion(windowContent, [
+          {opacity: 0, transform: 'translateY(-10px) scaleY(.96)'},
+          {opacity: 1, transform: 'translateY(0) scaleY(1)'}
+        ], {duration: 260, delay: 30, easing: motionTiming.spring})
+      ];
+
+      await waitForMotion(animations);
+      delete window.dataset['widthBeforeMinimize'];
+      delete window.dataset['heightBeforeMinimize'];
+      delete window.dataset['minHeightBeforeMinimize'];
+      releaseMotion(animations);
     }
+
+    window.classList.remove('bm-window-motion');
+    button.disabled = false;
+    button.style.textDecoration = '';
   }
 
   /** Handles dragging of the overlay.
@@ -1360,133 +1591,87 @@ export default class Overlay {
       return; // Kills itself
     }
 
-    let isDragging = false;
-    let offsetX, offsetY = 0;
-    let animationFrame = null;
+    let pointerID = null;
+    let offsetX = 0;
+    let offsetY = 0;
     let currentX = 0;
     let currentY = 0;
     let targetX = 0;
     let targetY = 0;
-    let initialRect = null; // Cache initial position to avoid expensive getBoundingClientRect calls during drag
+    let animationFrame = null;
 
-    // Smooth animation loop using requestAnimationFrame for optimal performance
     const updatePosition = () => {
-      if (isDragging) {
-        // Only update DOM if position changed significantly (reduce repaints)
-        const deltaX = Math.abs(currentX - targetX);
-        const deltaY = Math.abs(currentY - targetY);
-        
-        if (deltaX > 0.5 || deltaY > 0.5) {
-          currentX = targetX;
-          currentY = targetY;
-          
-          // Use CSS transform for GPU acceleration instead of left/top
-          moveMe.style.transform = `translate(${currentX}px, ${currentY}px)`;
-          moveMe.style.left = '0px';
-          moveMe.style.top = '0px';
-          moveMe.style.right = '';
-        }
-        
+      animationFrame = null;
+      if (pointerID == null) {return;}
+      if (Math.abs(currentX - targetX) < 0.5 && Math.abs(currentY - targetY) < 0.5) {return;}
+
+      currentX = targetX;
+      currentY = targetY;
+      moveMe.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+    };
+
+    const schedulePositionUpdate = () => {
+      if (animationFrame == null) {
         animationFrame = requestAnimationFrame(updatePosition);
       }
     };
-    
-    const startDrag = (clientX, clientY) => {
-      isDragging = true;
-      initialRect = moveMe.getBoundingClientRect();
-      offsetX = clientX - initialRect.left;
-      offsetY = clientY - initialRect.top;
-      
-      // Get current position from transform or use element position
-      const computedStyle = window.getComputedStyle(moveMe);
-      const transform = computedStyle.transform;
-      
-      if (transform && transform !== 'none') {
-        const matrix = new DOMMatrix(transform);
-        currentX = matrix.m41;
-        currentY = matrix.m42;
-      } else {
-        currentX = initialRect.left;
-        currentY = initialRect.top;
-      }
-      
-      targetX = currentX;
-      targetY = currentY;
-      
-      document.body.style.userSelect = 'none';
-      iMoveThings.classList.add('bm-dragging');
 
-      // Add move listeners when dragging starts
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('touchmove', onTouchMove, { passive: false });
-      document.addEventListener('mouseup', endDrag);
-      document.addEventListener('touchend', endDrag);
-      document.addEventListener('touchcancel', endDrag);
-      
-      // Start animation loop
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-      }
-      updatePosition();
-    };
-
-    const endDrag = () => {
-      isDragging = false;
-      if (animationFrame) {
+    const endDrag = event => {
+      if (pointerID == null || (event?.pointerId != null && event.pointerId != pointerID)) {return;}
+      if (animationFrame != null) {
         cancelAnimationFrame(animationFrame);
         animationFrame = null;
       }
+      currentX = targetX;
+      currentY = targetY;
+      moveMe.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+
+      const completedPointerID = pointerID;
+      pointerID = null;
+      if (iMoveThings.hasPointerCapture?.(completedPointerID)) {
+        iMoveThings.releasePointerCapture(completedPointerID);
+      }
       document.body.style.userSelect = '';
       iMoveThings.classList.remove('bm-dragging');
+      moveMe.classList.remove('bm-window-interacting');
 
-      // Remove move listeners when drag ends
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('mouseup', endDrag);
-      document.removeEventListener('touchend', endDrag);
-      document.removeEventListener('touchcancel', endDrag);
-
-      onEnd({
-        element: moveMe,
-        x: currentX,
-        y: currentY
-      });
-
-      initialRect = null;
+      onEnd({element: moveMe, x: currentX, y: currentY});
     };
 
-    // Mouse move
-    const onMouseMove = event => {
-      if (isDragging && initialRect) {
-        targetX = event.clientX - offsetX;
-        targetY = event.clientY - offsetY;
-      }
-    }
+    iMoveThings.addEventListener('pointerdown', event => {
+      if (pointerID != null || (event.pointerType == 'mouse' && event.button != 0)) {return;}
+      if (event.target.closest('button, a, input, select, textarea, [role="button"]')) {return;}
 
-    // Touch move
-    const onTouchMove = event => {
-      if (isDragging && initialRect) {
-        const touch = event.touches[0];
-        if (!touch) return;
-        targetX = touch.clientX - offsetX;
-        targetY = touch.clientY - offsetY;
-        event.preventDefault();
-      }
-    };
+      const rect = moveMe.getBoundingClientRect();
+      pointerID = event.pointerId;
+      offsetX = event.clientX - rect.left;
+      offsetY = event.clientY - rect.top;
+      currentX = rect.left;
+      currentY = rect.top;
+      targetX = currentX;
+      targetY = currentY;
 
-    // Mouse down - start dragging
-    iMoveThings.addEventListener('mousedown', function(event) {
+      moveMe.style.left = '0px';
+      moveMe.style.top = '0px';
+      moveMe.style.right = '';
+      moveMe.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+      document.body.style.userSelect = 'none';
+      iMoveThings.classList.add('bm-dragging');
+      moveMe.classList.add('bm-window-interacting');
+      iMoveThings.setPointerCapture?.(pointerID);
       event.preventDefault();
-      startDrag(event.clientX, event.clientY);
     });
 
-    // Touch start - start dragging
-    iMoveThings.addEventListener('touchstart', function(event) {
-      const touch = event?.touches?.[0];
-      if (!touch) {return;}
-      startDrag(touch.clientX, touch.clientY);
-      event.preventDefault();
-    }, { passive: false });
+    iMoveThings.addEventListener('pointermove', event => {
+      if (event.pointerId != pointerID) {return;}
+      targetX = event.clientX - offsetX;
+      targetY = event.clientY - offsetY;
+      schedulePositionUpdate();
+    });
+
+    iMoveThings.addEventListener('pointerup', endDrag);
+    iMoveThings.addEventListener('pointercancel', endDrag);
+    iMoveThings.addEventListener('lostpointercapture', endDrag);
   }
 
   /** Handles resizing of an overlay window from a resize handle.
@@ -1506,7 +1691,7 @@ export default class Overlay {
       return;
     }
 
-    let isResizing = false;
+    let pointerID = null;
     let startX = 0;
     let startY = 0;
     let startWidth = 0;
@@ -1516,6 +1701,10 @@ export default class Overlay {
     let targetWidth = 0;
     let targetHeight = 0;
     let animationFrame = null;
+    let minimumWidth = 0;
+    let minimumHeight = 0;
+    let maximumWidth = 0;
+    let maximumHeight = 0;
 
     const getMaximumWidth = () => {
       const maximumWidth = typeof options?.maxWidth == 'function' ? options.maxWidth() : options?.maxWidth;
@@ -1537,61 +1726,63 @@ export default class Overlay {
     const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
 
     const updateSize = () => {
-      if (isResizing) {
-        const deltaWidth = Math.abs(currentWidth - targetWidth);
-        const deltaHeight = Math.abs(currentHeight - targetHeight);
+      animationFrame = null;
+      if (pointerID == null) {return;}
+      if (Math.abs(currentWidth - targetWidth) < 0.5 && Math.abs(currentHeight - targetHeight) < 0.5) {return;}
 
-        if (deltaWidth > 0.5 || deltaHeight > 0.5) {
-          currentWidth = targetWidth;
-          currentHeight = targetHeight;
-          resizeMe.style.width = `${currentWidth}px`;
-          resizeMe.style.height = `${currentHeight}px`;
-        }
+      currentWidth = targetWidth;
+      currentHeight = targetHeight;
+      resizeMe.style.width = `${currentWidth}px`;
+      resizeMe.style.height = `${currentHeight}px`;
+    };
 
+    const scheduleSizeUpdate = () => {
+      if (animationFrame == null) {
         animationFrame = requestAnimationFrame(updateSize);
       }
     };
 
-    const startResize = (clientX, clientY) => {
-      isResizing = true;
-      startX = clientX;
-      startY = clientY;
-      startWidth = resizeMe.offsetWidth;
-      startHeight = resizeMe.offsetHeight;
+    const startResize = event => {
+      const rect = resizeMe.getBoundingClientRect();
+      pointerID = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      startWidth = rect.width;
+      startHeight = rect.height;
       currentWidth = startWidth;
       currentHeight = startHeight;
       targetWidth = startWidth;
       targetHeight = startHeight;
+      minimumWidth = getMinimumWidth();
+      minimumHeight = getMinimumHeight();
+      maximumWidth = getMaximumWidth();
+      maximumHeight = getMaximumHeight();
 
       document.body.style.userSelect = 'none';
       iResizeThings.classList.add('bm-resizing');
-
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('touchmove', onTouchMove, { passive: false });
-      document.addEventListener('mouseup', endResize);
-      document.addEventListener('touchend', endResize);
-      document.addEventListener('touchcancel', endResize);
-
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-      }
-      updateSize();
+      resizeMe.classList.add('bm-window-interacting');
+      iResizeThings.setPointerCapture?.(pointerID);
     };
 
-    const endResize = () => {
-      isResizing = false;
-      if (animationFrame) {
+    const endResize = event => {
+      if (pointerID == null || (event?.pointerId != null && event.pointerId != pointerID)) {return;}
+      if (animationFrame != null) {
         cancelAnimationFrame(animationFrame);
         animationFrame = null;
       }
+      currentWidth = targetWidth;
+      currentHeight = targetHeight;
+      resizeMe.style.width = `${currentWidth}px`;
+      resizeMe.style.height = `${currentHeight}px`;
+
+      const completedPointerID = pointerID;
+      pointerID = null;
+      if (iResizeThings.hasPointerCapture?.(completedPointerID)) {
+        iResizeThings.releasePointerCapture(completedPointerID);
+      }
       document.body.style.userSelect = '';
       iResizeThings.classList.remove('bm-resizing');
-
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('mouseup', endResize);
-      document.removeEventListener('touchend', endResize);
-      document.removeEventListener('touchcancel', endResize);
+      resizeMe.classList.remove('bm-window-interacting');
 
       onEnd({
         element: resizeMe,
@@ -1600,34 +1791,23 @@ export default class Overlay {
       });
     };
 
-    const onMouseMove = event => {
-      if (!isResizing) {return;}
-      targetWidth = clamp(startWidth + (event.clientX - startX), getMinimumWidth(), getMaximumWidth());
-      targetHeight = clamp(startHeight + (event.clientY - startY), getMinimumHeight(), getMaximumHeight());
-    };
-
-    const onTouchMove = event => {
-      if (!isResizing) {return;}
-      const touch = event?.touches?.[0];
-      if (!touch) {return;}
-      targetWidth = clamp(startWidth + (touch.clientX - startX), getMinimumWidth(), getMaximumWidth());
-      targetHeight = clamp(startHeight + (touch.clientY - startY), getMinimumHeight(), getMaximumHeight());
-      event.preventDefault();
-    };
-
-    iResizeThings.addEventListener('mousedown', event => {
+    iResizeThings.addEventListener('pointerdown', event => {
+      if (pointerID != null || resizeMe.classList.contains('bm-window-collapsed') || (event.pointerType == 'mouse' && event.button != 0)) {return;}
       event.preventDefault();
       event.stopPropagation();
-      startResize(event.clientX, event.clientY);
+      startResize(event);
     });
 
-    iResizeThings.addEventListener('touchstart', event => {
-      const touch = event?.touches?.[0];
-      if (!touch) {return;}
-      event.preventDefault();
-      event.stopPropagation();
-      startResize(touch.clientX, touch.clientY);
-    }, { passive: false });
+    iResizeThings.addEventListener('pointermove', event => {
+      if (event.pointerId != pointerID) {return;}
+      targetWidth = clamp(startWidth + (event.clientX - startX), minimumWidth, maximumWidth);
+      targetHeight = clamp(startHeight + (event.clientY - startY), minimumHeight, maximumHeight);
+      scheduleSizeUpdate();
+    });
+
+    iResizeThings.addEventListener('pointerup', endResize);
+    iResizeThings.addEventListener('pointercancel', endResize);
+    iResizeThings.addEventListener('lostpointercapture', endResize);
   }
 
   /** Handles status display.

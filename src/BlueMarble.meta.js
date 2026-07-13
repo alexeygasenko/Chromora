@@ -1,17 +1,16 @@
 // ==UserScript==
-// @name            Blue Marble
-// @name:en         Blue Marble
-// @namespace       https://github.com/SwingTheVine/
-// @version         0.98.0
-// @description     A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
-// @description:en  A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
-// @author          SwingTheVine
+// @name            Chromora
+// @name:en         Chromora
+// @namespace       https://github.com/alexeygasenko/
+// @version         1.0.0
+// @description     A fluid liquid-glass template, color analysis, pixel highlighting, and assisted drafting toolkit for Wplace.live.
+// @description:en  A fluid liquid-glass template, color analysis, pixel highlighting, and assisted drafting toolkit for Wplace.live.
+// @author          alexeygasenko; based on Blue Marble by SwingTheVine
 // @license         MPL-2.0
-// @supportURL      https://discord.gg/tpeBPy46hf
-// @homepageURL     https://bluemarble.lol/
-// @icon            https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/assets/Favicon.png
-// @updateURL       https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/BlueMarble.user.js
-// @downloadURL     https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/BlueMarble.user.js
+// @supportURL      https://github.com/alexeygasenko/Chromora/issues
+// @homepageURL     https://github.com/alexeygasenko/Chromora
+// @updateURL       https://raw.githubusercontent.com/alexeygasenko/Chromora/main/dist/BlueMarble.user.js
+// @downloadURL     https://raw.githubusercontent.com/alexeygasenko/Chromora/main/dist/BlueMarble.user.js
 // @match           https://wplace.live/*
 // @grant           GM_getResourceText
 // @grant           GM_addStyle
@@ -21,7 +20,7 @@
 // @grant           GM_xmlhttpRequest
 // @grant           GM.download
 // @connect         telemetry.thebluecorner.net
-// @resource        CSS-BM-File https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/BlueMarble.user.css
+// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/BlueMarble.user.css
 // @antifeature     tracking Anonymous opt-in telemetry data
 // @noframes
 // ==/UserScript==
@@ -35,7 +34,7 @@
   This script is not affiliated with any userscript manager.
   The author of this userscript is not responsible for any damages, issues, loss of data, or punishment that may occur as a result of using this script.
   This script is provided "as is" under the MPL-2.0 license.
-  The "Blue Marble" icon is licensed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication.
-  The "Blue Marble" image is owned by NASA.
+  Chromora is based on Blue Marble by SwingTheVine.
+  Original Blue Marble copyright and attribution are preserved in the repository history and credits.
 */
 

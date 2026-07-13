@@ -19,6 +19,7 @@ export default class ApiManager {
     this.chargeRefillTimerID = ''; // Contains the Charge refill timer element ID attribute so we can update the timer.
     this.coordsTilePixel = []; // Contains the last detected tile/pixel coordinate pair requested
     this.templateCoordsTilePixel = []; // Contains the last "enabled" template coords
+    this.spontaneousMessageHandler = null;
   }
 
   /** Determines if the spontaneously received response is something we want.
@@ -30,8 +31,10 @@ export default class ApiManager {
   */
   spontaneousResponseListener(overlay) {
 
+    this.stopSpontaneousResponseListener();
+
     // Triggers whenever a message is sent
-    window.addEventListener('message', async (event) => {
+    const messageHandler = async (event) => {
 
       const data = event.data; // The data of the message
       const dataJSON = data['jsonData']; // The JSON response, if any
@@ -155,7 +158,20 @@ export default class ApiManager {
           this.disableAll = dataJSON['userscript']?.toString().toLowerCase() == 'false'; // Disables Blue Marble if site owner wants userscripts disabled
           break;
       }
-    });
+    };
+
+    this.spontaneousMessageHandler = messageHandler;
+    window.addEventListener('message', messageHandler);
+    return () => this.stopSpontaneousResponseListener();
+  }
+
+  /** Stops the active spontaneous response listener, if one exists.
+   * @since 0.99.0
+   */
+  stopSpontaneousResponseListener() {
+    if (!this.spontaneousMessageHandler) {return;}
+    window.removeEventListener('message', this.spontaneousMessageHandler);
+    this.spontaneousMessageHandler = null;
   }
 
   /** Applies user data from the /me endpoint to the current overlay.

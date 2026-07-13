@@ -31,6 +31,35 @@
   text-transform: uppercase;
 }
 
+#bm-window-settings .bm-settings-hotkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.58rem 0.2rem 0.72rem;
+  color: rgba(49, 71, 105, 0.82);
+  font-family: var(--bm-font-display);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+#bm-window-settings .bm-settings-hotkey-button {
+  min-width: 7.2rem;
+  min-height: 2rem;
+  margin: 0;
+  padding: 0.28rem 0.72rem;
+  color: rgba(17, 36, 66, 0.96);
+  font-family: var(--bm-font-mono);
+  font-size: 0.72rem;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+#bm-window-settings .bm-settings-hotkey-button[data-recording='true'] {
+  border-color: rgba(99, 211, 239, 0.62);
+  box-shadow: 0 0 0 3px rgba(116, 231, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
 #bm-window-settings .bm-settings-checkbox {
   display: flex;
   width: 100%;

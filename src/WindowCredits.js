@@ -28,26 +28,9 @@ export default class WindowCredts extends Overlay {
    */
   buildWindow() {
 
-    // ASCII art of "Blue Marble"
-    const ascii = `
-██████╗ ██╗     ██╗   ██╗███████╗
-██╔══██╗██║     ██║   ██║██╔════╝
-██████╔╝██║     ██║   ██║█████╗  
-██╔══██╗██║     ██║   ██║██╔══╝  
-██████╔╝███████╗╚██████╔╝███████╗
-╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝
-
-███╗   ███╗ █████╗ ██████╗ ██████╗ ██╗     ███████╗
-████╗ ████║██╔══██╗██╔══██╗██╔══██╗██║     ██╔════╝
-██╔████╔██║███████║██████╔╝██████╔╝██║     █████╗  
-██║╚██╔╝██║██╔══██║██╔══██╗██╔══██╗██║     ██╔══╝  
-██║ ╚═╝ ██║██║  ██║██║  ██║██████╔╝███████╗███████╗
-╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝
-`;
-
     // If a credits window already exists, close it
     if (document.querySelector(`#${this.windowID}`)) {
-      document.querySelector(`#${this.windowID}`).remove();
+      void this.handleWindowClose(document.querySelector(`#${this.windowID}`));
       return;
     }
 
@@ -56,12 +39,10 @@ export default class WindowCredts extends Overlay {
       .addDragbar()
         .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'aria-label': 'Minimize window "Credits"', 'data-button-status': 'expanded'}, (instance, button) => {
           button.onclick = () => instance.handleMinimization(button);
-          button.ontouchend = () => {button.click()}; // Needed only to negate weird interaction with dragbar
         }).buildElement()
         .addDiv().buildElement() // Contains the minimized h1 element
         .addButton({'class': 'bm-button-circle', 'textContent': '✖', 'aria-label': 'Close window "Credits"'}, (instance, button) => {
-          button.onclick = () => {document.querySelector(`#${this.windowID}`)?.remove();};
-          button.ontouchend = () => {button.click();}; // Needed only to negate weird interaction with dragbar
+          button.onclick = () => this.handleWindowClose(document.querySelector(`#${this.windowID}`));
         }).buildElement()
       .buildElement()
       .addDiv({'class': 'bm-window-content'})
@@ -70,11 +51,8 @@ export default class WindowCredts extends Overlay {
         .buildElement()
         .addHr().buildElement()
         .addDiv({'class': 'bm-container bm-scrollable'})
-          .addSpan({'role': 'img', 'aria-label': this.name})
-            .addSpan({'innerHTML': ascii, 'class': 'bm-ascii', 'aria-hidden': 'true'}).buildElement()
-          .buildElement()
-          .addBr().buildElement()
-          .addHr().buildElement()
+          .addHeader(2, {'textContent': 'Chromora'}).buildElement()
+          .addSpan({'innerHTML': 'Chromora is maintained by <a href="https://github.com/alexeygasenko" target="_blank" rel="noopener noreferrer">alexeygasenko</a> and is based on Blue Marble.'}).buildElement()
           .addBr().buildElement()
           .addSpan({'textContent': '"Blue Marble" userscript is made by SwingTheVine.'}).buildElement()
           .addBr().buildElement()

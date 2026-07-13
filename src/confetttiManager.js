@@ -60,4 +60,6 @@ export default class ConfettiManager {
 
 // Creates a custom element called <confetti-piece>
 class BlueMarbleConfettiPiece extends HTMLElement {}
-customElements.define('confetti-piece', BlueMarbleConfettiPiece);
+if (!customElements.get('confetti-piece')) {
+  customElements.define('confetti-piece', BlueMarbleConfettiPiece);
+}

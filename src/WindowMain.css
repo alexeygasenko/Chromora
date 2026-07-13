@@ -21,30 +21,10 @@
   pointer-events: none;
 }
 
-#bm-window-main .bm-main-drag-brand .bm-favicon {
-  flex: 0 0 auto;
-  width: auto;
-  height: 1.18rem;
-  margin-right: 0.38rem;
-  padding: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-}
-
 #bm-window-main .bm-main-drag-brand h1 {
   min-width: 0;
   margin: 0;
   line-height: 1;
-}
-
-#bm-window-main .bm-main-birthday-hat {
-  position: absolute;
-  top: -0.34rem;
-  left: 1.08rem;
-  width: 1rem;
-  height: 1rem;
-  pointer-events: none;
 }
 
 #bm-window-main .bm-main-shell {

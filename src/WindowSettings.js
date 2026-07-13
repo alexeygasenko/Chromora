@@ -42,7 +42,6 @@ export default class WindowSettings extends Overlay {
       .addDragbar()
         .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'aria-label': 'Minimize window "Settings"', 'data-button-status': 'expanded'}, (instance, button) => {
           button.onclick = () => instance.handleMinimization(button);
-          button.ontouchend = () => {button.click()}; // Needed only to negate weird interaction with dragbar
         }).buildElement()
         .addDiv({'class': 'bm-settings-drag-title-slot'})
           .addHeader(1, {'class': 'bm-dragbar-title-persistent bm-settings-drag-title', 'textContent': 'Settings'}).buildElement()
@@ -50,7 +49,6 @@ export default class WindowSettings extends Overlay {
         .addDiv({'class': 'bm-flex-center'})
           .addButton({'class': 'bm-button-circle', 'innerHTML': closeIcon, 'aria-label': 'Close window "Settings"'}, (instance, button) => {
             button.onclick = () => this.#closeWindow();
-            button.ontouchend = () => {button.click();}; // Needed only to negate weird interaction with dragbar
           }).buildElement()
         .buildElement()
       .buildElement()
@@ -58,6 +56,7 @@ export default class WindowSettings extends Overlay {
         .addHr({'class': 'bm-window-divider-top'}).buildElement()
         .addDiv({'class': 'bm-container bm-scrollable'}, (instance, div) => {
           // Each category in the settings window
+          this.buildHotkeys();
           this.buildHighlight();
           this.buildTemplate();
         }).buildElement()
@@ -80,10 +79,10 @@ export default class WindowSettings extends Overlay {
   /** Immediately closes the settings window and saves its position.
    * @since 0.95.0
    */
-  #closeWindow() {
+  async #closeWindow() {
     const windowElement = document.querySelector(`#${this.windowID}`);
     this.#saveWindowPosition(windowElement);
-    windowElement?.remove();
+    await this.handleWindowClose(windowElement);
   }
 
   /** Returns a viewport-safe position for the settings window.
@@ -185,6 +184,14 @@ export default class WindowSettings extends Overlay {
    */
   buildHighlight() {
     this.#errorOverrideFailure('Pixel Highlight');
+  }
+
+  /** Builds the hotkey section of the window.
+   * This should be overriden by {@link SettingsManager}
+   * @since 0.99.0
+   */
+  buildHotkeys() {
+    this.#errorOverrideFailure('Hotkeys');
   }
 
   /** Builds the template section of the window.

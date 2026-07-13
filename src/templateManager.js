@@ -116,6 +116,12 @@ export default class TemplateManager {
     this.shouldFilterColor = new Map();
     this.highlightIncorrectColorID = null; // Restricts incorrect-pixel highlighting to one template color when set
     this.highlightIncorrectMode = 'incorrect'; // Either "incorrect" or "missing" when color-specific highlighting is active
+    this.incorrectHighlightStencilCache = new Map();
+    this.canvasRefreshRevision = 0;
+    this.templateStatisticsState = 'idle';
+    this.templateChangeListeners = new Set();
+    this.paintAreaMessageHandler = null;
+    this.paintAreaAbortController = null;
   }
 
   /** Updates the stored instance of the main window.
@@ -133,6 +139,199 @@ export default class TemplateManager {
   setSettingsManager(settingsManager) {
     this.settingsManager = settingsManager;
     this.#restoreFilteredColorsFromSettings();
+  }
+
+  /** Subscribes to template readiness changes.
+   * @param {function({reason: string, state: string}):void} listener
+   * @returns {function():void} Unsubscribe callback
+   * @since 0.99.0
+   */
+  onTemplatesChanged(listener) {
+    if (typeof listener != 'function') {return () => {};}
+    this.templateChangeListeners.add(listener);
+    return () => this.templateChangeListeners.delete(listener);
+  }
+
+  /** Returns whether template statistics are idle, loading, ready, degraded, or failed.
+   * @returns {'idle' | 'loading' | 'ready' | 'degraded' | 'error'}
+   * @since 0.99.0
+   */
+  getTemplateStatisticsState() {
+    return this.templateStatisticsState;
+  }
+
+  /** Notifies UI owners without coupling TemplateManager to a specific window.
+   * @param {string} reason
+   * @since 0.99.0
+   */
+  #emitTemplatesChanged(reason) {
+    const detail = {reason: reason, state: this.templateStatisticsState};
+    for (const listener of this.templateChangeListeners) {
+      try {
+        listener(detail);
+      } catch (error) {
+        consoleWarn('A template-change listener failed.', error);
+      }
+    }
+  }
+
+  /** Starts the bridge that turns a user-selected map rectangle into Wplace draft pixels.
+   * @returns {function():void} Cleanup callback
+   * @since 0.99.0
+   */
+  startPaintAreaSelectionBridge() {
+    if (this.paintAreaMessageHandler) {
+      return () => this.stopPaintAreaSelectionBridge();
+    }
+
+    this.paintAreaMessageHandler = event => {
+      const data = event.data;
+      if ((data?.source != 'blue-marble') || (data?.action != 'paint-area-selected')) {return;}
+
+      this.paintAreaAbortController?.abort();
+      const abortController = new AbortController();
+      this.paintAreaAbortController = abortController;
+      void this.#processPaintAreaSelection(data, abortController.signal);
+    };
+
+    window.addEventListener('message', this.paintAreaMessageHandler);
+    return () => this.stopPaintAreaSelectionBridge();
+  }
+
+  /** Stops area-selection work and removes its message listener.
+   * @since 0.99.0
+   */
+  stopPaintAreaSelectionBridge() {
+    this.paintAreaAbortController?.abort();
+    this.paintAreaAbortController = null;
+    if (!this.paintAreaMessageHandler) {return;}
+    window.removeEventListener('message', this.paintAreaMessageHandler);
+    this.paintAreaMessageHandler = null;
+  }
+
+  /** Finds template pixels of one palette color inside inclusive world-pixel bounds.
+   * Results are compact horizontal runs: [worldY, worldXStart, worldXEnd].
+   * @param {{minX:number, minY:number, maxX:number, maxY:number}} bounds
+   * @param {number} colorID
+   * @param {{maxPixels?:number, signal?:AbortSignal}} options
+   * @returns {Promise<{runs:Array<[number, number, number]>, pixelCount:number}>}
+   * @since 0.99.0
+   */
+  async findTemplatePixelRuns(bounds, colorID, {maxPixels = 100000, signal} = {}) {
+    const normalizedColorID = Number(colorID);
+    if (!Number.isInteger(normalizedColorID) || (normalizedColorID <= 0)) {
+      throw new TypeError('Select a non-transparent Wplace color first.');
+    }
+
+    const normalizedBounds = {
+      minX: Math.floor(Math.min(Number(bounds?.minX), Number(bounds?.maxX))),
+      minY: Math.floor(Math.min(Number(bounds?.minY), Number(bounds?.maxY))),
+      maxX: Math.floor(Math.max(Number(bounds?.minX), Number(bounds?.maxX))),
+      maxY: Math.floor(Math.max(Number(bounds?.minY), Number(bounds?.maxY)))
+    };
+    if (!Object.values(normalizedBounds).every(Number.isFinite)) {
+      throw new TypeError('Selected map area has invalid coordinates.');
+    }
+
+    const pixelLimit = Math.max(1, Math.min(Math.floor(Number(maxPixels) || 1), 100001));
+    const runs = [];
+    let pixelCount = 0;
+    let workSliceStarted = performance.now();
+    const chunkEntries = value => value instanceof Map
+      ? value.entries()
+      : Object.entries(value ?? {});
+    const centerOffset = Math.floor(this.drawMult / 2);
+
+    for (const template of this.templatesArray) {
+      for (const [chunkKey, pixelBuffer] of chunkEntries(template?.chunked32)) {
+        if (signal?.aborted) {throw new DOMException('Area selection cancelled.', 'AbortError');}
+        if (!(pixelBuffer instanceof Uint32Array)) {continue;}
+
+        const [tileX, tileY, pixelX, pixelY] = String(chunkKey).split(',').map(Number);
+        if (![tileX, tileY, pixelX, pixelY].every(Number.isFinite)) {continue;}
+
+        const bitmap = template?.chunked instanceof Map
+          ? template.chunked.get(chunkKey)
+          : template?.chunked?.[chunkKey];
+        const bitmapWidth = Number(bitmap?.width);
+        const bitmapHeight = Number(bitmap?.height);
+        if (!Number.isFinite(bitmapWidth) || !Number.isFinite(bitmapHeight) || !bitmapWidth || !bitmapHeight) {continue;}
+
+        const chunkWidth = Math.floor(bitmapWidth / this.drawMult);
+        const chunkHeight = Math.floor(bitmapHeight / this.drawMult);
+        const pixelState = template?.pixelStateByChunk?.get(chunkKey);
+        if (!(pixelState instanceof Uint8Array) || (pixelState.length != (chunkWidth * chunkHeight))) {continue;}
+        const chunkMinX = (tileX * this.tileSize) + pixelX;
+        const chunkMinY = (tileY * this.tileSize) + pixelY;
+        const localMinX = Math.max(0, normalizedBounds.minX - chunkMinX);
+        const localMinY = Math.max(0, normalizedBounds.minY - chunkMinY);
+        const localMaxX = Math.min(chunkWidth - 1, normalizedBounds.maxX - chunkMinX);
+        const localMaxY = Math.min(chunkHeight - 1, normalizedBounds.maxY - chunkMinY);
+        if ((localMinX > localMaxX) || (localMinY > localMaxY)) {continue;}
+
+        for (let localY = localMinY; localY <= localMaxY; localY++) {
+          let runStart = null;
+
+          for (let localX = localMinX; localX <= localMaxX; localX++) {
+            const bufferX = (localX * this.drawMult) + centerOffset;
+            const bufferY = (localY * this.drawMult) + centerOffset;
+            const packedColor = pixelBuffer[(bufferY * bitmapWidth) + bufferX];
+            const matchesColor = (this.paletteBM.LUT.get(packedColor) == normalizedColorID)
+              && (pixelState[(localY * chunkWidth) + localX] == 2);
+
+            if (matchesColor && (runStart == null)) {runStart = localX;}
+            const closesRun = (runStart != null) && (!matchesColor || (localX == localMaxX));
+            if (!closesRun) {continue;}
+
+            const localRunEnd = matchesColor && (localX == localMaxX) ? localX : localX - 1;
+            const remaining = pixelLimit - pixelCount;
+            const runEnd = Math.min(localRunEnd, runStart + remaining - 1);
+            runs.push([chunkMinY + localY, chunkMinX + runStart, chunkMinX + runEnd]);
+            pixelCount += runEnd - runStart + 1;
+            runStart = null;
+            if (pixelCount >= pixelLimit) {return {runs, pixelCount};}
+          }
+
+          if ((performance.now() - workSliceStarted) >= 4) {
+            await this.#yieldToBrowser();
+            workSliceStarted = performance.now();
+          }
+        }
+      }
+    }
+
+    return {runs, pixelCount};
+  }
+
+  /** Resolves a map selection and sends compact matching runs back to the page bridge.
+   * @param {Object} data
+   * @param {AbortSignal} signal
+   * @since 0.99.0
+   */
+  async #processPaintAreaSelection(data, signal) {
+    try {
+      const result = await this.findTemplatePixelRuns(data.bounds, data.colorID, {
+        maxPixels: data.maxPixels,
+        signal: signal
+      });
+      if (signal.aborted) {return;}
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'paint-area-fill',
+        requestID: data.requestID,
+        colorID: Number(data.colorID),
+        runs: result.runs,
+        pixelCount: result.pixelCount
+      }, '*');
+    } catch (error) {
+      if (signal.aborted || (error?.name == 'AbortError')) {return;}
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'paint-area-error',
+        requestID: data.requestID,
+        message: error instanceof Error ? error.message : String(error)
+      }, '*');
+    }
   }
 
   /** Restores hidden colors from persisted user settings.
@@ -178,6 +377,26 @@ export default class TemplateManager {
       this.shouldFilterColor.set(parsedColorID, true);
     } else {
       this.shouldFilterColor.delete(parsedColorID);
+    }
+
+    this.#persistFilteredColors();
+  }
+
+  /** Updates many palette filters with one storage write.
+   * @param {Iterable<number>} colorIDs
+   * @param {boolean} shouldHide
+   * @since 0.99.0
+   */
+  setColorsFiltered(colorIDs, shouldHide) {
+    for (const colorID of colorIDs) {
+      const parsedColorID = Number(colorID);
+      if (!Number.isFinite(parsedColorID)) {continue;}
+
+      if (shouldHide) {
+        this.shouldFilterColor.set(parsedColorID, true);
+      } else {
+        this.shouldFilterColor.delete(parsedColorID);
+      }
     }
 
     this.#persistFilteredColors();
@@ -243,6 +462,58 @@ export default class TemplateManager {
     return {colorID: this.highlightIncorrectColorID, mode: this.highlightIncorrectMode};
   }
 
+  /** Invalidates visible map tiles and resolves after refreshed tile rendering settles.
+   * @returns {Promise<void>}
+   * @since 0.98.0
+   */
+  requestCanvasRefresh() {
+    this.canvasRefreshRevision = (this.canvasRefreshRevision + 1) >>> 0;
+    const revision = this.canvasRefreshRevision;
+
+    return new Promise(resolve => {
+      let started = 0;
+      let completed = 0;
+      let settleTimer = null;
+      let noWorkTimer = null;
+      let hardTimeout = null;
+
+      const finish = () => {
+        clearTimeout(settleTimer);
+        clearTimeout(noWorkTimer);
+        clearTimeout(hardTimeout);
+        window.removeEventListener('message', handleProgress);
+        resolve();
+      };
+      const scheduleSettle = () => {
+        if (!started || (completed < started)) {return;}
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(finish, 180);
+      };
+      const handleProgress = event => {
+        const data = event.data;
+        if ((data?.source != 'blue-marble') || (data?.action != 'refresh-progress') || (Number(data?.revision) != revision)) {return;}
+
+        if (data.state == 'started') {
+          started++;
+          clearTimeout(noWorkTimer);
+          clearTimeout(settleTimer);
+        } else if (data.state == 'completed') {
+          completed++;
+          scheduleSettle();
+        }
+      };
+
+      window.addEventListener('message', handleProgress);
+      noWorkTimer = setTimeout(finish, 1200);
+      hardTimeout = setTimeout(finish, 10000);
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'refresh-tiles',
+        revision: revision
+      }, '*');
+    });
+  }
+
   /** Creates the JSON object to store templates in
    * @returns {{ whoami: string, scriptVersion: string, schemaVersion: string, templates: Object }} The JSON object
    * @since 0.65.4
@@ -264,56 +535,74 @@ export default class TemplateManager {
    */
   async createTemplate(blob, name, coords) {
 
-    // Creates the JSON object if it does not already exist
-    if (!this.templatesJSON) {this.templatesJSON = await this.createJSON(); console.log(`Creating JSON...`);}
+    this.templateStatisticsState = 'loading';
+    this.#emitTemplatesChanged('create-started');
 
-    this.windowMain.handleDisplayStatus(`Creating template at ${coords.join(', ')}...`);
+    try {
+      const hasWritableTemplateStore = ['BlueMarble', 'Chromora'].includes(this.templatesJSON?.whoami)
+        && this.templatesJSON?.schemaVersion == this.schemaVersion
+        && this.templatesJSON?.templates
+        && (typeof this.templatesJSON.templates == 'object')
+        && !Array.isArray(this.templatesJSON.templates);
 
-    // Creates a new template instance
-    const template = new Template({
-      displayName: name,
-      sortID: 0, // Object.keys(this.templatesJSON.templates).length || 0, // Uncomment this to enable multiple templates (1/2)
-      authorID: numberToEncoded(this.userID || 0, this.encodingBase),
-      file: blob,
-      coords: coords
-    });
+      // Rebuilds missing, stale, or damaged storage before writing a new template.
+      if (!hasWritableTemplateStore) {this.templatesJSON = await this.createJSON(); console.log(`Creating JSON...`);}
 
-    // Does the user want to skip transparent tiles while creating templates?
-    const shouldSkipTransTiles = !this.settingsManager?.userSettings?.flags?.includes('hl-noSkip');
+      this.windowMain.handleDisplayStatus(`Creating template at ${coords.join(', ')}...`);
 
-    // Does the user want to aggressively skip transparent tiles while creating templates?
-    const shouldAggSkipTransTiles = this.settingsManager?.userSettings?.flags?.includes('hl-agSkip');
+      // Creates a new template instance
+      const template = new Template({
+        displayName: name,
+        sortID: 0, // Object.keys(this.templatesJSON.templates).length || 0, // Uncomment this to enable multiple templates (1/2)
+        authorID: numberToEncoded(this.userID || 0, this.encodingBase),
+        file: blob,
+        coords: coords
+      });
 
-    console.log(`Should Skip: ${shouldSkipTransTiles}; Should Agg Skip: ${shouldAggSkipTransTiles}`);
+      // Does the user want to skip transparent tiles while creating templates?
+      const shouldSkipTransTiles = !this.settingsManager?.userSettings?.flags?.includes('hl-noSkip');
+
+      // Does the user want to aggressively skip transparent tiles while creating templates?
+      const shouldAggSkipTransTiles = this.settingsManager?.userSettings?.flags?.includes('hl-agSkip');
+
+      console.log(`Should Skip: ${shouldSkipTransTiles}; Should Agg Skip: ${shouldAggSkipTransTiles}`);
+
+      const { templateTiles, templateTilesBuffers } = await template.createTemplateTiles(this.tileSize, this.paletteBM, shouldSkipTransTiles, shouldAggSkipTransTiles); // Chunks the tiles
     
-    const { templateTiles, templateTilesBuffers } = await template.createTemplateTiles(this.tileSize, this.paletteBM, shouldSkipTransTiles, shouldAggSkipTransTiles); // Chunks the tiles
-    
-    template.chunked = templateTiles; // Stores the chunked tile bitmaps
+      template.chunked = templateTiles; // Stores the chunked tile bitmaps
 
-    // Converts total pixel Object/Map variables into JSON-ready format
-    const _pixels = { "total": template.pixelCount.total, "colors": Object.fromEntries(template.pixelCount.colors) }
+      // Converts total pixel Object/Map variables into JSON-ready format
+      const _pixels = { "total": template.pixelCount.total, "colors": Object.fromEntries(template.pixelCount.colors) }
 
-    // Appends a child into the templates object
-    // The child's name is the number of templates already in the list (sort order) plus the encoded player ID
-    this.templatesJSON.templates[`${template.sortID} ${template.authorID}`] = {
-      "name": template.displayName, // Display name of template
-      "coords": coords.join(', '), // The coords of the template
-      "enabled": true,
-      "pixels": _pixels, // The total pixels in the template
-      "tiles": templateTilesBuffers // Stores the chunked tile buffers
-    };
+      // Appends a child into the templates object
+      // The child's name is the number of templates already in the list (sort order) plus the encoded player ID
+      this.templatesJSON.templates[`${template.sortID} ${template.authorID}`] = {
+        "name": template.displayName, // Display name of template
+        "coords": coords.join(', '), // The coords of the template
+        "enabled": true,
+        "pixels": _pixels, // The total pixels in the template
+        "tiles": templateTilesBuffers // Stores the chunked tile buffers
+      };
 
-    this.templatesArray = []; // Remove this to enable multiple templates (2/2)
-    this.templatesArray.push(template); // Pushes the Template object instance to the Template Array
+      this.templatesArray = []; // Remove this to enable multiple templates (2/2)
+      this.templatesArray.push(template); // Pushes the Template object instance to the Template Array
 
-    this.windowMain.handleDisplayStatus(`Template created at ${coords.join(', ')}!`);
+      this.windowMain.handleDisplayStatus(`Template created at ${coords.join(', ')}!`);
 
-    console.log(Object.keys(this.templatesJSON.templates).length);
-    console.log(this.templatesJSON);
-    console.log(this.templatesArray);
-    console.log(JSON.stringify(this.templatesJSON));
+      console.log(Object.keys(this.templatesJSON.templates).length);
+      console.log(this.templatesJSON);
+      console.log(this.templatesArray);
+      console.log(JSON.stringify(this.templatesJSON));
 
-    await this.#storeTemplates();
+      await this.#storeTemplates();
+      this.templateStatisticsState = 'ready';
+      this.#emitTemplatesChanged('created');
+      return template;
+    } catch (error) {
+      this.templateStatisticsState = 'error';
+      this.#emitTemplatesChanged('create-failed');
+      throw error;
+    }
   }
 
   /** Generates a {@link Template} class instance from the JSON object template.
@@ -348,7 +637,7 @@ export default class TemplateManager {
    * @since 0.72.7
    */
   async #storeTemplates() {
-    GM.setValue('bmTemplates', JSON.stringify(this.templatesJSON));
+    await GM.setValue('bmTemplates', JSON.stringify(this.templatesJSON));
   }
 
   /** Deletes a template from the JSON object.
@@ -572,9 +861,10 @@ export default class TemplateManager {
     if (!this.templatesShouldBeDrawn) {return tileBlob;}
 
     const drawSize = this.tileSize * this.drawMult; // Calculate draw multiplier for scaling
+    const numericTileCoords = [Number(tileCoords[0]) || 0, Number(tileCoords[1]) || 0];
 
     // Format tile coordinates with proper padding for consistent lookup
-    tileCoords = tileCoords[0].toString().padStart(4, '0') + ',' + tileCoords[1].toString().padStart(4, '0');
+    tileCoords = numericTileCoords[0].toString().padStart(4, '0') + ',' + numericTileCoords[1].toString().padStart(4, '0');
 
     console.log(`Searching for templates in tile: "${tileCoords}"`);
 
@@ -604,6 +894,7 @@ export default class TemplateManager {
             instance: template,
             bitmap: template.chunked[tile],
             chunked32: template.chunked32?.[tile],
+            chunkKey: tile,
             tileCoords: [coords[0], coords[1]],
             pixelCoords: [coords[2], coords[3]]
           }
@@ -702,6 +993,16 @@ export default class TemplateManager {
 
       const coordXtoDrawAt = Number(template.pixelCoords[0]) * this.drawMult;
       const coordYtoDrawAt = Number(template.pixelCoords[1]) * this.drawMult;
+      const templateOrigin = Array.isArray(template.instance.coords) ? template.instance.coords.map(Number) : null;
+      const highlightGridOrigin = templateOrigin?.every(Number.isFinite)
+        ? [
+            (((numericTileCoords[0] - templateOrigin[0]) * this.tileSize) + Number(template.pixelCoords[0]) - templateOrigin[2]) * this.drawMult,
+            (((numericTileCoords[1] - templateOrigin[1]) * this.tileSize) + Number(template.pixelCoords[1]) - templateOrigin[3]) * this.drawMult
+          ]
+        : [
+            (numericTileCoords[0] * drawSize) + coordXtoDrawAt,
+            (numericTileCoords[1] * drawSize) + coordYtoDrawAt
+          ];
 
       // Draws the template to the tile if there are no colors to filter, and there are no Erased pixels
       if ((this.shouldFilterColor.size == 0) && !templateHasErased) {
@@ -719,14 +1020,17 @@ export default class TemplateManager {
       const {
         correctPixels: pixelsCorrect,
         filteredTemplate: templateAfterFilter
-      } = this.#calculateCorrectPixelsOnTile_And_FilterTile({
+      } = await this.#calculateCorrectPixelsOnTile_And_FilterTile({
         tile: tileBeforeTemplates32,
         template: templateBeforeFilter32,
         templateInfo: [coordXtoDrawAt, coordYtoDrawAt, template.bitmap.width, template.bitmap.height],
         highlightPattern: effectiveHighlightPattern,
         highlightDisabled: highlightDisabled && !hasIncorrectHighlightColor,
         highlightColorID: incorrectHighlightColorID,
-        highlightMode: incorrectHighlightMode
+        highlightMode: incorrectHighlightMode,
+        highlightGridOrigin: highlightGridOrigin,
+        pixelState: template.instance.pixelStateByChunk,
+        chunkKey: template.chunkKey
       });
 
       let pixelsCorrectTotal = 0;
@@ -771,9 +1075,43 @@ export default class TemplateManager {
     console.log(`Importing JSON...`);
     console.log(json);
 
-    // If the passed in JSON is a Blue Marble template object...
-    if (json?.whoami == 'BlueMarble') {
-      await this.#parseBlueMarble(json); // ...parse the template object as Blue Marble
+    this.templateStatisticsState = 'loading';
+    this.#emitTemplatesChanged('import-started');
+    const previousTemplatesJSON = this.templatesJSON;
+    const previousTemplatesArray = this.templatesArray;
+
+    try {
+      // If the passed in JSON is a Blue Marble template object...
+      if (['BlueMarble', 'Chromora'].includes(json?.whoami)) {
+        const {templatesArray: importedTemplates, skippedTemplates} = await this.#parseBlueMarble(json); // ...parse the template object as Blue Marble
+        if (Object.keys(json.templates).length && !importedTemplates.length) {
+          throw new AggregateError(
+            skippedTemplates.map(({error}) => error),
+            'None of the stored templates could be loaded.'
+          );
+        }
+        const importedJSON = skippedTemplates.length
+          ? {...json, templates: {...json.templates}}
+          : json;
+        for (const {templateKey} of skippedTemplates) {
+          delete importedJSON.templates[templateKey];
+        }
+        this.templatesJSON = importedJSON;
+        this.templatesArray = importedTemplates;
+        this.templateStatisticsState = skippedTemplates.length ? 'degraded' : 'ready';
+        this.#emitTemplatesChanged(skippedTemplates.length ? 'imported-with-errors' : 'imported');
+      } else {
+        this.templatesJSON = await this.createJSON();
+        this.templatesArray = [];
+        this.templateStatisticsState = 'ready';
+        this.#emitTemplatesChanged('imported');
+      }
+    } catch (error) {
+      this.templatesJSON = previousTemplatesJSON;
+      this.templatesArray = previousTemplatesArray;
+      this.templateStatisticsState = 'error';
+      this.#emitTemplatesChanged('import-failed');
+      throw error;
     }
   }
 
@@ -785,11 +1123,17 @@ export default class TemplateManager {
 
     console.log(`Parsing BlueMarble...`);
 
-    const templates = json.templates;
+    const templates = json?.templates;
+    if (!templates || (typeof templates != 'object') || Array.isArray(templates)) {
+      throw new TypeError('Stored template data has no valid templates object.');
+    }
 
     console.log(`BlueMarble length: ${Object.keys(templates).length}`);
 
     const schemaVersion = json?.schemaVersion;
+    if (typeof schemaVersion != 'string') {
+      throw new TypeError('Stored template data has no valid schema version.');
+    }
     const schemaVersionArray = schemaVersion.split(/[-\.\+]/); // SemVer -> string[]
     const schemaVersionBleedingEdge = this.schemaVersion.split(/[-\.\+]/); // SemVer -> string[]
     const scriptVersion = json?.scriptVersion;
@@ -808,10 +1152,10 @@ export default class TemplateManager {
       }
 
       // Load using the latest schema loader. It will be fine, probably...
-      this.templatesArray = await loadSchema({
+      return await loadSchema({
         tileSize: this.tileSize,
         drawMult: this.drawMult,
-        templatesArray: this.templatesArray
+        templatesArray: []
       });
 
     } else if (schemaVersionArray[0] < schemaVersionBleedingEdge[0]) {
@@ -820,11 +1164,13 @@ export default class TemplateManager {
       // Spawns a new Template Wizard
       const windowWizard = new WindowWizard(this.name, this.version, this.schemaVersion, this);
       windowWizard.buildWindow();
+      throw new Error(`Template schema ${schemaVersion} must be migrated before loading.`);
     
     } else {
       // We don't know what the schema is. Unsupported?
 
-      this.windowMain.handleDisplayError(`Template version ${schemaVersion} is unsupported.\nUse Blue Marble version ${scriptVersion} or load a new template.`);
+      this.windowMain.handleDisplayError(`Template version ${schemaVersion} is unsupported.\nUse ${this.name} version ${scriptVersion} or load a new template.`);
+      throw new Error(`Template schema ${schemaVersion} is unsupported.`);
     }
 
     /** Loads schema of Blue Marble template storage
@@ -840,18 +1186,17 @@ export default class TemplateManager {
       templatesArray: templatesArray
     }) {
 
-      // Run only if there are templates saved
-      if (Object.keys(templates).length > 0) {
-  
-        // For each template...
-        for (const template in templates) {
-  
-          const templateKey = template; // The identification key for the template. E.g., "0 $Z"
-          const templateValue = templates[template]; // The actual content of the template
-          console.log(`Template Key: ${templateKey}`);
-  
-          if (templates.hasOwnProperty(template)) {
-  
+      const skippedTemplates = [];
+
+      // Each template is isolated so one damaged tile cannot block all remaining templates.
+      for (const [templateKey, templateValue] of Object.entries(templates)) {
+        console.log(`Template Key: ${templateKey}`);
+
+        try {
+          if (!templateValue || (typeof templateValue != 'object')) {
+            throw new TypeError(`Template "${templateKey}" is not an object.`);
+          }
+
             const templateKeyArray = templateKey.split(' '); // E.g., "0 $Z" -> ["0", "$Z"]
             const sortID = Number(templateKeyArray?.[0]); // Sort ID of the template
             const authorID = templateKeyArray?.[1] || '0'; // User ID of the person who exported the template
@@ -863,15 +1208,17 @@ export default class TemplateManager {
               colors: new Map(Object.entries(templateValue.pixels?.colors || {}).map(([key, value]) => [Number(key), value]))
             };
   
-            const tilesbase64 = templateValue.tiles;
+            const tilesbase64 = templateValue.tiles ?? {};
+            if ((typeof tilesbase64 != 'object') || Array.isArray(tilesbase64)) {
+              throw new TypeError(`Template "${templateKey}" has no valid tiles object.`);
+            }
             const templateTiles = {}; // Stores the template bitmap tiles for each tile.
             const templateTiles32 = {}; // Stores the template Uint32Array tiles for each tile.
   
             const actualTileSize = tileSize * drawMult;
   
-            for (const tile in tilesbase64) {
+            for (const tile of Object.keys(tilesbase64)) {
               console.log(tile);
-              if (tilesbase64.hasOwnProperty(tile)) {
                 const encodedTemplateBase64 = tilesbase64[tile];
                 const templateUint8Array = base64ToUint8(encodedTemplateBase64); // Base 64 -> Uint8Array
   
@@ -885,13 +1232,12 @@ export default class TemplateManager {
                 context.drawImage(templateBitmap, 0, 0);
                 const imageData = context.getImageData(0, 0, templateBitmap.width, templateBitmap.height);
                 templateTiles32[tile] = new Uint32Array(imageData.data.buffer);
-              }
             }
   
             // Creates a new Template class instance
             const template = new Template({
               displayName: displayName,
-              sortID: sortID || this.templatesArray?.length || 0,
+              sortID: Number.isFinite(sortID) ? sortID : templatesArray.length,
               authorID: authorID || '',
               //coords: coords,
             });
@@ -900,13 +1246,15 @@ export default class TemplateManager {
             template.chunked32 = templateTiles32;
             
             templatesArray.push(template);
-            console.log(this.templatesArray);
+            console.log(templatesArray);
             console.log(`^^^ This ^^^`);
-          }
+        } catch (error) {
+          skippedTemplates.push({templateKey, error});
+          console.warn(`Blue Marble: Skipping damaged template "${templateKey}".`, error);
         }
       }
 
-      return templatesArray
+      return {templatesArray, skippedTemplates};
     }
   }
 
@@ -937,16 +1285,22 @@ export default class TemplateManager {
    * @param {boolean} params.highlightDisabled - Should highlighting be disabled?
    * @param {number | null} params.highlightColorID - Restricts highlighting to one template color when set
    * @param {'incorrect' | 'missing'} params.highlightMode - Which color-specific highlight mode to use
-   * @returns {{correctPixels: Map<number, number>, filteredTemplate: Uint32Array}} A Map containing the color IDs (keys) and how many correct pixels there are for that color (values)
+   * @param {Array<number>} params.highlightGridOrigin - Absolute subpixel origin used to keep 16x16 zones aligned across map tiles
+   * @param {Map<string, Uint8Array>} params.pixelState - Cached current board state for each template pixel
+   * @param {string} params.chunkKey - Template chunk key owning this tile fragment
+   * @returns {Promise<{correctPixels: Map<number, number>, filteredTemplate: Uint32Array}>} A Map containing the color IDs (keys) and how many correct pixels there are for that color (values)
    */
-  #calculateCorrectPixelsOnTile_And_FilterTile({
+  async #calculateCorrectPixelsOnTile_And_FilterTile({
     tile: tile32, 
     template: template32, 
     templateInfo: templateInformation,
     highlightPattern: highlightPattern,
     highlightDisabled: highlightDisabled,
     highlightColorID: highlightColorID = null,
-    highlightMode: highlightMode = 'incorrect'
+    highlightMode: highlightMode = 'incorrect',
+    highlightGridOrigin: highlightGridOrigin = null,
+    pixelState: pixelStateByChunk = null,
+    chunkKey: chunkKey = null
   }) {
 
     // Size of a pixel in actuality
@@ -963,6 +1317,11 @@ export default class TemplateManager {
     const templateCoordY = templateInformation[1];
     const templateWidth = templateInformation[2];
     const templateHeight = templateInformation[3];
+    const templatePixelWidth = Math.floor(templateWidth / pixelSize);
+    const templatePixelHeight = Math.floor(templateHeight / pixelSize);
+    const currentPixelState = new Uint8Array(templatePixelWidth * templatePixelHeight);
+    const highlightGridOriginX = Number.isFinite(Number(highlightGridOrigin?.[0])) ? Number(highlightGridOrigin[0]) : templateCoordX;
+    const highlightGridOriginY = Number.isFinite(Number(highlightGridOrigin?.[1])) ? Number(highlightGridOrigin[1]) : templateCoordY;
     const tolerance = this.paletteTolerance;
 
     //console.log(`TemplateX: ${templateCoordX}\nTemplateY: ${templateCoordY}\nStarting Row:${templateCoordY+tilePixelOffsetY}\nStarting Column:${templateCoordX+tilePixelOffsetX}`);
@@ -987,26 +1346,32 @@ export default class TemplateManager {
     const incorrectHighlights = [];
     const maxIncorrectHighlightMarkers = 900;
     const incorrectHighlightBucketSize = pixelSize * 10;
+    const incorrectHighlightBucketStride = Math.ceil(templateWidth / incorrectHighlightBucketSize) + 2;
     const incorrectHighlightBuckets = new Set();
     const missingHighlightBucketSize = pixelSize * 16;
     const missingHighlightBuckets = new Map();
-    const queueIncorrectHighlight = ({row, column, color}) => {
+    const getMissingBucketKey = (bucketRow, bucketColumn) => {
+      if ((bucketRow < 0) || (bucketColumn < 0)) {return -1;}
+      const diagonal = bucketRow + bucketColumn;
+      return ((diagonal * (diagonal + 1)) / 2) + bucketColumn;
+    };
+    const queueIncorrectHighlight = ({row, column}) => {
       if (incorrectHighlights.length >= maxIncorrectHighlightMarkers) {return;}
 
-      const bucketKey = `${Math.floor(row / incorrectHighlightBucketSize)},${Math.floor(column / incorrectHighlightBucketSize)}`;
+      const bucketKey = (Math.floor(row / incorrectHighlightBucketSize) * incorrectHighlightBucketStride)
+        + Math.floor(column / incorrectHighlightBucketSize);
       if (incorrectHighlightBuckets.has(bucketKey)) {return;}
 
       incorrectHighlightBuckets.add(bucketKey);
       incorrectHighlights.push({
         row: row,
-        column: column,
-        color: color
+        column: column
       });
     };
-    const queueMissingHighlight = ({row, column, color}) => {
-      const bucketRow = Math.floor(row / missingHighlightBucketSize);
-      const bucketColumn = Math.floor(column / missingHighlightBucketSize);
-      const bucketKey = `${bucketRow},${bucketColumn}`;
+    const queueMissingHighlight = ({row, column}) => {
+      const bucketRow = Math.floor((highlightGridOriginY + row) / missingHighlightBucketSize);
+      const bucketColumn = Math.floor((highlightGridOriginX + column) / missingHighlightBucketSize);
+      const bucketKey = getMissingBucketKey(bucketRow, bucketColumn);
       const bucket = missingHighlightBuckets.get(bucketKey);
 
       if (bucket) {
@@ -1015,25 +1380,26 @@ export default class TemplateManager {
         bucket.minColumn = Math.min(bucket.minColumn, column);
         bucket.maxColumn = Math.max(bucket.maxColumn, column);
         bucket.count++;
-        bucket.cells.push([row, column]);
         return;
       }
 
       missingHighlightBuckets.set(bucketKey, {
         bucketRow: bucketRow,
         bucketColumn: bucketColumn,
+        bucketKey: bucketKey,
         bucketSize: missingHighlightBucketSize,
+        bucketTop: (bucketRow * missingHighlightBucketSize) - highlightGridOriginY,
+        bucketLeft: (bucketColumn * missingHighlightBucketSize) - highlightGridOriginX,
         minRow: row,
         maxRow: row,
         minColumn: column,
         maxColumn: column,
-        count: 1,
-        color: color,
-        cells: [[row, column]]
+        count: 1
       });
     };
 
     // For each center pixel...
+    let workSliceStarted = performance.now();
     for (let templateRow = 1; templateRow < templateHeight; templateRow += pixelSize) {
       for (let templateColumn = 1; templateColumn < templateWidth; templateColumn += pixelSize) {
         // ROWS ARE VERTICAL. "ROWS" AS IN, LIKE ON A SPREADSHEET
@@ -1058,6 +1424,14 @@ export default class TemplateManager {
 
         // Finds the best matching color ID for the tile pixel. If none is found, default to "-2"
         const bestTileColorID = lookupTable.get(tilePixelAbove) ?? -2;
+
+        const stateIndex = (Math.floor((templateRow - 1) / pixelSize) * templatePixelWidth)
+          + Math.floor((templateColumn - 1) / pixelSize);
+        if ((templatePixelAlpha > tolerance) && (bestTemplateColorID > 0)) {
+          currentPixelState[stateIndex] = (tilePixelAlpha <= tolerance)
+            ? 2
+            : (bestTileColorID == bestTemplateColorID ? 1 : 3);
+        }
 
         // -----     COLOR FILTER      -----
         // If this pixel on the template is a color the user wants to hide on the canvas...
@@ -1128,20 +1502,19 @@ export default class TemplateManager {
           // If the tile pixel is NOT transparent, OR the user wants to highlight transparent pixels
           if ((hasHighlightColorFilter && (shouldHighlightSelectedColorMissing || (tilePixelAlpha > tolerance))) || (!hasHighlightColorFilter && (shouldTransparentTilePixelsBeHighlighted || (tilePixelAlpha > tolerance)))) {
 
+            if (hasHighlightColorFilter) {
+              (highlightMode == 'missing' ? queueMissingHighlight : queueIncorrectHighlight)({
+                row: templateRow,
+                column: templateColumn
+              });
+              continue;
+            }
+
             // Obtains the template color of this pixel
             const templatePixelColor = (templatePixelAlpha > tolerance)
               ? template32[(templateRow * templateWidth) + templateColumn]
               : tilePixelAbove;
             // This will retrieve the tile background instead if the color is filtered!
-
-            if (hasHighlightColorFilter) {
-              (highlightMode == 'missing' ? queueMissingHighlight : queueIncorrectHighlight)({
-                row: templateRow,
-                column: templateColumn,
-                color: templatePixelColor
-              });
-              continue;
-            }
 
             // For each of the 9 subpixels inside the pixel...
             for (const subpixelPattern of highlightPattern) {
@@ -1192,22 +1565,32 @@ export default class TemplateManager {
         const colorIDcount = _colorpalette.get(bestTemplateColorID);
         _colorpalette.set(bestTemplateColorID, colorIDcount ? colorIDcount + 1 : 1);
       }
+
+      if ((performance.now() - workSliceStarted) >= 4) {
+        await this.#yieldToBrowser();
+        workSliceStarted = performance.now();
+      }
     }
 
     if (hasHighlightColorFilter && (highlightMode == 'missing')) {
-      const missingHighlightClusters = this.#buildMissingHighlightClusters(missingHighlightBuckets, 96);
+      await this.#yieldToBrowser();
+      const missingHighlightClusters = await this.#buildMissingHighlightClusters(missingHighlightBuckets, 96);
+      await this.#yieldToBrowser();
       for (const cluster of missingHighlightClusters) {
         this.#drawMissingHighlightCluster({
           template: template32,
           templateWidth: templateWidth,
           templateHeight: templateHeight,
           cluster: cluster,
-          colors: incorrectHighlightColors,
-          phase: incorrectHighlightPhase,
           pixelSize: pixelSize
         });
+        if ((performance.now() - workSliceStarted) >= 4) {
+          await this.#yieldToBrowser();
+          workSliceStarted = performance.now();
+        }
       }
     } else {
+      const markerStencil = this.#getIncorrectHighlightStencil(incorrectHighlightColors, incorrectHighlightPhase);
       for (const highlight of incorrectHighlights) {
         this.#drawIncorrectHighlightMarker({
           template: template32,
@@ -1215,11 +1598,17 @@ export default class TemplateManager {
           templateHeight: templateHeight,
           row: highlight.row,
           column: highlight.column,
-          centerColor: highlight.color,
-          colors: incorrectHighlightColors,
-          phase: incorrectHighlightPhase
+          stencil: markerStencil
         });
+        if ((performance.now() - workSliceStarted) >= 4) {
+          await this.#yieldToBrowser();
+          workSliceStarted = performance.now();
+        }
       }
+    }
+
+    if ((pixelStateByChunk instanceof Map) && chunkKey) {
+      pixelStateByChunk.set(chunkKey, currentPixelState);
     }
 
     console.log(`List of template pixels that match the tile:`);
@@ -1227,17 +1616,30 @@ export default class TemplateManager {
     return { correctPixels: _colorpalette, filteredTemplate: template32 };
   }
 
+  /** Lets input and animation frames run between expensive tile-render slices.
+   * @returns {Promise<void>}
+   * @since 0.98.0
+   */
+  async #yieldToBrowser() {
+    if (typeof globalThis.scheduler?.yield === 'function') {
+      await globalThis.scheduler.yield();
+      return;
+    }
+    await new Promise(resolve => requestAnimationFrame(() => resolve()));
+  }
+
   /** Builds connected blob bounds for dense missing-pixel highlighting.
-   * @param {Map<string, Object>} bucketMap
+   * @param {Map<number, Object>} bucketMap
    * @param {number} maxClusters
-   * @returns {Array<Object>}
+   * @returns {Promise<Array<Object>>}
    * @since 0.97.0
    */
-  #buildMissingHighlightClusters(bucketMap, maxClusters) {
+  async #buildMissingHighlightClusters(bucketMap, maxClusters) {
     if (!bucketMap?.size) {return [];}
 
     const visited = new Set();
     const clusters = [];
+    let workSliceStarted = performance.now();
     const neighborDeltas = [
       [-1, -1], [-1, 0], [-1, 1],
       [0, -1], [0, 1],
@@ -1254,7 +1656,6 @@ export default class TemplateManager {
         minColumn: startBucket.minColumn,
         maxColumn: startBucket.maxColumn,
         count: 0,
-        color: startBucket.color,
         buckets: []
       };
       visited.add(bucketKey);
@@ -1269,7 +1670,11 @@ export default class TemplateManager {
         cluster.buckets.push(bucket);
 
         for (const [rowDelta, columnDelta] of neighborDeltas) {
-          const neighborKey = `${bucket.bucketRow + rowDelta},${bucket.bucketColumn + columnDelta}`;
+          const neighborRow = bucket.bucketRow + rowDelta;
+          const neighborColumn = bucket.bucketColumn + columnDelta;
+          if ((neighborRow < 0) || (neighborColumn < 0)) {continue;}
+          const diagonal = neighborRow + neighborColumn;
+          const neighborKey = ((diagonal * (diagonal + 1)) / 2) + neighborColumn;
           if (visited.has(neighborKey)) {continue;}
 
           const neighbor = bucketMap.get(neighborKey);
@@ -1277,6 +1682,11 @@ export default class TemplateManager {
 
           visited.add(neighborKey);
           queue.push(neighbor);
+        }
+
+        if ((performance.now() - workSliceStarted) >= 4) {
+          await this.#yieldToBrowser();
+          workSliceStarted = performance.now();
         }
       }
 
@@ -1294,8 +1704,6 @@ export default class TemplateManager {
    * @param {number} params.templateWidth
    * @param {number} params.templateHeight
    * @param {Object} params.cluster
-   * @param {Object} params.colors
-   * @param {number} params.phase
    * @param {number} params.pixelSize
    * @since 0.97.0
    */
@@ -1304,185 +1712,165 @@ export default class TemplateManager {
     templateWidth: templateWidth,
     templateHeight: templateHeight,
     cluster: cluster,
-    colors: colors,
-    phase: phase,
     pixelSize: pixelSize
   }) {
-    const padding = pixelSize * 2;
-    const outerThickness = Math.max(1, Math.round(pixelSize * 0.58));
-    const softColors = {
-      cyan: 0xC8FFFB00
+    const contourColor = 0xC8FFFB00;
+    const logicalWidth = Math.ceil(templateWidth / pixelSize);
+    const logicalHeight = Math.ceil(templateHeight / pixelSize);
+    // Sweep half-open logical-pixel rectangles into constant-coverage horizontal slabs.
+    const events = new Map();
+
+    const addEvent = (row, type, rectangle) => {
+      const event = events.get(row) ?? {add: [], remove: []};
+      event[type].push(rectangle);
+      events.set(row, event);
     };
-    const protectedPixels = new Set();
-    const protectedRadius = Math.floor(pixelSize / 2);
-
-    for (const bucket of cluster.buckets) {
-      for (const [row, column] of bucket.cells) {
-        for (let rowDelta = -protectedRadius; rowDelta <= protectedRadius; rowDelta++) {
-          for (let columnDelta = -protectedRadius; columnDelta <= protectedRadius; columnDelta++) {
-            protectedPixels.add(((row + rowDelta) * templateWidth) + (column + columnDelta));
-          }
-        }
-      }
-    }
-
-    const setPixel = (row, column, color) => {
-      if ((row < 0) || (row >= templateHeight) || (column < 0) || (column >= templateWidth)) {return;}
-      if (protectedPixels.has((row * templateWidth) + column)) {return;}
-      template32[(row * templateWidth) + column] = color;
-    };
-
-    const contourColor = () => {
-      return softColors.cyan;
-    };
-
-    const drawHorizontal = (row, startColumn, endColumn) => {
-      if (startColumn > endColumn) {return;}
-      for (let column = startColumn; column <= endColumn; column++) {
-        setPixel(row, column, contourColor());
-      }
-    };
-
-    const addInterval = (intervalsByRow, row, startColumn, endColumn) => {
-      if (startColumn > endColumn) {return;}
-      const intervals = intervalsByRow.get(row) ?? [];
-      intervals.push([startColumn, endColumn]);
-      intervalsByRow.set(row, intervals);
-    };
-
-    const mergeIntervals = (intervals) => {
-      if (!intervals?.length) {return [];}
-
+    const mergeIntervals = intervals => {
+      if (!intervals.length) {return [];}
       const sorted = intervals.slice().sort((a, b) => a[0] - b[0]);
-      const merged = [];
-      for (const [startColumn, endColumn] of sorted) {
+      const merged = [sorted[0].slice()];
+
+      for (let index = 1; index < sorted.length; index++) {
+        const current = sorted[index];
         const previous = merged[merged.length - 1];
-        if (previous && (startColumn <= previous[1] + 1)) {
-          previous[1] = Math.max(previous[1], endColumn);
+        if (current[0] <= previous[1]) {
+          previous[1] = Math.max(previous[1], current[1]);
         } else {
-          merged.push([startColumn, endColumn]);
+          merged.push(current.slice());
         }
       }
-
       return merged;
     };
-
-    const subtractCoveredIntervals = ([startColumn, endColumn], blockers) => {
-      if (!blockers?.length) {return [[startColumn, endColumn]];}
-
-      const visibleSegments = [];
-      let segmentStart = startColumn;
+    const intervalsEqual = (first, second) => (
+      first.length == second.length
+      && first.every((interval, index) => interval[0] == second[index][0] && interval[1] == second[index][1])
+    );
+    const subtractIntervals = ([start, end], blockers) => {
+      const visible = [];
+      let cursor = start;
 
       for (const [blockStart, blockEnd] of blockers) {
-        if (blockEnd < segmentStart) {continue;}
-        if (blockStart > endColumn) {break;}
-
-        if (blockStart > segmentStart) {
-          visibleSegments.push([segmentStart, Math.min(endColumn, blockStart - 1)]);
-        }
-
-        segmentStart = Math.max(segmentStart, blockEnd + 1);
-        if (segmentStart > endColumn) {break;}
+        if (blockEnd <= cursor) {continue;}
+        if (blockStart >= end) {break;}
+        if (blockStart > cursor) {visible.push([cursor, Math.min(end, blockStart)]);}
+        cursor = Math.max(cursor, blockEnd);
+        if (cursor >= end) {break;}
       }
-
-      if (segmentStart <= endColumn) {
-        visibleSegments.push([segmentStart, endColumn]);
-      }
-
-      return visibleSegments;
+      if (cursor < end) {visible.push([cursor, end]);}
+      return visible;
     };
 
-    const filledIntervalsByRow = new Map();
     for (const bucket of cluster.buckets) {
-      const bucketTop = bucket.bucketRow * bucket.bucketSize;
-      const bucketLeft = bucket.bucketColumn * bucket.bucketSize;
-      const bucketBottom = bucketTop + bucket.bucketSize - 1;
-      const bucketRight = bucketLeft + bucket.bucketSize - 1;
-      const top = Math.max(0, Math.floor(bucketTop - padding));
-      const bottom = Math.min(templateHeight - 1, Math.ceil(bucketBottom + padding));
-      const left = Math.max(0, Math.floor(bucketLeft - padding));
-      const right = Math.min(templateWidth - 1, Math.ceil(bucketRight + padding));
+      const top = Math.round(bucket.bucketTop / pixelSize);
+      const left = Math.round(bucket.bucketLeft / pixelSize);
+      const size = Math.round(bucket.bucketSize / pixelSize);
+      const rectangle = {
+        top: top,
+        bottom: top + size,
+        left: left,
+        right: left + size
+      };
+      addEvent(rectangle.top, 'add', rectangle);
+      addEvent(rectangle.bottom, 'remove', rectangle);
+    }
 
-      for (let row = top; row <= bottom; row++) {
-        addInterval(filledIntervalsByRow, row, left, right);
+    const eventRows = Array.from(events.keys()).sort((a, b) => a - b);
+    const activeRectangles = new Set();
+    const slabs = [];
+
+    for (let eventIndex = 0; eventIndex < eventRows.length - 1; eventIndex++) {
+      const top = eventRows[eventIndex];
+      const nextTop = eventRows[eventIndex + 1];
+      const event = events.get(top);
+
+      for (const rectangle of event.remove) {activeRectangles.delete(rectangle);}
+      for (const rectangle of event.add) {activeRectangles.add(rectangle);}
+      if (!activeRectangles.size || (nextTop <= top)) {continue;}
+
+      const intervals = mergeIntervals(Array.from(activeRectangles, rectangle => [rectangle.left, rectangle.right]));
+      const previousSlab = slabs[slabs.length - 1];
+      if (previousSlab && (previousSlab.bottom == top) && intervalsEqual(previousSlab.intervals, intervals)) {
+        previousSlab.bottom = nextTop;
+      } else {
+        slabs.push({top: top, bottom: nextTop, intervals: intervals});
       }
     }
 
-    const mergedIntervalsByRow = new Map();
-    for (const [row, intervals] of filledIntervalsByRow) {
-      mergedIntervalsByRow.set(row, mergeIntervals(intervals));
-    }
+    const drawHorizontal = (row, startColumn, endColumn) => {
+      const start = Math.max(0, startColumn);
+      const end = Math.min(logicalWidth, endColumn);
+      if ((row < 0) || (row >= logicalHeight) || (start >= end)) {return;}
 
-    const rows = Array.from(mergedIntervalsByRow.keys()).sort((a, b) => a - b);
-    for (const row of rows) {
-      const currentIntervals = mergedIntervalsByRow.get(row) ?? [];
-      const previousIntervals = mergedIntervalsByRow.get(row - 1) ?? [];
-      const nextIntervals = mergedIntervalsByRow.get(row + 1) ?? [];
-
-      for (const interval of currentIntervals) {
-        const [left, right] = interval;
-
-        for (const [startColumn, endColumn] of subtractCoveredIntervals(interval, previousIntervals)) {
-          for (let offset = 0; offset <= outerThickness; offset++) {
-            drawHorizontal(row + offset, startColumn, endColumn);
-          }
-        }
-
-        for (const [startColumn, endColumn] of subtractCoveredIntervals(interval, nextIntervals)) {
-          for (let offset = 0; offset <= outerThickness; offset++) {
-            drawHorizontal(row - offset, startColumn, endColumn);
-          }
-        }
-
-        for (let offset = 0; offset <= outerThickness; offset++) {
-          setPixel(row, left + offset, contourColor());
-          setPixel(row, right - offset, contourColor());
-        }
+      const firstSubpixelRow = row * pixelSize;
+      const finalSubpixelRow = Math.min(templateHeight, firstSubpixelRow + pixelSize);
+      const firstSubpixelColumn = start * pixelSize;
+      const finalSubpixelColumn = Math.min(templateWidth, end * pixelSize);
+      for (let subpixelRow = firstSubpixelRow; subpixelRow < finalSubpixelRow; subpixelRow++) {
+        template32.fill(contourColor, (subpixelRow * templateWidth) + firstSubpixelColumn, (subpixelRow * templateWidth) + finalSubpixelColumn);
       }
-    }
-  }
-
-  /** Returns the same Uint32 RGBA color with a new alpha channel.
-   * @param {number} color
-   * @param {number} alpha
-   * @returns {number}
-   * @since 0.97.0
-   */
-  #withAlpha(color, alpha) {
-    return (color & 0x00FFFFFF) | ((Math.max(0, Math.min(255, alpha)) & 0xFF) << 24);
-  }
-
-  /** Draws a loud marker around one incorrect pixel for color-specific highlighting.
-   * @param {Object} params
-   * @param {Uint32Array} params.template
-   * @param {number} params.templateWidth
-   * @param {number} params.templateHeight
-   * @param {number} params.row
-   * @param {number} params.column
-   * @param {number} params.centerColor
-   * @param {Object} params.colors
-   * @param {number} params.phase
-   * @since 0.97.0
-   */
-  #drawIncorrectHighlightMarker({
-    template: template32,
-    templateWidth: templateWidth,
-    templateHeight: templateHeight,
-    row: templateRow,
-    column: templateColumn,
-    centerColor: centerColor,
-    colors: colors,
-    phase: phase
-  }) {
-    const setSubpixel = (rowDelta, columnDelta, color) => {
-      const row = templateRow + rowDelta;
-      const column = templateColumn + columnDelta;
-      if ((row < 0) || (row >= templateHeight) || (column < 0) || (column >= templateWidth)) {return;}
-      template32[(row * templateWidth) + column] = color;
     };
+    const drawVertical = (column, startRow, endRow) => {
+      const start = Math.max(0, startRow);
+      const end = Math.min(logicalHeight, endRow);
+      if ((column < 0) || (column >= logicalWidth) || (start >= end)) {return;}
 
+      const firstSubpixelColumn = column * pixelSize;
+      const finalSubpixelColumn = Math.min(templateWidth, firstSubpixelColumn + pixelSize);
+      for (let row = start; row < end; row++) {
+        const firstSubpixelRow = row * pixelSize;
+        const finalSubpixelRow = Math.min(templateHeight, firstSubpixelRow + pixelSize);
+        for (let subpixelRow = firstSubpixelRow; subpixelRow < finalSubpixelRow; subpixelRow++) {
+          template32.fill(contourColor, (subpixelRow * templateWidth) + firstSubpixelColumn, (subpixelRow * templateWidth) + finalSubpixelColumn);
+        }
+      }
+    };
+    const drawPixel = (row, column) => drawHorizontal(row, column, column + 1);
+
+    for (let slabIndex = 0; slabIndex < slabs.length; slabIndex++) {
+      const slab = slabs[slabIndex];
+      const previousSlab = slabs[slabIndex - 1];
+      const nextSlab = slabs[slabIndex + 1];
+      const previousIntervals = previousSlab && (previousSlab.bottom == slab.top) ? previousSlab.intervals : [];
+      const nextIntervals = nextSlab && (slab.bottom == nextSlab.top) ? nextSlab.intervals : [];
+
+      for (const interval of slab.intervals) {
+        const [left, right] = interval;
+        drawVertical(left, slab.top, slab.bottom);
+        drawVertical(right - 1, slab.top, slab.bottom);
+
+        for (const [start, end] of subtractIntervals(interval, previousIntervals)) {
+          drawHorizontal(slab.top, start, end);
+          if (start > left) {drawPixel(slab.top, start - 1);}
+          if (end < right) {drawPixel(slab.top, end);}
+        }
+        for (const [start, end] of subtractIntervals(interval, nextIntervals)) {
+          const bottomRow = slab.bottom - 1;
+          drawHorizontal(bottomRow, start, end);
+          if (start > left) {drawPixel(bottomRow, start - 1);}
+          if (end < right) {drawPixel(bottomRow, end);}
+        }
+      }
+    }
+  }
+
+  /** Builds one reusable marker stencil for the current animation phase.
+   * @param {Object} colors
+   * @param {number} phase
+   * @returns {Array<number>}
+   * @since 0.98.0
+   */
+  #getIncorrectHighlightStencil(colors, phase) {
+    const normalizedPhase = phase % 12;
+    const cacheKey = `${this.drawMult}:${normalizedPhase}`;
+    const cachedStencil = this.incorrectHighlightStencilCache.get(cacheKey);
+    if (cachedStencil) {return cachedStencil;}
+
+    const stencil = [];
+    const push = (rowDelta, columnDelta, color) => {
+      stencil.push(rowDelta, columnDelta, color);
+    };
     const pixelSize = this.drawMult;
-    const radiusPixels = 10 + (phase % 4);
+    const radiusPixels = 10 + (normalizedPhase % 4);
     const waveRadius = radiusPixels * pixelSize;
     const innerRadius = Math.max(pixelSize * 3, waveRadius - (pixelSize * 4));
     const midRadius = Math.max(pixelSize * 2, waveRadius - (pixelSize * 2));
@@ -1490,16 +1878,16 @@ export default class TemplateManager {
     const midRingThickness = pixelSize * 0.46;
     const innerRingThickness = pixelSize * 0.4;
     const spokeHalfThickness = Math.max(0, Math.floor(pixelSize * 0.22));
-    const phaseIsEven = (phase & 1) == 0;
-    const phaseModThree = phase % 3;
-
+    const phaseIsEven = (normalizedPhase & 1) == 0;
+    const phaseModThree = normalizedPhase % 3;
     const crossStart = Math.max(1, pixelSize);
     const crossEnd = Math.max(crossStart + 1, pixelSize * 2);
+
     for (let offset = crossStart; offset <= crossEnd; offset++) {
-      setSubpixel(-offset, 0, colors.yellow);
-      setSubpixel(offset, 0, colors.yellow);
-      setSubpixel(0, -offset, colors.yellow);
-      setSubpixel(0, offset, colors.yellow);
+      push(-offset, 0, colors.yellow);
+      push(offset, 0, colors.yellow);
+      push(0, -offset, colors.yellow);
+      push(0, offset, colors.yellow);
     }
 
     for (let rowDelta = -waveRadius; rowDelta <= waveRadius; rowDelta++) {
@@ -1509,31 +1897,61 @@ export default class TemplateManager {
         const isMidRing = Math.abs(distance - midRadius) <= midRingThickness;
         const isInnerRing = Math.abs(distance - innerRadius) <= innerRingThickness;
         const isSpoke = (
-          ((Math.abs(rowDelta) <= spokeHalfThickness) && (Math.abs(columnDelta) >= crossStart) && (Math.abs(columnDelta) <= waveRadius) && (((Math.abs(columnDelta) / pixelSize) + phase) % 5 < 1))
-          || ((Math.abs(columnDelta) <= spokeHalfThickness) && (Math.abs(rowDelta) >= crossStart) && (Math.abs(rowDelta) <= waveRadius) && (((Math.abs(rowDelta) / pixelSize) + phase) % 5 < 1))
+          ((Math.abs(rowDelta) <= spokeHalfThickness) && (Math.abs(columnDelta) >= crossStart) && (Math.abs(columnDelta) <= waveRadius) && (((Math.abs(columnDelta) / pixelSize) + normalizedPhase) % 5 < 1))
+          || ((Math.abs(columnDelta) <= spokeHalfThickness) && (Math.abs(rowDelta) >= crossStart) && (Math.abs(rowDelta) <= waveRadius) && (((Math.abs(rowDelta) / pixelSize) + normalizedPhase) % 5 < 1))
         );
 
         if (!isOuterRing && !isMidRing && !isInnerRing && !isSpoke) {continue;}
 
         if (isOuterRing && (((Math.floor((Math.atan2(rowDelta, columnDelta) + Math.PI) * 6) + phaseModThree) % 3) == 0)) {
-          setSubpixel(rowDelta, columnDelta, colors.white);
-          continue;
-        }
-
-        if (isOuterRing) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.cyan : colors.blue);
+          push(rowDelta, columnDelta, colors.white);
+        } else if (isOuterRing) {
+          push(rowDelta, columnDelta, phaseIsEven ? colors.cyan : colors.blue);
         } else if (isMidRing) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.yellow : colors.cyan);
+          push(rowDelta, columnDelta, phaseIsEven ? colors.yellow : colors.cyan);
         } else if (isInnerRing) {
-          setSubpixel(rowDelta, columnDelta, colors.coral);
-        } else if (isSpoke) {
-          setSubpixel(rowDelta, columnDelta, phaseIsEven ? colors.blue : colors.yellow);
+          push(rowDelta, columnDelta, colors.coral);
+        } else {
+          push(rowDelta, columnDelta, phaseIsEven ? colors.blue : colors.yellow);
         }
       }
     }
 
     for (const [rowDelta, columnDelta] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
-      setSubpixel(rowDelta, columnDelta, colors.yellow);
+      push(rowDelta, columnDelta, colors.yellow);
+    }
+
+    this.incorrectHighlightStencilCache.set(cacheKey, stencil);
+    return stencil;
+  }
+
+  /** Draws a loud marker around one incorrect pixel for color-specific highlighting.
+   * @param {Object} params
+   * @param {Uint32Array} params.template
+   * @param {number} params.templateWidth
+   * @param {number} params.templateHeight
+   * @param {number} params.row
+   * @param {number} params.column
+   * @param {Array<number>} params.stencil
+   * @since 0.97.0
+   */
+  #drawIncorrectHighlightMarker({
+    template: template32,
+    templateWidth: templateWidth,
+    templateHeight: templateHeight,
+    row: templateRow,
+    column: templateColumn,
+    stencil: stencil
+  }) {
+    const setSubpixel = (rowDelta, columnDelta, color) => {
+      const row = templateRow + rowDelta;
+      const column = templateColumn + columnDelta;
+      if ((row < 0) || (row >= templateHeight) || (column < 0) || (column >= templateWidth)) {return;}
+      template32[(row * templateWidth) + column] = color;
+    };
+
+    for (let index = 0; index < stencil.length; index += 3) {
+      setSubpixel(stencil[index], stencil[index + 1], stencil[index + 2]);
     }
   }
 }

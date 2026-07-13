@@ -41,17 +41,47 @@ The project started with Blue Marble, then grew into a separate liquid-glass too
 
 ## Screenshots
 
-<img src="./docs/assets/blue-marble-1.png" alt="Chromora Color Filter horizontal mode" width="520">
+### Main window
 
-Horizontal layout for fast scanning across large color sets.
+<img src="./docs/assets/chromora-main.png" alt="Chromora main window with template controls and droplet statistics" width="560">
 
-<img src="./docs/assets/blue-marble-2.png" alt="Chromora Color Filter vertical mode" width="360">
+Upload a template, set its coordinates, check your droplets, and open the Color Filter from one compact window.
 
-Vertical layout for a compact persistent tool window.
+### Settings
 
-<img src="./docs/assets/blue-marble-3.png" alt="Chromora Color Filter fullscreen mode" width="520">
+<img src="./docs/assets/chromora-settings.png" alt="Chromora settings window with hotkeys and pixel highlight patterns" width="560">
 
-Fullscreen layout with larger cards and richer statistics.
+Set area-selection hotkeys and choose how unfinished pixels are highlighted.
+
+### Template Wizard
+
+<img src="./docs/assets/chromora-template-wizard.png" alt="Chromora Template Wizard showing a detected template" width="600">
+
+Check saved templates and their storage status before loading them.
+
+### Credits
+
+<img src="./docs/assets/chromora-credits.png" alt="Chromora credits window" width="600">
+
+Chromora keeps its Blue Marble origins and open-source attribution visible inside the app.
+
+### Color Filter: horizontal
+
+<img src="./docs/assets/chromora-filter-horizontal.png" alt="Chromora Color Filter in horizontal mode" width="900">
+
+Scan many colors while keeping the filter close to the edge of the canvas.
+
+### Color Filter: vertical
+
+<img src="./docs/assets/chromora-filter-vertical.png" alt="Chromora Color Filter in vertical mode" width="420">
+
+Keep a compact color checklist open beside your artwork.
+
+### Color Filter: fullscreen
+
+<img src="./docs/assets/chromora-filter-fullscreen.png" alt="Chromora Color Filter in fullscreen mode with artwork statistics and color cards" width="700">
+
+See overall progress, sort colors, and compare every color's remaining pixels in one view.
 
 ## Installation
 

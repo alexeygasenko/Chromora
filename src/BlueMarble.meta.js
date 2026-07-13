@@ -2,7 +2,7 @@
 // @name            Chromora
 // @name:en         Chromora
 // @namespace       https://github.com/alexeygasenko/
-// @version         1.0.0
+// @version         1.1.0
 // @description     A fluid liquid-glass template, color analysis, pixel highlighting, and assisted drafting toolkit for Wplace.live.
 // @description:en  A fluid liquid-glass template, color analysis, pixel highlighting, and assisted drafting toolkit for Wplace.live.
 // @author          alexeygasenko; based on Blue Marble by SwingTheVine
@@ -17,11 +17,8 @@
 // @grant           GM.setValue
 // @grant           GM_getValue
 // @grant           GM_deleteValue
-// @grant           GM_xmlhttpRequest
 // @grant           GM.download
-// @connect         telemetry.thebluecorner.net
 // @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/34041aef63a7354063db8d6c8881dc5327671ef0/dist/BlueMarble.user.css
-// @antifeature     tracking Anonymous opt-in telemetry data
 // @noframes
 // ==/UserScript==
 

@@ -95,6 +95,7 @@ const resultEsbuild = await esbuild.build({
   format: 'iife', // What format the bundler bundles the code into
   target: 'es2020', // What is the minimum version/year that should be supported? When omited, it attempts to support backwards compatability with legacy browsers
   platform: 'browser', // The platform the bundled code will be operating on
+  loader: {'.png': 'dataurl'}, // Embed UI icons so every userscript flavor stays self-contained.
   legalComments: 'inline', // What level of legal comments are preserved? (Hard: none, Soft: inline)
   minify: false, // Should the code be minified?
   write: false, // Should we write the outfile to the disk?

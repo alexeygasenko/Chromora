@@ -1,6 +1,7 @@
 import Overlay, { minimizeIconExpanded } from "./Overlay";
 import Template from "./Template";
 import TemplateManager from "./templateManager";
+import { closeIcon } from "./uiIcons";
 import { encodedToNumber, escapeHTML, getWplaceVersion, localizeDate, localizeNumber, sleep } from "./utils";
 
 /** Wizard that manages template updates & recovery
@@ -67,7 +68,7 @@ export default class WindowWizard extends Overlay {
           button.onclick = () => instance.handleMinimization(button);
         }).buildElement()
         .addDiv().buildElement() // Contains the minimized h1 element
-        .addButton({'class': 'bm-button-circle', 'textContent': '✖', 'aria-label': 'Close window "Template Wizard"'}, (instance, button) => {
+        .addButton({'class': 'bm-button-circle', 'innerHTML': closeIcon, 'aria-label': 'Close window "Template Wizard"'}, (instance, button) => {
           button.onclick = () => this.handleWindowClose(document.querySelector(`#${this.windowID}`));
         }).buildElement()
       .buildElement()

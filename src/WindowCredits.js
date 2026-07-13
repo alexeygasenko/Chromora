@@ -1,4 +1,5 @@
 import Overlay, { minimizeIconExpanded } from "./Overlay";
+import { closeIcon } from "./uiIcons";
 import { localizeDate } from "./utils";
 
 /** Manages the credits window for Blue Marble.
@@ -41,7 +42,7 @@ export default class WindowCredts extends Overlay {
           button.onclick = () => instance.handleMinimization(button);
         }).buildElement()
         .addDiv().buildElement() // Contains the minimized h1 element
-        .addButton({'class': 'bm-button-circle', 'textContent': '✖', 'aria-label': 'Close window "Credits"'}, (instance, button) => {
+        .addButton({'class': 'bm-button-circle', 'innerHTML': closeIcon, 'aria-label': 'Close window "Credits"'}, (instance, button) => {
           button.onclick = () => this.handleWindowClose(document.querySelector(`#${this.windowID}`));
         }).buildElement()
       .buildElement()
@@ -71,7 +72,6 @@ export default class WindowCredts extends Overlay {
             .addLi({'innerHTML': 'guidu_ and <a href="https://github.com/Nick-machado" target="_blank" rel="noopener noreferrer">Nick-machado</a> for the original "Minimize" Button code!'}).buildElement()
             .addLi({'innerHTML': 'Nomad and <a href="https://www.youtube.com/@gustav_vv" target="_blank" rel="noopener noreferrer">Gustav</a> for the tutorials!'}).buildElement()
             .addLi({'innerHTML': '<a href="https://github.com/cfpwastaken" target="_blank" rel="noopener noreferrer">cfp</a> for creating the template overlay that Blue Marble was based on!'}).buildElement()
-            .addLi({'innerHTML': '<a href="https://forcenetwork.cloud/" target="_blank" rel="noopener noreferrer">Force Network</a> for hosting the <a href="https://github.com/SwingTheVine/Wplace-TelemetryServer" target="_blank" rel="noopener noreferrer">telemetry server</a>!'}).buildElement()
             .addLi({'innerHTML': '<a href="https://thebluecorner.net" target="_blank" rel="noopener noreferrer">TheBlueCorner</a> for getting me interested in online pixel canvases!'}).buildElement()
           .buildElement()
           .addBr().buildElement()

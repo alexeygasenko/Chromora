@@ -12,8 +12,6 @@ import WindowSettings from "./WindowSettings";
  * @since 0.91.11
  * @example
  * {
- *   "uuid": "497dcba3-ecbf-4587-a2dd-5eb0665e6880",
- *   "telemetry": 1,
  *   "flags": ["hl-noTrans", "ftr-oWin", "te-noSkip"],
  *   "highlight": [[1,0,-1],[1,-1,0],[2,1,0],[1,0,1]],
  *   "filter": [-2,0,4,5,6,29,63],
@@ -37,7 +35,9 @@ export default class SettingsManager extends WindowSettings {
     if (!this.userSettings.hotkeys || (typeof this.userSettings.hotkeys != 'object') || Array.isArray(this.userSettings.hotkeys)) {
       this.userSettings.hotkeys = {};
     }
-    this.userSettings.hotkeys.paintArea = this.#normalizeHotkeyCode(this.userSettings.hotkeys.paintArea);
+    this.userSettings.hotkeys.paintArea = this.#normalizeHotkeyCode(this.userSettings.hotkeys.paintArea, 'AltLeft');
+    this.userSettings.hotkeys.paintAllArea = this.#normalizeHotkeyCode(this.userSettings.hotkeys.paintAllArea, 'ControlLeft');
+    delete this.userSettings.hotkeys.clearPaintArea;
     this.userSettingsOld = structuredClone(this.userSettings); // Creates a duplicate of the user settings to store the old version of user settings from 5+ seconds ago
     this.userSettingsSaveLocation = 'bmUserSettings'; // Storage save location
 
@@ -45,17 +45,18 @@ export default class SettingsManager extends WindowSettings {
     this.lastUpdateTime = 0; // When this unix timestamp is within the last 5 seconds, we should save this.userSettings to storage
 
     setInterval(this.updateUserStorage.bind(this), this.updateFrequency); // Runs every X seconds (see updateFrequency)
-    this.#broadcastPaintAreaHotkey();
+    this.#broadcastPaintAreaHotkeys();
   }
 
   /** Normalizes a persisted KeyboardEvent.code value.
    * @param {string} code
+   * @param {string} fallbackCode
    * @returns {string}
    * @since 0.99.0
    */
-  #normalizeHotkeyCode(code) {
+  #normalizeHotkeyCode(code, fallbackCode) {
     const normalizedCode = String(code ?? '');
-    return /^[A-Za-z][A-Za-z0-9]{1,31}$/.test(normalizedCode) ? normalizedCode : 'AltLeft';
+    return /^[A-Za-z][A-Za-z0-9]{1,31}$/.test(normalizedCode) ? normalizedCode : fallbackCode;
   }
 
   /** Converts KeyboardEvent.code to a compact label.
@@ -84,22 +85,36 @@ export default class SettingsManager extends WindowSettings {
   /** Sends the current hotkey into the page-context paint bridge.
    * @since 0.99.0
    */
-  #broadcastPaintAreaHotkey() {
-    window.postMessage({
-      source: 'blue-marble',
-      action: 'paint-area-hotkey-setting',
-      code: this.userSettings.hotkeys.paintArea
-    }, '*');
+  #broadcastPaintAreaHotkeys() {
+    const hotkeys = [
+      ['matching', this.userSettings.hotkeys.paintArea],
+      ['template', this.userSettings.hotkeys.paintAllArea]
+    ];
+    for (const [mode, code] of hotkeys) {
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'paint-area-hotkey-setting',
+        mode: mode,
+        code: code
+      }, '*');
+    }
   }
 
   /** Stores a new area-selection hotkey.
+   * @param {'paintArea'|'paintAllArea'} settingKey
    * @param {string} code
    * @returns {Promise<void>}
    * @since 0.99.0
    */
-  async setPaintAreaHotkey(code) {
-    this.userSettings.hotkeys.paintArea = this.#normalizeHotkeyCode(code);
-    this.#broadcastPaintAreaHotkey();
+  async setPaintAreaHotkey(settingKey, code) {
+    const hotkeyDefaults = new Map([
+      ['paintArea', 'AltLeft'],
+      ['paintAllArea', 'ControlLeft']
+    ]);
+    const normalizedSettingKey = hotkeyDefaults.has(settingKey) ? settingKey : 'paintArea';
+    const fallbackCode = hotkeyDefaults.get(normalizedSettingKey);
+    this.userSettings.hotkeys[normalizedSettingKey] = this.#normalizeHotkeyCode(code, fallbackCode);
+    this.#broadcastPaintAreaHotkeys();
     await this.saveUserStorageNow();
   }
 
@@ -164,49 +179,74 @@ export default class SettingsManager extends WindowSettings {
    * @see WindowSettings#buildHotkeys
    */
   buildHotkeys() {
-    const currentCode = this.userSettings.hotkeys.paintArea;
+    const configureHotkeyButton = (button, settingKey, label) => {
+      let recording = false;
+      const handleRecordingKeyDown = event => {
+        if (!recording) {return;}
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.repeat) {return;}
+        if (event.code == 'Escape') {
+          stopRecording();
+          return;
+        }
+        if (!/^[A-Za-z][A-Za-z0-9]{1,31}$/.test(event.code)) {return;}
+        void this.setPaintAreaHotkey(settingKey, event.code).finally(() => {
+          stopRecording();
+          const formattedCode = this.#formatHotkeyCode(this.userSettings.hotkeys[settingKey]);
+          button.setAttribute('aria-label', `${label} hotkey: ${formattedCode}`);
+        });
+      };
+      const stopRecording = () => {
+        if (!recording) {return;}
+        recording = false;
+        window.removeEventListener('keydown', handleRecordingKeyDown, true);
+        button.dataset['recording'] = 'false';
+        button.textContent = this.#formatHotkeyCode(this.userSettings.hotkeys[settingKey]);
+        if (!document.querySelector('.bm-settings-hotkey-button[data-recording="true"]')) {
+          document.body?.classList.remove('bm-hotkey-recording');
+        }
+      };
+
+      button.onclick = event => {
+        event.preventDefault();
+        if (recording) {return;}
+        recording = true;
+        button.dataset['recording'] = 'true';
+        button.textContent = '...';
+        document.body?.classList.add('bm-hotkey-recording');
+        button.focus({preventScroll: true});
+        window.addEventListener('keydown', handleRecordingKeyDown, true);
+      };
+      button.onblur = stopRecording;
+    };
+
+    const matchingCode = this.userSettings.hotkeys.paintArea;
+    const templateCode = this.userSettings.hotkeys.paintAllArea;
 
     this.window = this.addDiv({'class': 'bm-container'})
       .addHeader(2, {'textContent': 'Hotkeys'}).buildElement()
       .addHr().buildElement()
       .addDiv({'class': 'bm-settings-hotkey-row'})
-        .addSpan({'textContent': 'Area selection'}).buildElement()
+        .addSpan({'textContent': 'Selected color area'}).buildElement()
         .addButton({
           'class': 'bm-settings-hotkey-button',
-          'textContent': this.#formatHotkeyCode(currentCode),
-          'title': 'Change area selection hotkey',
-          'aria-label': `Area selection hotkey: ${this.#formatHotkeyCode(currentCode)}`
+          'textContent': this.#formatHotkeyCode(matchingCode),
+          'title': 'Change selected color area hotkey',
+          'aria-label': `Selected color area hotkey: ${this.#formatHotkeyCode(matchingCode)}`
         }, (instance, button) => {
-          let recording = false;
-          const stopRecording = () => {
-            recording = false;
-            button.dataset['recording'] = 'false';
-            button.textContent = this.#formatHotkeyCode(this.userSettings.hotkeys.paintArea);
-            document.body?.classList.remove('bm-hotkey-recording');
-          };
-
-          button.onclick = () => {
-            recording = true;
-            button.dataset['recording'] = 'true';
-            button.textContent = '...';
-            document.body?.classList.add('bm-hotkey-recording');
-          };
-          button.onkeydown = event => {
-            if (!recording) {return;}
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            if (event.code == 'Escape') {
-              stopRecording();
-              return;
-            }
-            if (!/^[A-Za-z][A-Za-z0-9]{1,31}$/.test(event.code)) {return;}
-            const code = this.#normalizeHotkeyCode(event.code);
-            void this.setPaintAreaHotkey(code).finally(() => {
-              stopRecording();
-              button.setAttribute('aria-label', `Area selection hotkey: ${this.#formatHotkeyCode(code)}`);
-            });
-          };
-          button.onblur = stopRecording;
+          configureHotkeyButton(button, 'paintArea', 'Selected color area');
+        }).buildElement()
+      .buildElement()
+      .addDiv({'class': 'bm-settings-hotkey-row'})
+        .addSpan({'textContent': 'All template colors'}).buildElement()
+        .addButton({
+          'class': 'bm-settings-hotkey-button',
+          'textContent': this.#formatHotkeyCode(templateCode),
+          'title': 'Change all template colors hotkey',
+          'aria-label': `All template colors hotkey: ${this.#formatHotkeyCode(templateCode)}`
+        }, (instance, button) => {
+          configureHotkeyButton(button, 'paintAllArea', 'All template colors');
         }).buildElement()
       .buildElement()
     .buildElement();

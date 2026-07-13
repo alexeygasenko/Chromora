@@ -31,12 +31,13 @@ The project started with Blue Marble, then grew into a separate liquid-glass too
 
 ### Prepare an area for painting
 
-- Hold `Left Alt` and drag over the part of the artwork you want to paint.
-- Chromora adds only empty pixels that should use your currently selected Wplace color.
+- Hold `Left Alt` and drag to add empty pixels that use your currently selected Wplace color.
+- Hold `Left Ctrl` and drag to add every empty pixel in the area using its color from the template.
 - Check the result, then press Wplace's **Paint** button yourself.
-- Repeated selections do not add the same pixel twice.
-- If the selected area needs more pixels than you have available, Chromora adds nothing and shows a warning.
-- Change the hotkey in Settings whenever you need.
+- Pixels erased from the draft can be selected and added again.
+- If the whole area needs more droplets than you have, Chromora fills as much as possible from left to right.
+- A warning appears only when no droplets are available at all.
+- Change either hotkey in Settings whenever you need.
 
 ## Screenshots
 

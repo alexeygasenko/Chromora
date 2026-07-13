@@ -378,7 +378,8 @@
   font-size: 0.74rem;
 }
 
-.bm-button-circle svg {
+.bm-button-circle svg,
+.bm-button-circle .bm-raster-icon {
   display: block;
   width: 70%;
   height: 70%;
@@ -388,6 +389,21 @@
   pointer-events: none;
   transform: translateZ(0);
   overflow: visible;
+  user-select: none;
+}
+
+.bm-raster-icon {
+  display: block;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-image: var(--bm-icon-image);
+  mask-image: var(--bm-icon-image);
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
 .bm-button-circle .bm-button-icon-settings {

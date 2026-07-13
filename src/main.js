@@ -7,8 +7,9 @@ import ApiManager from './apiManager.js';
 import TemplateManager from './templateManager.js';
 import { consoleLog, consoleWarn } from './utils.js';
 import WindowMain from './WindowMain.js';
-import WindowTelemetry from './WindowTelemetry.js';
 import SettingsManager from './settingsManager.js';
+import paintSelectedIcon from './assets/paint-selected.png';
+import paintAllIcon from './assets/paint-all.png';
 
 const name = GM_info.script.name.toString(); // Name of userscript
 const version = GM_info.script.version.toString(); // Version of userscript
@@ -19,11 +20,11 @@ const consoleStyle = 'color: cornflowerblue;'; // The styling for the console lo
  * @param {*} callback - The code to execute
  * @since 0.11.15
  */
-function inject(callback) {
+function inject(callback, ...args) {
     const script = document.createElement('script');
     script.setAttribute('bm-name', name); // Passes in the name value
     script.setAttribute('bm-cStyle', consoleStyle); // Passes in the console style value
-    script.textContent = `(${callback})();`;
+    script.textContent = `(${callback})(${args.map(argument => JSON.stringify(argument)).join(',')});`;
     document.documentElement?.appendChild(script);
     script.remove();
 }
@@ -32,7 +33,7 @@ function inject(callback) {
  * This code will execute outside of TamperMonkey's sandbox.
  * @since 0.11.15
  */
-inject(() => {
+inject((paintAreaIcons) => {
 
   if (window['__blueMarblePageHookInstalled']) {return;}
   Object.defineProperty(window, '__blueMarblePageHookInstalled', {
@@ -88,44 +89,64 @@ inject(() => {
   /** Bridges a trusted drag gesture to Wplace's local paint draft without submitting it. */
   function setupPaintAreaBridge() {
     const tileSize = 1000;
+    const matchingMode = 'matching';
+    const templateMode = 'template';
+    const selectionModes = [matchingMode, templateMode];
     const scannedModuleURLs = new Set();
     const state = {
       runtimeStore: null,
       userStore: null,
-      active: false,
-      manualActive: false,
-      hotkeyHeld: false,
-      hotkeyCode: 'AltLeft',
+      activeMode: null,
+      manualMode: null,
+      heldHotkeyModes: new Map(),
+      hotkeyCodes: {
+        [matchingMode]: 'AltLeft',
+        [templateMode]: 'ControlLeft'
+      },
       busy: false,
+      operationMode: null,
       dragging: false,
+      dragMode: null,
       pointerID: null,
       dragStart: null,
       dragEnd: null,
       trustedEvent: null,
       pendingRequestID: null,
       fillRevision: 0,
-      queuedDraftPixels: new Set(),
+      queuedDraftPixels: new Map(),
       lastChargeSnapshot: null,
+      previewObserver: null,
       suppressClickUntil: 0,
-      toggleButton: null,
+      toggleGroup: null,
+      toggleButtons: new Map(),
       marquee: null,
       alert: null,
       alertTimer: null,
       syncFrame: null
     };
 
-    const selectAreaIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 4H5a1 1 0 0 0-1 1v3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path class="bm-paint-area-cursor" d="m9 8 7.15 7.15-3.05.55-1.55 3.05z"/></svg>';
-
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
-    function setButtonState(buttonState, title) {
-      const button = state.toggleButton;
-      if (!button) {return;}
-      button.dataset['state'] = buttonState;
-      button.title = title;
-      button.setAttribute('aria-label', title);
-      button.setAttribute('aria-pressed', state.active ? 'true' : 'false');
-      button.disabled = state.busy;
+    function getModeTitle(mode, active = false) {
+      if (mode == templateMode) {
+        return active ? 'Stop selecting all template colors' : 'Select all template colors in an area';
+      }
+      return active ? 'Stop selecting the current color' : 'Select the current color in an area';
+    }
+
+    function setButtonState(buttonState, title, targetMode = state.operationMode ?? state.activeMode ?? matchingMode) {
+      for (const mode of selectionModes) {
+        const button = state.toggleButtons.get(mode);
+        if (!button) {continue;}
+        const isTarget = mode == targetMode;
+        const isActive = mode == state.activeMode;
+        const modeTitle = isTarget ? title : getModeTitle(mode, isActive);
+        button.dataset['state'] = isTarget ? buttonState : (isActive ? 'active' : 'idle');
+        button.title = modeTitle;
+        button.setAttribute('aria-label', modeTitle);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        button.disabled = state.busy;
+      }
     }
 
     function removeMarquee() {
@@ -152,9 +173,7 @@ inject(() => {
       state.alertTimer = setTimeout(() => {
         removeAreaAlert();
         if (!state.busy) {
-          setButtonState(state.active ? 'active' : 'idle', state.active
-            ? 'Stop selecting matching template areas'
-            : 'Select matching template area');
+          setButtonState(state.activeMode ? 'active' : 'idle', getModeTitle(state.activeMode ?? matchingMode, !!state.activeMode));
         }
       }, 4200);
     }
@@ -162,6 +181,61 @@ inject(() => {
     function resetQueuedDraftPixels() {
       state.queuedDraftPixels.clear();
       state.lastChargeSnapshot = null;
+    }
+
+    function reconcileQueuedDraftPixels(previewPixels) {
+      if (!Array.isArray(previewPixels)) {return;}
+      const previewCoordinates = new Map();
+      for (const previewPixel of previewPixels) {
+        const tile = previewPixel?.['tile'];
+        const pixel = previewPixel?.['pixel'];
+        const tileX = Number(tile?.[0]);
+        const tileY = Number(tile?.[1]);
+        const pixelX = Number(pixel?.[0]);
+        const pixelY = Number(pixel?.[1]);
+        if (![tileX, tileY, pixelX, pixelY].every(Number.isFinite)) {continue;}
+        const colorID = Number(previewPixel?.['colorIdx']);
+        previewCoordinates.set(
+          `${(tileX * tileSize) + pixelX},${(tileY * tileSize) + pixelY}`,
+          Number.isInteger(colorID) && (colorID > 0) ? colorID : null
+        );
+      }
+      for (const [coordinateKey, colorID] of state.queuedDraftPixels) {
+        const previewColorID = previewCoordinates.get(coordinateKey);
+        if (!previewCoordinates.has(coordinateKey) || ((previewColorID != null) && (previewColorID != colorID))) {
+          state.queuedDraftPixels.delete(coordinateKey);
+        }
+      }
+    }
+
+    function installDraftPreviewObserver() {
+      const serviceWorkerPrototype = globalThis.ServiceWorker?.prototype;
+      if (!serviceWorkerPrototype) {return;}
+      const originalPostMessage = serviceWorkerPrototype.postMessage;
+      if ((typeof originalPostMessage != 'function') || (originalPostMessage == state.previewObserver)) {return;}
+
+      const observedPostMessage = function(message, ...args) {
+        if (message?.['type'] == 'previewPixels') {
+          queueMicrotask(() => reconcileQueuedDraftPixels(message['data']));
+        } else if (message?.['type'] == 'clearPixelPreview') {
+          queueMicrotask(resetQueuedDraftPixels);
+        }
+        return originalPostMessage.call(this, message, ...args);
+      };
+
+      try {
+        serviceWorkerPrototype.postMessage = observedPostMessage;
+        if (serviceWorkerPrototype.postMessage != observedPostMessage) {return;}
+        state.previewObserver = observedPostMessage;
+      } catch {}
+    }
+
+    function handleManualDraftErase(event) {
+      const isEraseEvent = (event.type == 'mousedown') ? (event.button == 2) : !!(event.buttons & 2);
+      const map = state.runtimeStore?.['map'];
+      if (!event.isTrusted || !isEraseEvent || !map || !isMapCanvasTarget(event.target, map)) {return;}
+      const [worldX, worldY] = clientPointToWorldPixel(map, event.clientX, event.clientY);
+      state.queuedDraftPixels.delete(`${worldX},${worldY}`);
     }
 
     function getAvailableDraftPixels() {
@@ -178,55 +252,97 @@ inject(() => {
       };
     }
 
-    function prepareDraftRuns(runs, availablePixels) {
-      const preparedRuns = [];
+    async function prepareDraftRuns(runs, availablePixels, fallbackColorID) {
+      const runsByColor = new Map();
+      const selectedPixels = new Set();
       let pixelCount = 0;
+      let workSliceStarted = performance.now();
 
       for (const run of runs) {
-        const worldY = Number(run?.[0]);
-        const startX = Number(run?.[1]);
-        const endX = Number(run?.[2]);
-        if (![worldY, startX, endX].every(Number.isFinite)) {continue;}
+        const isColoredVerticalRun = run?.length >= 4;
+        const colorID = Number(isColoredVerticalRun ? run[0] : fallbackColorID);
+        const fixedAxis = Number(run?.[isColoredVerticalRun ? 1 : 0]);
+        const rangeStart = Number(run?.[isColoredVerticalRun ? 2 : 1]);
+        const rangeEnd = Number(run?.[isColoredVerticalRun ? 3 : 2]);
+        if (!Number.isInteger(colorID) || (colorID <= 0) || ![fixedAxis, rangeStart, rangeEnd].every(Number.isFinite)) {continue;}
 
-        let preparedRunStart = null;
-        for (let worldX = startX; worldX <= endX; worldX++) {
-          const alreadyQueued = state.queuedDraftPixels.has(`${worldX},${worldY}`);
-          if (!alreadyQueued && (preparedRunStart == null)) {preparedRunStart = worldX;}
+        for (let variableAxis = rangeStart; variableAxis <= rangeEnd; variableAxis++) {
+          const worldX = isColoredVerticalRun ? fixedAxis : variableAxis;
+          const worldY = isColoredVerticalRun ? variableAxis : fixedAxis;
+          const coordinateKey = `${worldX},${worldY}`;
+          if (state.queuedDraftPixels.has(coordinateKey) || selectedPixels.has(coordinateKey)) {continue;}
+          if (pixelCount >= availablePixels) {return {runs: await flattenPreparedRuns(runsByColor), pixelCount};}
 
-          if (!alreadyQueued) {
-            pixelCount++;
-            if (pixelCount > availablePixels) {
-              return {exceeded: true, runs: [], pixelCount};
-            }
+          selectedPixels.add(coordinateKey);
+          let rows = runsByColor.get(colorID);
+          if (!rows) {
+            rows = new Map();
+            runsByColor.set(colorID, rows);
           }
+          let rowPixels = rows.get(worldY);
+          if (!rowPixels) {
+            rowPixels = [];
+            rows.set(worldY, rowPixels);
+          }
+          rowPixels.push(worldX);
+          pixelCount++;
 
-          const closesRun = (preparedRunStart != null) && (alreadyQueued || (worldX == endX));
-          if (!closesRun) {continue;}
-          preparedRuns.push([worldY, preparedRunStart, alreadyQueued ? worldX - 1 : worldX]);
-          preparedRunStart = null;
+          if ((performance.now() - workSliceStarted) >= 5) {
+            await nextFrame();
+            workSliceStarted = performance.now();
+          }
         }
       }
 
-      return {exceeded: false, runs: preparedRuns, pixelCount};
+      return {runs: await flattenPreparedRuns(runsByColor), pixelCount};
+    }
+
+    async function flattenPreparedRuns(runsByColor) {
+      const preparedRuns = [];
+      let workSliceStarted = performance.now();
+      for (const [colorID, rows] of runsByColor) {
+        for (const [worldY, worldXs] of rows) {
+          let runStart = null;
+          let previousX = null;
+          for (const worldX of worldXs) {
+            if (runStart == null) {
+              runStart = worldX;
+            } else if (worldX != (previousX + 1)) {
+              preparedRuns.push([colorID, worldY, runStart, previousX]);
+              runStart = worldX;
+            }
+            previousX = worldX;
+          }
+          if (runStart != null) {preparedRuns.push([colorID, worldY, runStart, previousX]);}
+          if ((performance.now() - workSliceStarted) >= 5) {
+            await nextFrame();
+            workSliceStarted = performance.now();
+          }
+        }
+      }
+      return preparedRuns;
     }
 
     function updateSelectionActive({cancelWork = false} = {}) {
-      state.active = state.manualActive || state.hotkeyHeld;
-      document.body?.classList.toggle('bm-paint-area-active', state.active);
-      if (!state.active) {
+      const heldModes = Array.from(state.heldHotkeyModes.values());
+      state.activeMode = heldModes[heldModes.length - 1] ?? state.manualMode;
+      document.body?.classList.toggle('bm-paint-area-active', !!state.activeMode);
+      document.body?.setAttribute('data-bm-paint-area-mode', state.activeMode ?? '');
+      if (!state.activeMode) {
         state.dragging = false;
+        state.dragMode = null;
         state.pointerID = null;
         removeMarquee();
         if (cancelWork) {
           state.fillRevision++;
           state.busy = false;
           state.pendingRequestID = null;
+          state.operationMode = null;
         }
       }
       if (!state.busy) {
-        setButtonState(state.active ? 'active' : 'idle', state.active
-          ? 'Stop selecting matching template areas'
-          : 'Select matching template area');
+        const targetMode = state.activeMode ?? matchingMode;
+        setButtonState(state.activeMode ? 'active' : 'idle', getModeTitle(targetMode, !!state.activeMode), targetMode);
       }
     }
 
@@ -235,50 +351,84 @@ inject(() => {
     }
 
     function handleHotkeyDown(event) {
-      if ((event.code != state.hotkeyCode) || event.repeat || state.hotkeyHeld || !state.toggleButton || state.toggleButton.hidden) {return;}
+      const hotkeyMode = selectionModes.find(mode => state.hotkeyCodes[mode] == event.code);
+      if (!hotkeyMode || event.repeat || state.heldHotkeyModes.has(event.code) || !state.toggleGroup || state.toggleGroup.hidden) {return;}
       if (document.body?.classList.contains('bm-hotkey-recording') || isEditableTarget(event.target)) {return;}
       event.preventDefault();
       event.stopImmediatePropagation();
-      state.hotkeyHeld = true;
+      state.heldHotkeyModes.set(event.code, hotkeyMode);
       updateSelectionActive();
+    }
+
+    function handleHotkeyPress(event) {
+      if (!state.heldHotkeyModes.has(event.code)) {return;}
+      event.preventDefault();
+      event.stopImmediatePropagation();
     }
 
     function releaseHotkey(event = null) {
-      if (!state.hotkeyHeld || (event && (event.code != state.hotkeyCode))) {return;}
+      if (event && !state.heldHotkeyModes.has(event.code)) {return;}
+      if (!event && !state.heldHotkeyModes.size) {return;}
       event?.preventDefault();
       event?.stopImmediatePropagation();
-      state.hotkeyHeld = false;
+      if (event) {
+        state.heldHotkeyModes.delete(event.code);
+      } else {
+        state.heldHotkeyModes.clear();
+      }
       updateSelectionActive();
     }
 
-    function ensureToggleButton() {
-      if (state.toggleButton?.isConnected) {return state.toggleButton;}
-      const button = document.createElement('button');
-      button.id = 'bm-paint-area-toggle';
-      button.type = 'button';
-      button.className = 'bm-paint-area-toggle';
-      button.innerHTML = selectAreaIcon;
-      button.hidden = true;
-      button.onclick = async event => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (state.busy) {return;}
-        if (!state.runtimeStore?.['map']) {await discoverWplaceRuntime();}
-        if (!state.runtimeStore?.['map']) {
-          setButtonState('error', 'Wplace paint runtime is unavailable');
-          return;
-        }
-        state.manualActive = !state.active;
-        updateSelectionActive();
+    function ensureToggleButtons() {
+      if (state.toggleGroup?.isConnected) {return state.toggleGroup;}
+      const group = document.createElement('div');
+      group.id = 'bm-paint-area-controls';
+      group.className = 'bm-paint-area-controls';
+      group.hidden = true;
+      const buttonIDs = {
+        [matchingMode]: 'bm-paint-area-toggle',
+        [templateMode]: 'bm-paint-template-area-toggle'
       };
-      document.body?.appendChild(button);
-      state.toggleButton = button;
-      setButtonState('idle', 'Select matching template area');
-      return button;
+
+      for (const mode of selectionModes) {
+        const button = document.createElement('button');
+        button.id = buttonIDs[mode];
+        button.type = 'button';
+        button.className = 'bm-paint-area-toggle';
+        button.dataset['mode'] = mode;
+        const icon = document.createElement('img');
+        icon.src = paintAreaIcons[mode];
+        icon.alt = '';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.draggable = false;
+        button.appendChild(icon);
+        button.onclick = async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (state.busy) {return;}
+          if (!state.runtimeStore?.['map']) {await discoverWplaceRuntime();}
+          if (!state.runtimeStore?.['map']) {
+            setButtonState('error', 'Wplace paint runtime is unavailable', mode);
+            return;
+          }
+          state.manualMode = state.manualMode == mode ? null : mode;
+          updateSelectionActive();
+        };
+        group.appendChild(button);
+        state.toggleButtons.set(mode, button);
+      }
+
+      document.body?.appendChild(group);
+      state.toggleGroup = group;
+      setButtonState('idle', getModeTitle(matchingMode), matchingMode);
+      return group;
     }
 
     async function discoverWplaceRuntime() {
-      if (state.runtimeStore?.['map']) {return state.runtimeStore['map'];}
+      if (state.runtimeStore?.['map']) {
+        installDraftPreviewObserver();
+        return state.runtimeStore['map'];
+      }
       const resourceURLs = performance.getEntriesByType('resource').map(entry => entry.name);
       const preloadURLs = Array.from(document.querySelectorAll('link[rel="modulepreload"][href]'), link => link.href);
       const moduleURLs = Array.from(new Set([...resourceURLs, ...preloadURLs].filter(url => {
@@ -311,6 +461,7 @@ inject(() => {
           if (state.runtimeStore?.['map'] && state.userStore) {break;}
         } catch {}
       }
+      installDraftPreviewObserver();
       return state.runtimeStore?.['map'] ?? null;
     }
 
@@ -386,16 +537,20 @@ inject(() => {
 
     function handlePointerDown(event) {
       const map = state.runtimeStore?.['map'];
-      if (!state.active || state.busy || !map || (event.button != 0) || !event.isTrusted || !isMapCanvasTarget(event.target, map)) {return;}
+      if (!state.activeMode || state.busy || !map || (event.button != 0) || !event.isTrusted || !isMapCanvasTarget(event.target, map)) {return;}
       event.preventDefault();
       event.stopImmediatePropagation();
       state.dragging = true;
+      state.dragMode = state.activeMode;
       state.pointerID = event.pointerId;
       state.dragStart = {x: event.clientX, y: event.clientY};
       state.dragEnd = {...state.dragStart};
       state.trustedEvent = event;
       state.suppressClickUntil = Date.now() + 750;
-      setButtonState('selecting', 'Selecting template area');
+      const selectingTitle = state.dragMode == templateMode
+        ? 'Selecting all template colors'
+        : 'Selecting the current template color';
+      setButtonState('selecting', selectingTitle, state.dragMode);
       updateMarquee();
     }
 
@@ -420,45 +575,54 @@ inject(() => {
       state.suppressClickUntil = Date.now() + 750;
       removeMarquee();
 
-      const colorID = Number(localStorage.getItem('selected-color'));
-      if (!Number.isInteger(colorID) || (colorID <= 0)) {
-        setButtonState('error', 'Select a non-transparent Wplace color first');
+      const selectionMode = state.dragMode ?? state.activeMode ?? matchingMode;
+      state.dragMode = null;
+      const colorID = selectionMode == matchingMode ? Number(localStorage.getItem('selected-color')) : null;
+      if ((selectionMode == matchingMode) && (!Number.isInteger(colorID) || (colorID <= 0))) {
+        setButtonState('error', 'Select a non-transparent Wplace color first', selectionMode);
         return;
       }
 
       const startPixel = clientPointToWorldPixel(map, state.dragStart.x, state.dragStart.y);
       const endPixel = clientPointToWorldPixel(map, state.dragEnd.x, state.dragEnd.y);
+      const bounds = {
+        minX: Math.min(startPixel[0], endPixel[0]),
+        minY: Math.min(startPixel[1], endPixel[1]),
+        maxX: Math.max(startPixel[0], endPixel[0]),
+        maxY: Math.max(startPixel[1], endPixel[1])
+      };
       const budget = getAvailableDraftPixels();
       if (budget.charges == null) {
         showAreaAlert('Could not determine available Wplace pixels. Try again after the charge counter loads.');
         return;
       }
       if (budget.available <= 0) {
-        showAreaAlert('No Wplace pixels are available. Paint or clear the current draft before selecting another area.');
+        state.operationMode = selectionMode;
+        showAreaAlert('No active droplets are available. Paint or clear the current draft before selecting another area.');
+        state.operationMode = null;
         return;
       }
       const requestID = crypto.randomUUID();
       state.pendingRequestID = requestID;
       state.busy = true;
-      setButtonState('loading', 'Finding matching template pixels');
+      state.operationMode = selectionMode;
+      setButtonState('loading', selectionMode == templateMode
+        ? 'Finding all unpainted template pixels'
+        : 'Finding unpainted pixels of the current color', selectionMode);
       window.postMessage({
         source: 'blue-marble',
         action: 'paint-area-selected',
         requestID,
+        mode: selectionMode,
         colorID,
-        maxPixels: Math.min(100001, budget.charges + 1),
-        bounds: {
-          minX: Math.min(startPixel[0], endPixel[0]),
-          minY: Math.min(startPixel[1], endPixel[1]),
-          maxX: Math.max(startPixel[0], endPixel[0]),
-          maxY: Math.max(startPixel[1], endPixel[1])
-        }
+        maxPixels: Math.min(100001, budget.available + state.queuedDraftPixels.size),
+        bounds: bounds
       }, '*');
     }
 
     function handleClickCapture(event) {
       const map = state.runtimeStore?.['map'];
-      if (!state.active || !map || !isMapCanvasTarget(event.target, map)) {return;}
+      if (!state.activeMode || !map || !isMapCanvasTarget(event.target, map)) {return;}
       if (state.dragging || (Date.now() <= state.suppressClickUntil)) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -467,7 +631,7 @@ inject(() => {
 
     function handleDraftActionCapture(event) {
       const button = (event.target instanceof Element) ? event.target.closest('button') : null;
-      if (!button || (button == state.toggleButton)) {return;}
+      if (!button || state.toggleButtons.has(button.dataset?.['mode'])) {return;}
       const label = String(button.getAttribute('aria-label') || button.textContent || '').trim().toLowerCase();
       if ((label == 'clear') || (label == 'clear draft')) {
         queueMicrotask(resetQueuedDraftPixels);
@@ -538,47 +702,78 @@ inject(() => {
       return {flush, restore};
     }
 
+    async function selectWplaceColor(colorID) {
+      const normalizedColorID = Number(colorID);
+      if (!Number.isInteger(normalizedColorID) || (normalizedColorID <= 0)) {
+        throw new TypeError(`Template color ${colorID} is invalid.`);
+      }
+      if (Number(localStorage.getItem('selected-color')) == normalizedColorID) {return;}
+
+      const colorButton = document.querySelector(`#color-${normalizedColorID}`);
+      if (!(colorButton instanceof HTMLElement)) {
+        throw new Error(`Wplace color ${normalizedColorID} is not available.`);
+      }
+      colorButton.click();
+      await Promise.resolve();
+      if (Number(localStorage.getItem('selected-color')) != normalizedColorID) {await nextFrame();}
+      if (Number(localStorage.getItem('selected-color')) != normalizedColorID) {
+        throw new Error(`Wplace color ${normalizedColorID} could not be selected.`);
+      }
+    }
+
     async function fillPaintDraft(data) {
       if (data.requestID != state.pendingRequestID) {return;}
+      const selectionMode = data.mode == templateMode ? templateMode : matchingMode;
+      state.operationMode = selectionMode;
       const map = state.runtimeStore?.['map'] ?? await discoverWplaceRuntime();
       const paintClickListener = getPaintClickListener(map);
       if (!map || !paintClickListener) {throw new Error('Wplace paint handler is unavailable.');}
 
-      const selectedColorID = Number(localStorage.getItem('selected-color'));
-      if (selectedColorID != Number(data.colorID)) {throw new Error('Selected Wplace color changed during area scan.');}
+      const initialColorID = Number(localStorage.getItem('selected-color'));
+      if ((selectionMode == matchingMode) && (initialColorID != Number(data.colorID))) {
+        throw new Error('Selected Wplace color changed during area scan.');
+      }
 
       const budget = getAvailableDraftPixels();
       if (budget.charges == null) {
         state.pendingRequestID = null;
         state.busy = false;
         showAreaAlert('Could not determine available Wplace pixels. Nothing was added.');
+        state.operationMode = null;
         return;
       }
-
-      const prepared = prepareDraftRuns(Array.isArray(data.runs) ? data.runs : [], budget.available);
-      if (prepared.exceeded) {
+      if (budget.available <= 0) {
         state.pendingRequestID = null;
         state.busy = false;
-        showAreaAlert(`Selected area exceeds the available pixel limit (${budget.available}). Nothing was added.`);
+        showAreaAlert('No active droplets are available. Paint or clear the current draft before selecting another area.');
+        state.operationMode = null;
         return;
       }
 
+      const prepared = await prepareDraftRuns(Array.isArray(data.runs) ? data.runs : [], budget.available, data.colorID);
       const runs = prepared.runs;
       const fillRevision = ++state.fillRevision;
       const previousMuted = state.runtimeStore['muted'];
       const preview = beginPreviewCoalescing(map);
       state.runtimeStore['muted'] = true;
       state.busy = true;
-      setButtonState('filling', `Adding ${Number(data.pixelCount) || 0} pixels to Wplace draft`);
+      setButtonState('filling', `Adding ${prepared.pixelCount} pixels to Wplace draft`, selectionMode);
       let queuedPixels = 0;
       let workSliceStarted = performance.now();
+      let activeColorID = initialColorID;
 
       try {
         for (const run of runs) {
-          const worldY = Number(run?.[0]);
-          const startX = Number(run?.[1]);
-          const endX = Number(run?.[2]);
-          if (![worldY, startX, endX].every(Number.isFinite)) {continue;}
+          const colorID = Number(run?.[0]);
+          const worldY = Number(run?.[1]);
+          const startX = Number(run?.[2]);
+          const endX = Number(run?.[3]);
+          if (!Number.isInteger(colorID) || (colorID <= 0) || ![worldY, startX, endX].every(Number.isFinite)) {continue;}
+
+          if (selectionMode == templateMode && activeColorID != colorID) {
+            await selectWplaceColor(colorID);
+            activeColorID = colorID;
+          }
 
           for (let worldX = startX; worldX <= endX; worldX++) {
             if (fillRevision != state.fillRevision) {return;}
@@ -591,7 +786,7 @@ inject(() => {
               'lngLat': lngLat,
               'point': point
             });
-            state.queuedDraftPixels.add(`${worldX},${worldY}`);
+            state.queuedDraftPixels.set(`${worldX},${worldY}`, colorID);
             queuedPixels++;
 
             if ((performance.now() - workSliceStarted) >= 5) {
@@ -607,19 +802,24 @@ inject(() => {
         state.pendingRequestID = null;
         state.busy = false;
         setButtonState('success', queuedPixels
-          ? `Processed ${queuedPixels} matching pixels in Wplace draft`
-          : 'No matching template pixels in selected area');
+          ? `Added ${queuedPixels} template pixels to Wplace draft`
+          : 'No unpainted template pixels in selected area', selectionMode);
         setTimeout(() => {
           if (!state.busy) {
-            setButtonState(state.active ? 'active' : 'idle', state.active
-              ? 'Stop selecting matching template areas'
-              : 'Select matching template area');
+            const targetMode = state.activeMode ?? selectionMode;
+            setButtonState(state.activeMode ? 'active' : 'idle', getModeTitle(targetMode, !!state.activeMode), targetMode);
           }
         }, 1600);
       } finally {
         preview.restore();
         state.runtimeStore['muted'] = previousMuted;
-        if (fillRevision == state.fillRevision) {state.busy = false;}
+        if ((selectionMode == templateMode) && Number.isInteger(initialColorID) && (initialColorID > 0) && (activeColorID != initialColorID)) {
+          try {await selectWplaceColor(initialColorID);} catch {}
+        }
+        if (fillRevision == state.fillRevision) {
+          state.busy = false;
+          state.operationMode = null;
+        }
       }
     }
 
@@ -628,21 +828,26 @@ inject(() => {
       if (data?.source != 'blue-marble') {return;}
       if (data.action == 'paint-area-hotkey-setting') {
         const hotkeyCode = String(data.code ?? '');
+        const hotkeyMode = selectionModes.includes(data.mode) ? data.mode : matchingMode;
         if (!/^[A-Za-z][A-Za-z0-9]{1,31}$/.test(hotkeyCode)) {return;}
-        state.hotkeyHeld = false;
-        state.hotkeyCode = hotkeyCode;
+        state.heldHotkeyModes.clear();
+        state.hotkeyCodes[hotkeyMode] = hotkeyCode;
         updateSelectionActive();
       } else if (data.action == 'paint-area-fill') {
         void fillPaintDraft(data).catch(error => {
           if (data.requestID != state.pendingRequestID) {return;}
           state.pendingRequestID = null;
           state.busy = false;
-          setButtonState('error', error instanceof Error ? error.message : String(error));
+          const operationMode = state.operationMode ?? (data.mode == templateMode ? templateMode : matchingMode);
+          setButtonState('error', error instanceof Error ? error.message : String(error), operationMode);
+          state.operationMode = null;
         });
       } else if ((data.action == 'paint-area-error') && (data.requestID == state.pendingRequestID)) {
         state.pendingRequestID = null;
         state.busy = false;
-        setButtonState('error', data.message || 'Could not fill selected area');
+        const operationMode = state.operationMode ?? (data.mode == templateMode ? templateMode : matchingMode);
+        setButtonState('error', data.message || 'Could not fill selected area', operationMode);
+        state.operationMode = null;
       }
     });
 
@@ -650,11 +855,11 @@ inject(() => {
       state.syncFrame = null;
       const paintModeVisible = !!document.querySelector('#color-1');
       if (paintModeVisible) {await discoverWplaceRuntime();}
-      const button = ensureToggleButton();
-      button.hidden = !paintModeVisible;
-      if (!paintModeVisible && (state.active || state.busy)) {
-        state.manualActive = false;
-        state.hotkeyHeld = false;
+      const buttonGroup = ensureToggleButtons();
+      buttonGroup.hidden = !paintModeVisible;
+      if (!paintModeVisible && (state.activeMode || state.busy)) {
+        state.manualMode = null;
+        state.heldHotkeyModes.clear();
         updateSelectionActive({cancelWork: true});
         resetQueuedDraftPixels();
         removeAreaAlert();
@@ -673,12 +878,17 @@ inject(() => {
     window.addEventListener('pointercancel', handlePointerUp, true);
     window.addEventListener('click', handleClickCapture, true);
     window.addEventListener('click', handleDraftActionCapture, true);
+    window.addEventListener('mousedown', handleManualDraftErase, true);
+    window.addEventListener('mousemove', handleManualDraftErase, true);
     window.addEventListener('keydown', handleHotkeyDown, true);
+    window.addEventListener('keypress', handleHotkeyPress, true);
     window.addEventListener('keyup', releaseHotkey, true);
     window.addEventListener('blur', () => releaseHotkey());
+    navigator.serviceWorker?.addEventListener('controllerchange', installDraftPreviewObserver);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState == 'hidden') {releaseHotkey();}
     });
+    installDraftPreviewObserver();
     schedulePaintModeSync();
   }
 
@@ -829,6 +1039,9 @@ inject(() => {
     completeRefreshRequest();
     return response; // Returns the original response
   };
+}, {
+  ["matching"]: paintSelectedIcon,
+  ["template"]: paintAllIcon
 });
 
 // Imports the CSS file from dist folder on github
@@ -877,6 +1090,9 @@ function readStoredJSON(key, fallback = {}) {
 }
 
 const userSettings = readStoredJSON('bmUserSettings'); // Loads the user settings
+const hasLegacyTelemetrySettings = Object.hasOwn(userSettings, 'telemetry') || Object.hasOwn(userSettings, 'uuid');
+delete userSettings['telemetry'];
+delete userSettings['uuid'];
 const runtimeMarkerID = 'bm-userscript-runtime';
 const existingRuntimeMarker = document.querySelector('meta[data-blue-marble-runtime]');
 const shouldInitializeRuntime = !existingRuntimeMarker;
@@ -888,14 +1104,20 @@ if (!shouldInitializeRuntime) {
 if (shouldInitializeRuntime) {
 void (async () => {
 let runtimeMarker = null;
-let heartbeatInterval = null;
 let activeWindowMain = null;
-let activeTelemetryWindow = null;
 let stopSpontaneousResponseListener = null;
 let stopBlackObserver = null;
 let stopPaintAreaSelectionBridge = null;
 
 try {
+
+if (hasLegacyTelemetrySettings) {
+  try {
+    await GM.setValue('bmUserSettings', JSON.stringify(userSettings));
+  } catch (error) {
+    consoleWarn('Could not remove legacy telemetry settings.', error);
+  }
+}
 
 // CONSTRUCTORS
 const observers = new Observers(); // Constructs a new Observers object
@@ -922,36 +1144,6 @@ runtimeMarker.dataset['blueMarbleRuntime'] = 'true';
 runtimeMarker.dataset['runtimeState'] = 'initializing';
 document.documentElement.appendChild(runtimeMarker);
 
-
-console.log(userSettings);
-console.log(Object.keys(userSettings).length);
-
-// If the user does not have a UUID yet, make a new one.
-if (Object.keys(userSettings).length == 0) {
-  const uuid = crypto.randomUUID(); // Generates a random UUID
-  console.log(uuid);
-  await GM.setValue('bmUserSettings', JSON.stringify({
-    'uuid': uuid
-  }));
-}
-
-heartbeatInterval = setInterval(() => apiManager.sendHeartbeat(version), 1000 * 60 * 30); // Sends a heartbeat every 30 minutes
-
-// The current "version" of the data collection agreement
-// Increment by 1 to retrigger the telemetry window
-const currentTelemetryVersion = 1;
-
-// The last "version" of the data collection agreement that the user agreed too
-const previousTelemetryVersion = userSettings?.telemetry;
-console.log(`Telemetry is ${!(previousTelemetryVersion == undefined)}`);
-
-// If the user has not agreed to the current data collection terms, we need to show the Telemetry window.
-if ((previousTelemetryVersion == undefined) || (previousTelemetryVersion > currentTelemetryVersion)) {
-  const windowTelemetry = new WindowTelemetry(name, version, currentTelemetryVersion, userSettings?.uuid);
-  activeTelemetryWindow = windowTelemetry;
-  windowTelemetry.setApiManager(apiManager);
-  await windowTelemetry.buildWindow(); // Asks the user if they want to enable telemetry
-}
 
 await initializeBlueMarble();
 runtimeMarker.dataset['runtimeState'] = 'ready';
@@ -1030,13 +1222,11 @@ function observeBlack() {
 }
 
 } catch (error) {
-  if (heartbeatInterval != null) {clearInterval(heartbeatInterval);}
   stopBlackObserver?.();
   stopSpontaneousResponseListener?.();
   stopPaintAreaSelectionBridge?.();
   activeWindowMain?.windowFilter?.dispose();
   document.getElementById(activeWindowMain?.windowID)?.remove();
-  document.getElementById(activeTelemetryWindow?.windowID)?.remove();
   runtimeMarker?.remove();
   console.error('Blue Marble: Runtime initialization failed.', error);
 }

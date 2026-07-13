@@ -28,23 +28,6 @@ export default class WindowCredts extends Overlay {
    */
   buildWindow() {
 
-    // ASCII art of "Blue Marble"
-    const ascii = `
-██████╗ ██╗     ██╗   ██╗███████╗
-██╔══██╗██║     ██║   ██║██╔════╝
-██████╔╝██║     ██║   ██║█████╗  
-██╔══██╗██║     ██║   ██║██╔══╝  
-██████╔╝███████╗╚██████╔╝███████╗
-╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝
-
-███╗   ███╗ █████╗ ██████╗ ██████╗ ██╗     ███████╗
-████╗ ████║██╔══██╗██╔══██╗██╔══██╗██║     ██╔════╝
-██╔████╔██║███████║██████╔╝██████╔╝██║     █████╗  
-██║╚██╔╝██║██╔══██║██╔══██╗██╔══██╗██║     ██╔══╝  
-██║ ╚═╝ ██║██║  ██║██║  ██║██████╔╝███████╗███████╗
-╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝
-`;
-
     // If a credits window already exists, close it
     if (document.querySelector(`#${this.windowID}`)) {
       void this.handleWindowClose(document.querySelector(`#${this.windowID}`));
@@ -68,11 +51,8 @@ export default class WindowCredts extends Overlay {
         .buildElement()
         .addHr().buildElement()
         .addDiv({'class': 'bm-container bm-scrollable'})
-          .addSpan({'role': 'img', 'aria-label': this.name})
-            .addSpan({'innerHTML': ascii, 'class': 'bm-ascii', 'aria-hidden': 'true'}).buildElement()
-          .buildElement()
-          .addBr().buildElement()
-          .addHr().buildElement()
+          .addHeader(2, {'textContent': 'Chromora'}).buildElement()
+          .addSpan({'innerHTML': 'Chromora is maintained by <a href="https://github.com/alexeygasenko" target="_blank" rel="noopener noreferrer">alexeygasenko</a> and is based on Blue Marble.'}).buildElement()
           .addBr().buildElement()
           .addSpan({'textContent': '"Blue Marble" userscript is made by SwingTheVine.'}).buildElement()
           .addBr().buildElement()

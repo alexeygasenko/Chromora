@@ -41,6 +41,8 @@ export default class Template {
     this.coords = coords;
     this.chunked = chunked;
     this.chunked32 = chunked32;
+    /** Current board state per template chunk: 0 unknown, 1 correct, 2 unpainted, 3 painted differently. */
+    this.pixelStateByChunk = new Map();
     this.tileSize = tileSize;
     const colorEntries = pixelCount?.colors instanceof Map
       ? pixelCount.colors

@@ -34,6 +34,10 @@ export default class SettingsManager extends WindowSettings {
     
     this.userSettings = userSettings; // User settings as an Object
     this.userSettings.flags ??= []; // Makes sure the key "flags" always exists
+    if (!this.userSettings.hotkeys || (typeof this.userSettings.hotkeys != 'object') || Array.isArray(this.userSettings.hotkeys)) {
+      this.userSettings.hotkeys = {};
+    }
+    this.userSettings.hotkeys.paintArea = this.#normalizeHotkeyCode(this.userSettings.hotkeys.paintArea);
     this.userSettingsOld = structuredClone(this.userSettings); // Creates a duplicate of the user settings to store the old version of user settings from 5+ seconds ago
     this.userSettingsSaveLocation = 'bmUserSettings'; // Storage save location
 
@@ -41,6 +45,62 @@ export default class SettingsManager extends WindowSettings {
     this.lastUpdateTime = 0; // When this unix timestamp is within the last 5 seconds, we should save this.userSettings to storage
 
     setInterval(this.updateUserStorage.bind(this), this.updateFrequency); // Runs every X seconds (see updateFrequency)
+    this.#broadcastPaintAreaHotkey();
+  }
+
+  /** Normalizes a persisted KeyboardEvent.code value.
+   * @param {string} code
+   * @returns {string}
+   * @since 0.99.0
+   */
+  #normalizeHotkeyCode(code) {
+    const normalizedCode = String(code ?? '');
+    return /^[A-Za-z][A-Za-z0-9]{1,31}$/.test(normalizedCode) ? normalizedCode : 'AltLeft';
+  }
+
+  /** Converts KeyboardEvent.code to a compact label.
+   * @param {string} code
+   * @returns {string}
+   * @since 0.99.0
+   */
+  #formatHotkeyCode(code) {
+    const labels = {
+      AltLeft: 'Left Alt',
+      AltRight: 'Right Alt',
+      ControlLeft: 'Left Ctrl',
+      ControlRight: 'Right Ctrl',
+      ShiftLeft: 'Left Shift',
+      ShiftRight: 'Right Shift',
+      MetaLeft: 'Left Meta',
+      MetaRight: 'Right Meta',
+      Space: 'Space'
+    };
+    if (labels[code]) {return labels[code];}
+    if (code.startsWith('Key')) {return code.slice(3);}
+    if (code.startsWith('Digit')) {return code.slice(5);}
+    return code.replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+
+  /** Sends the current hotkey into the page-context paint bridge.
+   * @since 0.99.0
+   */
+  #broadcastPaintAreaHotkey() {
+    window.postMessage({
+      source: 'blue-marble',
+      action: 'paint-area-hotkey-setting',
+      code: this.userSettings.hotkeys.paintArea
+    }, '*');
+  }
+
+  /** Stores a new area-selection hotkey.
+   * @param {string} code
+   * @returns {Promise<void>}
+   * @since 0.99.0
+   */
+  async setPaintAreaHotkey(code) {
+    this.userSettings.hotkeys.paintArea = this.#normalizeHotkeyCode(code);
+    this.#broadcastPaintAreaHotkey();
+    await this.saveUserStorageNow();
   }
 
   /** Updates the user settings in userscript storage
@@ -98,6 +158,59 @@ export default class SettingsManager extends WindowSettings {
   }
 
   // This is one of the most insane OOP setups I have ever laid my eyes on
+
+  /** Builds the hotkey category of the settings window.
+   * @since 0.99.0
+   * @see WindowSettings#buildHotkeys
+   */
+  buildHotkeys() {
+    const currentCode = this.userSettings.hotkeys.paintArea;
+
+    this.window = this.addDiv({'class': 'bm-container'})
+      .addHeader(2, {'textContent': 'Hotkeys'}).buildElement()
+      .addHr().buildElement()
+      .addDiv({'class': 'bm-settings-hotkey-row'})
+        .addSpan({'textContent': 'Area selection'}).buildElement()
+        .addButton({
+          'class': 'bm-settings-hotkey-button',
+          'textContent': this.#formatHotkeyCode(currentCode),
+          'title': 'Change area selection hotkey',
+          'aria-label': `Area selection hotkey: ${this.#formatHotkeyCode(currentCode)}`
+        }, (instance, button) => {
+          let recording = false;
+          const stopRecording = () => {
+            recording = false;
+            button.dataset['recording'] = 'false';
+            button.textContent = this.#formatHotkeyCode(this.userSettings.hotkeys.paintArea);
+            document.body?.classList.remove('bm-hotkey-recording');
+          };
+
+          button.onclick = () => {
+            recording = true;
+            button.dataset['recording'] = 'true';
+            button.textContent = '...';
+            document.body?.classList.add('bm-hotkey-recording');
+          };
+          button.onkeydown = event => {
+            if (!recording) {return;}
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            if (event.code == 'Escape') {
+              stopRecording();
+              return;
+            }
+            if (!/^[A-Za-z][A-Za-z0-9]{1,31}$/.test(event.code)) {return;}
+            const code = this.#normalizeHotkeyCode(event.code);
+            void this.setPaintAreaHotkey(code).finally(() => {
+              stopRecording();
+              button.setAttribute('aria-label', `Area selection hotkey: ${this.#formatHotkeyCode(code)}`);
+            });
+          };
+          button.onblur = stopRecording;
+        }).buildElement()
+      .buildElement()
+    .buildElement();
+  }
 
   /** Builds the "highlight" category of the settings window
    * @since 0.91.18

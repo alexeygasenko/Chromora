@@ -1,17 +1,16 @@
 // ==UserScript==
-// @name            Blue Marble
-// @name:en         Blue Marble
-// @namespace       https://github.com/SwingTheVine/
-// @version         0.98.0
-// @description     A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
-// @description:en  A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
-// @author          SwingTheVine
+// @name            Chromora
+// @name:en         Chromora
+// @namespace       https://github.com/alexeygasenko/
+// @version         1.0.0
+// @description     A fluid liquid-glass template, color analysis, pixel highlighting, and assisted drafting toolkit for Wplace.live.
+// @description:en  A fluid liquid-glass template, color analysis, pixel highlighting, and assisted drafting toolkit for Wplace.live.
+// @author          alexeygasenko; based on Blue Marble by SwingTheVine
 // @license         MPL-2.0
-// @supportURL      https://discord.gg/tpeBPy46hf
-// @homepageURL     https://bluemarble.lol/
-// @icon            https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/assets/Favicon.png
-// @updateURL       https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/BlueMarble-For-GreasyFork.user.js
-// @downloadURL     https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/BlueMarble-For-GreasyFork.user.js
+// @supportURL      https://github.com/alexeygasenko/Chromora/issues
+// @homepageURL     https://github.com/alexeygasenko/Chromora
+// @updateURL       https://raw.githubusercontent.com/alexeygasenko/Chromora/main/dist/BlueMarble-For-GreasyFork.user.js
+// @downloadURL     https://raw.githubusercontent.com/alexeygasenko/Chromora/main/dist/BlueMarble-For-GreasyFork.user.js
 // @match           https://wplace.live/*
 // @grant           GM_getResourceText
 // @grant           GM_addStyle
@@ -21,7 +20,7 @@
 // @grant           GM_xmlhttpRequest
 // @grant           GM.download
 // @connect         telemetry.thebluecorner.net
-// @resource        CSS-BM-File https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/BlueMarble-For-GreasyFork.user.css
+// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/BlueMarble-For-GreasyFork.user.css
 // @antifeature     tracking Anonymous opt-in telemetry data
 // @noframes
 // ==/UserScript==
@@ -35,8 +34,8 @@
   This script is not affiliated with any userscript manager.
   The author of this userscript is not responsible for any damages, issues, loss of data, or punishment that may occur as a result of using this script.
   This script is provided "as is" under the MPL-2.0 license.
-  The "Blue Marble" icon is licensed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication.
-  The "Blue Marble" image is owned by NASA.
+  Chromora is based on Blue Marble by SwingTheVine.
+  Original Blue Marble copyright and attribution are preserved in the repository history and credits.
 */
 
 (() => {
@@ -1972,6 +1971,7 @@
       }).buildElement().addDiv({ "class": "bm-settings-drag-title-slot" }).addHeader(1, { "class": "bm-dragbar-title-persistent bm-settings-drag-title", "textContent": "Settings" }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "innerHTML": closeIcon, "aria-label": 'Close window "Settings"' }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowSettings_instances, closeWindow_fn).call(this);
       }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addHr({ "class": "bm-window-divider-top" }).buildElement().addDiv({ "class": "bm-container bm-scrollable" }, (instance, div) => {
+        this.buildHotkeys();
         this.buildHighlight();
         this.buildTemplate();
       }).buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
@@ -1983,6 +1983,13 @@
      */
     buildHighlight() {
       __privateMethod(this, _WindowSettings_instances, errorOverrideFailure_fn).call(this, "Pixel Highlight");
+    }
+    /** Builds the hotkey section of the window.
+     * This should be overriden by {@link SettingsManager}
+     * @since 0.99.0
+     */
+    buildHotkeys() {
+      __privateMethod(this, _WindowSettings_instances, errorOverrideFailure_fn).call(this, "Hotkeys");
     }
     /** Builds the template section of the window.
      * This should be overriden by {@link SettingsManager}
@@ -2097,7 +2104,7 @@
   };
 
   // src/settingsManager.js
-  var _SettingsManager_instances, updateHighlightSettings_fn, updateHighlightToPreset_fn;
+  var _SettingsManager_instances, normalizeHotkeyCode_fn, formatHotkeyCode_fn, broadcastPaintAreaHotkey_fn, updateHighlightSettings_fn, updateHighlightToPreset_fn;
   var SettingsManager = class extends WindowSettings {
     /** Constructor for the SettingsManager class
      * @param {string} name - The name of the userscript
@@ -2111,11 +2118,26 @@
       __privateAdd(this, _SettingsManager_instances);
       this.userSettings = userSettings2;
       (_a = this.userSettings).flags ?? (_a.flags = []);
+      if (!this.userSettings.hotkeys || typeof this.userSettings.hotkeys != "object" || Array.isArray(this.userSettings.hotkeys)) {
+        this.userSettings.hotkeys = {};
+      }
+      this.userSettings.hotkeys.paintArea = __privateMethod(this, _SettingsManager_instances, normalizeHotkeyCode_fn).call(this, this.userSettings.hotkeys.paintArea);
       this.userSettingsOld = structuredClone(this.userSettings);
       this.userSettingsSaveLocation = "bmUserSettings";
       this.updateFrequency = 5e3;
       this.lastUpdateTime = 0;
       setInterval(this.updateUserStorage.bind(this), this.updateFrequency);
+      __privateMethod(this, _SettingsManager_instances, broadcastPaintAreaHotkey_fn).call(this);
+    }
+    /** Stores a new area-selection hotkey.
+     * @param {string} code
+     * @returns {Promise<void>}
+     * @since 0.99.0
+     */
+    async setPaintAreaHotkey(code) {
+      this.userSettings.hotkeys.paintArea = __privateMethod(this, _SettingsManager_instances, normalizeHotkeyCode_fn).call(this, code);
+      __privateMethod(this, _SettingsManager_instances, broadcastPaintAreaHotkey_fn).call(this);
+      await this.saveUserStorageNow();
     }
     /** Updates the user settings in userscript storage
      * @since 0.91.39
@@ -2159,6 +2181,53 @@
       }
     }
     // This is one of the most insane OOP setups I have ever laid my eyes on
+    /** Builds the hotkey category of the settings window.
+     * @since 0.99.0
+     * @see WindowSettings#buildHotkeys
+     */
+    buildHotkeys() {
+      const currentCode = this.userSettings.hotkeys.paintArea;
+      this.window = this.addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Hotkeys" }).buildElement().addHr().buildElement().addDiv({ "class": "bm-settings-hotkey-row" }).addSpan({ "textContent": "Area selection" }).buildElement().addButton({
+        "class": "bm-settings-hotkey-button",
+        "textContent": __privateMethod(this, _SettingsManager_instances, formatHotkeyCode_fn).call(this, currentCode),
+        "title": "Change area selection hotkey",
+        "aria-label": `Area selection hotkey: ${__privateMethod(this, _SettingsManager_instances, formatHotkeyCode_fn).call(this, currentCode)}`
+      }, (instance, button) => {
+        let recording = false;
+        const stopRecording = () => {
+          recording = false;
+          button.dataset["recording"] = "false";
+          button.textContent = __privateMethod(this, _SettingsManager_instances, formatHotkeyCode_fn).call(this, this.userSettings.hotkeys.paintArea);
+          document.body?.classList.remove("bm-hotkey-recording");
+        };
+        button.onclick = () => {
+          recording = true;
+          button.dataset["recording"] = "true";
+          button.textContent = "...";
+          document.body?.classList.add("bm-hotkey-recording");
+        };
+        button.onkeydown = (event) => {
+          if (!recording) {
+            return;
+          }
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (event.code == "Escape") {
+            stopRecording();
+            return;
+          }
+          if (!/^[A-Za-z][A-Za-z0-9]{1,31}$/.test(event.code)) {
+            return;
+          }
+          const code = __privateMethod(this, _SettingsManager_instances, normalizeHotkeyCode_fn).call(this, event.code);
+          void this.setPaintAreaHotkey(code).finally(() => {
+            stopRecording();
+            button.setAttribute("aria-label", `Area selection hotkey: ${__privateMethod(this, _SettingsManager_instances, formatHotkeyCode_fn).call(this, code)}`);
+          });
+        };
+        button.onblur = stopRecording;
+      }).buildElement().buildElement().buildElement();
+    }
     /** Builds the "highlight" category of the settings window
      * @since 0.91.18
      * @see WindowSettings#buildHighlight
@@ -2216,6 +2285,53 @@
     }
   };
   _SettingsManager_instances = new WeakSet();
+  /** Normalizes a persisted KeyboardEvent.code value.
+   * @param {string} code
+   * @returns {string}
+   * @since 0.99.0
+   */
+  normalizeHotkeyCode_fn = function(code) {
+    const normalizedCode = String(code ?? "");
+    return /^[A-Za-z][A-Za-z0-9]{1,31}$/.test(normalizedCode) ? normalizedCode : "AltLeft";
+  };
+  /** Converts KeyboardEvent.code to a compact label.
+   * @param {string} code
+   * @returns {string}
+   * @since 0.99.0
+   */
+  formatHotkeyCode_fn = function(code) {
+    const labels = {
+      AltLeft: "Left Alt",
+      AltRight: "Right Alt",
+      ControlLeft: "Left Ctrl",
+      ControlRight: "Right Ctrl",
+      ShiftLeft: "Left Shift",
+      ShiftRight: "Right Shift",
+      MetaLeft: "Left Meta",
+      MetaRight: "Right Meta",
+      Space: "Space"
+    };
+    if (labels[code]) {
+      return labels[code];
+    }
+    if (code.startsWith("Key")) {
+      return code.slice(3);
+    }
+    if (code.startsWith("Digit")) {
+      return code.slice(5);
+    }
+    return code.replace(/([a-z])([A-Z])/g, "$1 $2");
+  };
+  /** Sends the current hotkey into the page-context paint bridge.
+   * @since 0.99.0
+   */
+  broadcastPaintAreaHotkey_fn = function() {
+    window.postMessage({
+      source: "blue-marble",
+      action: "paint-area-hotkey-setting",
+      code: this.userSettings.hotkeys.paintArea
+    }, "*");
+  };
   /** Updates the display of the highlight buttons in the settings window.
    * Additionally, it will update user settings with the new selection.
    * @param {HTMLButtonElement} button - The button that was pressed
@@ -2342,6 +2458,7 @@
       this.coords = coords2;
       this.chunked = chunked;
       this.chunked32 = chunked32;
+      this.pixelStateByChunk = /* @__PURE__ */ new Map();
       this.tileSize = tileSize;
       const colorEntries = pixelCount?.colors instanceof Map ? pixelCount.colors : Object.entries(pixelCount?.colors ?? {});
       this.pixelCount = {
@@ -4275,20 +4392,9 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
         return;
       }
       this.window = this.addDiv({ "id": this.windowID, "class": "bm-window bm-windowed", "style": "top: 10px; left: unset; right: 75px;" }, (instance, div) => {
-      }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "aria-label": 'Minimize window "Blue Marble"', "data-button-status": "expanded" }, (instance, button) => {
+      }).addDragbar().addButton({ "class": "bm-button-circle", "innerHTML": minimizeIconExpanded, "aria-label": 'Minimize window "Chromora"', "data-button-status": "expanded" }, (instance, button) => {
         button.onclick = () => instance.handleMinimization(button);
-      }).buildElement().addDiv({ "class": "bm-main-drag-brand" }).addImg({ "class": "bm-favicon", "src": "https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/assets/Favicon.png" }, (instance, img) => {
-        const date = /* @__PURE__ */ new Date();
-        const dayOfTheYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 1)) / (1e3 * 60 * 60 * 24)) + 1;
-        if (dayOfTheYear == 204) {
-          img.parentNode.style.position = "relative";
-          img.parentNode.innerHTML = img.parentNode.innerHTML + `<svg class="bm-main-birthday-hat" viewBox="0 0 9 7"><path d="M0,3L9,0L2,7" fill="#0af"/><path d="M0,3A.4,.4 0 1 1 1,5" fill="#a00"/><path d="M1.5,6A1,1 0 0 1 3,6L2,7" fill="#a0f"/><path d="M4,5A.6,.6 0 1 1 5,4" fill="#0a0"/><path d="M6,3A.8,.8 0 1 1 7,2" fill="#fa0"/><path d="M4.5,1.5A1,1 0 0 1 3,2" fill="#aa0"/></svg>`;
-          img.onload = () => {
-            const confettiManager = new ConfettiManager();
-            confettiManager.createConfetti(document.querySelector(`#${this.windowID}`));
-          };
-        }
-      }).buildElement().addHeader(1, { "class": "bm-dragbar-title-persistent", "textContent": this.name }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "innerHTML": settingsIcon, "title": "Settings", "aria-label": "Open settings" }, (instance, button) => {
+      }).buildElement().addDiv({ "class": "bm-main-drag-brand" }).addHeader(1, { "class": "bm-dragbar-title-persistent", "textContent": this.name }).buildElement().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "innerHTML": settingsIcon, "title": "Settings", "aria-label": "Open settings" }, (instance, button) => {
         button.onclick = () => {
           instance.settingsManager.buildWindow();
         };
@@ -4481,20 +4587,20 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
         schemaHealthBanner = 'Template storage health: <b style="color:#0f0;">Healthy!</b><br>No futher action required. (Reason: Semantic version matches)';
         this.schemaHealth = "Good";
       } else {
-        schemaHealthBanner = `Template storage health: <b style="color:#ff0;">Poor!</b><br>You can still use your template, but some features may not work. It is recommended that you update Blue Marble's template storage. (Reason: MINOR version mismatch)`;
+        schemaHealthBanner = `Template storage health: <b style="color:#ff0;">Poor!</b><br>You can still use your template, but some features may not work. Update ${escapeHTML(this.name)}'s template storage. (Reason: MINOR version mismatch)`;
         this.schemaHealth = "Poor";
       }
     } else if (schemaVersionArray[0] < schemaVersionBleedingEdgeArray[0]) {
-      schemaHealthBanner = `Template storage health: <b style="color:#f00;">Bad!</b><br>It is guaranteed that some features are broken. You <em>might</em> still be able to use the template. It is HIGHLY recommended that you download all templates and update Blue Marble's template storage before continuing. (Reason: MAJOR version mismatch)`;
+      schemaHealthBanner = `Template storage health: <b style="color:#f00;">Bad!</b><br>Some features are broken. Download all templates and update ${escapeHTML(this.name)}'s template storage before continuing. (Reason: MAJOR version mismatch)`;
       this.schemaHealth = "Bad";
     } else {
-      schemaHealthBanner = 'Template storage health: <b style="color:#f00">Dead!</b><br>Blue Marble can not load the template storage. (Reason: MAJOR version unknown)';
+      schemaHealthBanner = `Template storage health: <b style="color:#f00">Dead!</b><br>${escapeHTML(this.name)} cannot load the template storage. (Reason: MAJOR version unknown)`;
       this.schemaHealth = "Dead";
     }
-    const recoveryInstructions = `<hr style="margin:.5ch">If you want to continue using your current templates, then make sure the template storage (schema) is up-to-date.<br>If you don't want to update the template storage, then downgrade Blue Marble to version <b>${escapeHTML(this.scriptVersion)}</b> to continue using your templates.<br>Alternatively, if you don't care about corrupting the templates listed below, you can fix any issues with the template storage by uploading a new template.`;
+    const recoveryInstructions = `<hr style="margin:.5ch">To keep using the current templates, update the template storage schema.<br>Otherwise, downgrade ${escapeHTML(this.name)} to version <b>${escapeHTML(this.scriptVersion)}</b>.<br>You can also rebuild storage by uploading a new template.`;
     const wplaceUpdateTime = getWplaceVersion();
     let wplaceUpdateTimeLocalized = wplaceUpdateTime ? localizeDate(wplaceUpdateTime) : "???";
-    this.updateInnerHTML("#bm-wizard-status", `${schemaHealthBanner}<br>Your templates were created during Blue Marble version <b>${escapeHTML(this.scriptVersion)}</b> with schema version <b>${escapeHTML(this.schemaVersion)}</b>.<br>The current Blue Marble version is <b>${escapeHTML(this.version)}</b> and requires schema version <b>${escapeHTML(this.schemaVersionBleedingEdge)}</b>.<br>Wplace was last updated on <b>${wplaceUpdateTimeLocalized}</b>.${this.schemaHealth != "Good" ? recoveryInstructions : ""}`);
+    this.updateInnerHTML("#bm-wizard-status", `${schemaHealthBanner}<br>Your templates were created with script version <b>${escapeHTML(this.scriptVersion)}</b> and schema version <b>${escapeHTML(this.schemaVersion)}</b>.<br>The current ${escapeHTML(this.name)} version is <b>${escapeHTML(this.version)}</b> and requires schema version <b>${escapeHTML(this.schemaVersionBleedingEdge)}</b>.<br>Wplace was last updated on <b>${wplaceUpdateTimeLocalized}</b>.${this.schemaHealth != "Good" ? recoveryInstructions : ""}`);
     const buttonOptions = new Overlay(this.name, this.version);
     if (this.schemaHealth != "Dead") {
       buttonOptions.addDiv({ "class": "bm-container bm-flex-center bm-center-vertically", "style": "gap: 1.5ch;" });
@@ -4577,7 +4683,7 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
   var WindowWizard = _WindowWizard;
 
   // src/templateManager.js
-  var _TemplateManager_instances, emitTemplatesChanged_fn, restoreFilteredColorsFromSettings_fn, persistFilteredColors_fn, loadTemplate_fn, storeTemplates_fn, parseBlueMarble_fn, parseOSU_fn, calculateCorrectPixelsOnTile_And_FilterTile_fn, yieldToBrowser_fn, buildMissingHighlightClusters_fn, drawMissingHighlightCluster_fn, getIncorrectHighlightStencil_fn, drawIncorrectHighlightMarker_fn;
+  var _TemplateManager_instances, emitTemplatesChanged_fn, processPaintAreaSelection_fn, restoreFilteredColorsFromSettings_fn, persistFilteredColors_fn, loadTemplate_fn, storeTemplates_fn, parseBlueMarble_fn, parseOSU_fn, calculateCorrectPixelsOnTile_And_FilterTile_fn, yieldToBrowser_fn, buildMissingHighlightClusters_fn, drawMissingHighlightCluster_fn, getIncorrectHighlightStencil_fn, drawIncorrectHighlightMarker_fn;
   var TemplateManager = class {
     /** The constructor for the {@link TemplateManager} class.
      * @param {string} name - The name of the userscript
@@ -4610,6 +4716,8 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
       this.canvasRefreshRevision = 0;
       this.templateStatisticsState = "idle";
       this.templateChangeListeners = /* @__PURE__ */ new Set();
+      this.paintAreaMessageHandler = null;
+      this.paintAreaAbortController = null;
     }
     /** Updates the stored instance of the main window.
      * @param {WindowMain} windowMain - The main window instance
@@ -4645,6 +4753,133 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
      */
     getTemplateStatisticsState() {
       return this.templateStatisticsState;
+    }
+    /** Starts the bridge that turns a user-selected map rectangle into Wplace draft pixels.
+     * @returns {function():void} Cleanup callback
+     * @since 0.99.0
+     */
+    startPaintAreaSelectionBridge() {
+      if (this.paintAreaMessageHandler) {
+        return () => this.stopPaintAreaSelectionBridge();
+      }
+      this.paintAreaMessageHandler = (event) => {
+        const data = event.data;
+        if (data?.source != "blue-marble" || data?.action != "paint-area-selected") {
+          return;
+        }
+        this.paintAreaAbortController?.abort();
+        const abortController = new AbortController();
+        this.paintAreaAbortController = abortController;
+        void __privateMethod(this, _TemplateManager_instances, processPaintAreaSelection_fn).call(this, data, abortController.signal);
+      };
+      window.addEventListener("message", this.paintAreaMessageHandler);
+      return () => this.stopPaintAreaSelectionBridge();
+    }
+    /** Stops area-selection work and removes its message listener.
+     * @since 0.99.0
+     */
+    stopPaintAreaSelectionBridge() {
+      this.paintAreaAbortController?.abort();
+      this.paintAreaAbortController = null;
+      if (!this.paintAreaMessageHandler) {
+        return;
+      }
+      window.removeEventListener("message", this.paintAreaMessageHandler);
+      this.paintAreaMessageHandler = null;
+    }
+    /** Finds template pixels of one palette color inside inclusive world-pixel bounds.
+     * Results are compact horizontal runs: [worldY, worldXStart, worldXEnd].
+     * @param {{minX:number, minY:number, maxX:number, maxY:number}} bounds
+     * @param {number} colorID
+     * @param {{maxPixels?:number, signal?:AbortSignal}} options
+     * @returns {Promise<{runs:Array<[number, number, number]>, pixelCount:number}>}
+     * @since 0.99.0
+     */
+    async findTemplatePixelRuns(bounds, colorID, { maxPixels = 1e5, signal } = {}) {
+      const normalizedColorID = Number(colorID);
+      if (!Number.isInteger(normalizedColorID) || normalizedColorID <= 0) {
+        throw new TypeError("Select a non-transparent Wplace color first.");
+      }
+      const normalizedBounds = {
+        minX: Math.floor(Math.min(Number(bounds?.minX), Number(bounds?.maxX))),
+        minY: Math.floor(Math.min(Number(bounds?.minY), Number(bounds?.maxY))),
+        maxX: Math.floor(Math.max(Number(bounds?.minX), Number(bounds?.maxX))),
+        maxY: Math.floor(Math.max(Number(bounds?.minY), Number(bounds?.maxY)))
+      };
+      if (!Object.values(normalizedBounds).every(Number.isFinite)) {
+        throw new TypeError("Selected map area has invalid coordinates.");
+      }
+      const pixelLimit = Math.max(1, Math.min(Math.floor(Number(maxPixels) || 1), 100001));
+      const runs = [];
+      let pixelCount = 0;
+      let workSliceStarted = performance.now();
+      const chunkEntries = (value) => value instanceof Map ? value.entries() : Object.entries(value ?? {});
+      const centerOffset = Math.floor(this.drawMult / 2);
+      for (const template of this.templatesArray) {
+        for (const [chunkKey, pixelBuffer] of chunkEntries(template?.chunked32)) {
+          if (signal?.aborted) {
+            throw new DOMException("Area selection cancelled.", "AbortError");
+          }
+          if (!(pixelBuffer instanceof Uint32Array)) {
+            continue;
+          }
+          const [tileX, tileY, pixelX, pixelY] = String(chunkKey).split(",").map(Number);
+          if (![tileX, tileY, pixelX, pixelY].every(Number.isFinite)) {
+            continue;
+          }
+          const bitmap = template?.chunked instanceof Map ? template.chunked.get(chunkKey) : template?.chunked?.[chunkKey];
+          const bitmapWidth = Number(bitmap?.width);
+          const bitmapHeight = Number(bitmap?.height);
+          if (!Number.isFinite(bitmapWidth) || !Number.isFinite(bitmapHeight) || !bitmapWidth || !bitmapHeight) {
+            continue;
+          }
+          const chunkWidth = Math.floor(bitmapWidth / this.drawMult);
+          const chunkHeight = Math.floor(bitmapHeight / this.drawMult);
+          const pixelState = template?.pixelStateByChunk?.get(chunkKey);
+          if (!(pixelState instanceof Uint8Array) || pixelState.length != chunkWidth * chunkHeight) {
+            continue;
+          }
+          const chunkMinX = tileX * this.tileSize + pixelX;
+          const chunkMinY = tileY * this.tileSize + pixelY;
+          const localMinX = Math.max(0, normalizedBounds.minX - chunkMinX);
+          const localMinY = Math.max(0, normalizedBounds.minY - chunkMinY);
+          const localMaxX = Math.min(chunkWidth - 1, normalizedBounds.maxX - chunkMinX);
+          const localMaxY = Math.min(chunkHeight - 1, normalizedBounds.maxY - chunkMinY);
+          if (localMinX > localMaxX || localMinY > localMaxY) {
+            continue;
+          }
+          for (let localY = localMinY; localY <= localMaxY; localY++) {
+            let runStart = null;
+            for (let localX = localMinX; localX <= localMaxX; localX++) {
+              const bufferX = localX * this.drawMult + centerOffset;
+              const bufferY = localY * this.drawMult + centerOffset;
+              const packedColor = pixelBuffer[bufferY * bitmapWidth + bufferX];
+              const matchesColor = this.paletteBM.LUT.get(packedColor) == normalizedColorID && pixelState[localY * chunkWidth + localX] == 2;
+              if (matchesColor && runStart == null) {
+                runStart = localX;
+              }
+              const closesRun = runStart != null && (!matchesColor || localX == localMaxX);
+              if (!closesRun) {
+                continue;
+              }
+              const localRunEnd = matchesColor && localX == localMaxX ? localX : localX - 1;
+              const remaining = pixelLimit - pixelCount;
+              const runEnd = Math.min(localRunEnd, runStart + remaining - 1);
+              runs.push([chunkMinY + localY, chunkMinX + runStart, chunkMinX + runEnd]);
+              pixelCount += runEnd - runStart + 1;
+              runStart = null;
+              if (pixelCount >= pixelLimit) {
+                return { runs, pixelCount };
+              }
+            }
+            if (performance.now() - workSliceStarted >= 4) {
+              await __privateMethod(this, _TemplateManager_instances, yieldToBrowser_fn).call(this);
+              workSliceStarted = performance.now();
+            }
+          }
+        }
+      }
+      return { runs, pixelCount };
     }
     /** Updates whether a palette color should be hidden on the canvas.
      * @param {number} colorID
@@ -4813,7 +5048,7 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().bui
       this.templateStatisticsState = "loading";
       __privateMethod(this, _TemplateManager_instances, emitTemplatesChanged_fn).call(this, "create-started");
       try {
-        const hasWritableTemplateStore = this.templatesJSON?.whoami == this.name.replace(" ", "") && this.templatesJSON?.schemaVersion == this.schemaVersion && this.templatesJSON?.templates && typeof this.templatesJSON.templates == "object" && !Array.isArray(this.templatesJSON.templates);
+        const hasWritableTemplateStore = ["BlueMarble", "Chromora"].includes(this.templatesJSON?.whoami) && this.templatesJSON?.schemaVersion == this.schemaVersion && this.templatesJSON?.templates && typeof this.templatesJSON.templates == "object" && !Array.isArray(this.templatesJSON.templates);
         if (!hasWritableTemplateStore) {
           this.templatesJSON = await this.createJSON();
           console.log(`Creating JSON...`);
@@ -5035,6 +5270,7 @@ Canvas Height: ${canvasHeight}`);
             instance: template,
             bitmap: template.chunked[tile],
             chunked32: template.chunked32?.[tile],
+            chunkKey: tile,
             tileCoords: [coords2[0], coords2[1]],
             pixelCoords: [coords2[2], coords2[3]]
           };
@@ -5114,7 +5350,9 @@ Version: ${this.version}`);
           highlightDisabled: highlightDisabled && !hasIncorrectHighlightColor,
           highlightColorID: incorrectHighlightColorID,
           highlightMode: incorrectHighlightMode,
-          highlightGridOrigin
+          highlightGridOrigin,
+          pixelState: template.instance.pixelStateByChunk,
+          chunkKey: template.chunkKey
         });
         let pixelsCorrectTotal = 0;
         const transparentColorID = 0;
@@ -5148,7 +5386,7 @@ There are ${pixelsCorrectTotal} correct pixels.`);
       const previousTemplatesJSON = this.templatesJSON;
       const previousTemplatesArray = this.templatesArray;
       try {
-        if (json?.whoami == "BlueMarble") {
+        if (["BlueMarble", "Chromora"].includes(json?.whoami)) {
           const { templatesArray: importedTemplates, skippedTemplates } = await __privateMethod(this, _TemplateManager_instances, parseBlueMarble_fn).call(this, json);
           if (Object.keys(json.templates).length && !importedTemplates.length) {
             throw new AggregateError(
@@ -5199,6 +5437,35 @@ There are ${pixelsCorrectTotal} correct pixels.`);
       } catch (error) {
         consoleWarn("A template-change listener failed.", error);
       }
+    }
+  };
+  processPaintAreaSelection_fn = async function(data, signal) {
+    try {
+      const result = await this.findTemplatePixelRuns(data.bounds, data.colorID, {
+        maxPixels: data.maxPixels,
+        signal
+      });
+      if (signal.aborted) {
+        return;
+      }
+      window.postMessage({
+        source: "blue-marble",
+        action: "paint-area-fill",
+        requestID: data.requestID,
+        colorID: Number(data.colorID),
+        runs: result.runs,
+        pixelCount: result.pixelCount
+      }, "*");
+    } catch (error) {
+      if (signal.aborted || error?.name == "AbortError") {
+        return;
+      }
+      window.postMessage({
+        source: "blue-marble",
+        action: "paint-area-error",
+        requestID: data.requestID,
+        message: error instanceof Error ? error.message : String(error)
+      }, "*");
     }
   };
   /** Restores hidden colors from persisted user settings.
@@ -5281,7 +5548,7 @@ There are ${pixelsCorrectTotal} correct pixels.`);
       throw new Error(`Template schema ${schemaVersion} must be migrated before loading.`);
     } else {
       this.windowMain.handleDisplayError(`Template version ${schemaVersion} is unsupported.
-Use Blue Marble version ${scriptVersion} or load a new template.`);
+Use ${this.name} version ${scriptVersion} or load a new template.`);
       throw new Error(`Template schema ${schemaVersion} is unsupported.`);
     }
     async function loadSchema({
@@ -5356,7 +5623,9 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
     highlightDisabled,
     highlightColorID = null,
     highlightMode = "incorrect",
-    highlightGridOrigin = null
+    highlightGridOrigin = null,
+    pixelState: pixelStateByChunk = null,
+    chunkKey = null
   }) {
     const pixelSize = this.drawMult;
     const tileWidth = this.tileSize * pixelSize;
@@ -5367,6 +5636,9 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
     const templateCoordY = templateInformation[1];
     const templateWidth = templateInformation[2];
     const templateHeight = templateInformation[3];
+    const templatePixelWidth = Math.floor(templateWidth / pixelSize);
+    const templatePixelHeight = Math.floor(templateHeight / pixelSize);
+    const currentPixelState = new Uint8Array(templatePixelWidth * templatePixelHeight);
     const highlightGridOriginX = Number.isFinite(Number(highlightGridOrigin?.[0])) ? Number(highlightGridOrigin[0]) : templateCoordX;
     const highlightGridOriginY = Number.isFinite(Number(highlightGridOrigin?.[1])) ? Number(highlightGridOrigin[1]) : templateCoordY;
     const tolerance = this.paletteTolerance;
@@ -5448,6 +5720,10 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
         const tilePixelAlpha = tilePixelAbove >>> 24 & 255;
         const bestTemplateColorID = lookupTable.get(templatePixel) ?? -2;
         const bestTileColorID = lookupTable.get(tilePixelAbove) ?? -2;
+        const stateIndex = Math.floor((templateRow - 1) / pixelSize) * templatePixelWidth + Math.floor((templateColumn - 1) / pixelSize);
+        if (templatePixelAlpha > tolerance && bestTemplateColorID > 0) {
+          currentPixelState[stateIndex] = tilePixelAlpha <= tolerance ? 2 : bestTileColorID == bestTemplateColorID ? 1 : 3;
+        }
         if (this.shouldFilterColor.get(bestTemplateColorID)) {
           template32[templateRow * templateWidth + templateColumn] = tilePixelAbove;
         }
@@ -5543,6 +5819,9 @@ Use Blue Marble version ${scriptVersion} or load a new template.`);
           workSliceStarted = performance.now();
         }
       }
+    }
+    if (pixelStateByChunk instanceof Map && chunkKey) {
+      pixelStateByChunk.set(chunkKey, currentPixelState);
     }
     console.log(`List of template pixels that match the tile:`);
     console.log(_colorpalette);
@@ -6187,7 +6466,7 @@ HTTP ${response.status}`);
         button.onclick = () => {
           window.open("https://github.com/SwingTheVine/Wplace-TelemetryServer#telemetry-data", "_blank", "noopener noreferrer");
         };
-      }).buildElement().buildElement().addDiv({ "class": "bm-container bm-scrollable" }).addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Legal" }).buildElement().addP({ "textContent": `We collect anonymous telemetry data such as your browser, OS, and script version to make the experience better for everyone. The data is never shared personally. The data is never sold. You can turn this off by pressing the "Disable" button, but keeping it on helps us improve features and reliability faster. Thank you for supporting ${this.name}!` }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Non-Legal Summary" }).buildElement().addP({ "innerHTML": `You can disable telemetry by pressing the "Disable" button. If you would like to read more about what information we collect, press the "More Information" button.<br>This is the data <em>stored</em> on our servers:` }).buildElement().addUl().addLi({ "innerHTML": `A unique identifier (UUIDv4) generated by Blue Marble. This enables our telemetry to function without tracking your actual user ID.<br>Your UUID is: <b>${escapeHTML(this.uuid)}</b>` }).buildElement().addLi({ "innerHTML": `The version of Blue Marble you are using.<br>Your version is: <b>${escapeHTML(this.version)}</b>` }).buildElement().addLi({ "innerHTML": `Your browser type, which is used to determine Blue Marble outages and browser popularity.<br>Your browser type is: <b>${escapeHTML(browser)}</b>` }).buildElement().addLi({ "innerHTML": `Your OS type, which is used to determine Blue Marble outages and OS popularity.<br>Your OS type is: <b>${escapeHTML(os)}</b>` }).buildElement().addLi({ "innerHTML": `The date and time that Blue Marble sent the telemetry information.` }).buildElement().buildElement().addP({ "innerHTML": `All of the data mentioned above is <b>aggregated every hour</b>. This means every hour, anything that could even remotly be considered "personal data" is deleted from our server. Here, "aggregated" data means things like "42 people used Blue Marble on Google Chrome this hour", which can't be used to identify anyone in particular.` }).buildElement().buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
+      }).buildElement().buildElement().addDiv({ "class": "bm-container bm-scrollable" }).addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Legal" }).buildElement().addP({ "textContent": `We collect anonymous telemetry data such as your browser, OS, and script version to make the experience better for everyone. The data is never shared personally. The data is never sold. You can turn this off by pressing the "Disable" button, but keeping it on helps us improve features and reliability faster. Thank you for supporting ${this.name}!` }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Non-Legal Summary" }).buildElement().addP({ "innerHTML": `You can disable telemetry by pressing the "Disable" button. If you would like to read more about what information we collect, press the "More Information" button.<br>This is the data <em>stored</em> on our servers:` }).buildElement().addUl().addLi({ "innerHTML": `A unique identifier (UUIDv4) generated by ${escapeHTML(this.name)}. This enables telemetry without tracking your actual user ID.<br>Your UUID is: <b>${escapeHTML(this.uuid)}</b>` }).buildElement().addLi({ "innerHTML": `The version of ${escapeHTML(this.name)} you are using.<br>Your version is: <b>${escapeHTML(this.version)}</b>` }).buildElement().addLi({ "innerHTML": `Your browser type, used to determine ${escapeHTML(this.name)} outages and browser popularity.<br>Your browser type is: <b>${escapeHTML(browser)}</b>` }).buildElement().addLi({ "innerHTML": `Your OS type, used to determine ${escapeHTML(this.name)} outages and platform usage.<br>Your OS type is: <b>${escapeHTML(os)}</b>` }).buildElement().addLi({ "innerHTML": `The date and time that ${escapeHTML(this.name)} sent the telemetry information.` }).buildElement().buildElement().addP({ "innerHTML": `All data above is <b>aggregated every hour</b>. Anything that could be considered personal is deleted from the server. Aggregated data means totals such as "42 people used ${escapeHTML(this.name)} on Google Chrome this hour", which cannot identify anyone.` }).buildElement().buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
     }
   };
   _WindowTelemetry_instances = new WeakSet();
@@ -6255,6 +6534,617 @@ HTTP ${response.status}`);
         fetchedBlobQueue.delete(blobID);
       }
     });
+    function setupPaintAreaBridge() {
+      const tileSize = 1e3;
+      const scannedModuleURLs = /* @__PURE__ */ new Set();
+      const state = {
+        runtimeStore: null,
+        userStore: null,
+        active: false,
+        manualActive: false,
+        hotkeyHeld: false,
+        hotkeyCode: "AltLeft",
+        busy: false,
+        dragging: false,
+        pointerID: null,
+        dragStart: null,
+        dragEnd: null,
+        trustedEvent: null,
+        pendingRequestID: null,
+        fillRevision: 0,
+        queuedDraftPixels: /* @__PURE__ */ new Set(),
+        lastChargeSnapshot: null,
+        suppressClickUntil: 0,
+        toggleButton: null,
+        marquee: null,
+        alert: null,
+        alertTimer: null,
+        syncFrame: null
+      };
+      const selectAreaIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 4H5a1 1 0 0 0-1 1v3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path class="bm-paint-area-cursor" d="m9 8 7.15 7.15-3.05.55-1.55 3.05z"/></svg>';
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      function setButtonState(buttonState, title) {
+        const button = state.toggleButton;
+        if (!button) {
+          return;
+        }
+        button.dataset["state"] = buttonState;
+        button.title = title;
+        button.setAttribute("aria-label", title);
+        button.setAttribute("aria-pressed", state.active ? "true" : "false");
+        button.disabled = state.busy;
+      }
+      function removeMarquee() {
+        state.marquee?.remove();
+        state.marquee = null;
+      }
+      function removeAreaAlert() {
+        clearTimeout(state.alertTimer);
+        state.alertTimer = null;
+        state.alert?.remove();
+        state.alert = null;
+      }
+      function showAreaAlert(message) {
+        removeAreaAlert();
+        const alert = document.createElement("div");
+        alert.className = "bm-paint-area-alert";
+        alert.setAttribute("role", "alert");
+        alert.textContent = message;
+        document.body?.appendChild(alert);
+        state.alert = alert;
+        setButtonState("error", message);
+        state.alertTimer = setTimeout(() => {
+          removeAreaAlert();
+          if (!state.busy) {
+            setButtonState(state.active ? "active" : "idle", state.active ? "Stop selecting matching template areas" : "Select matching template area");
+          }
+        }, 4200);
+      }
+      function resetQueuedDraftPixels() {
+        state.queuedDraftPixels.clear();
+        state.lastChargeSnapshot = null;
+      }
+      function getAvailableDraftPixels() {
+        const charges = Number(state.userStore?.["charges"]);
+        if (!Number.isFinite(charges)) {
+          return { charges: null, available: null };
+        }
+        const normalizedCharges = Math.max(0, Math.floor(charges));
+        if (state.lastChargeSnapshot != null && normalizedCharges < state.lastChargeSnapshot) {
+          resetQueuedDraftPixels();
+        }
+        state.lastChargeSnapshot = normalizedCharges;
+        return {
+          charges: normalizedCharges,
+          available: Math.max(0, normalizedCharges - state.queuedDraftPixels.size)
+        };
+      }
+      function prepareDraftRuns(runs, availablePixels) {
+        const preparedRuns = [];
+        let pixelCount = 0;
+        for (const run of runs) {
+          const worldY = Number(run?.[0]);
+          const startX = Number(run?.[1]);
+          const endX = Number(run?.[2]);
+          if (![worldY, startX, endX].every(Number.isFinite)) {
+            continue;
+          }
+          let preparedRunStart = null;
+          for (let worldX = startX; worldX <= endX; worldX++) {
+            const alreadyQueued = state.queuedDraftPixels.has(`${worldX},${worldY}`);
+            if (!alreadyQueued && preparedRunStart == null) {
+              preparedRunStart = worldX;
+            }
+            if (!alreadyQueued) {
+              pixelCount++;
+              if (pixelCount > availablePixels) {
+                return { exceeded: true, runs: [], pixelCount };
+              }
+            }
+            const closesRun = preparedRunStart != null && (alreadyQueued || worldX == endX);
+            if (!closesRun) {
+              continue;
+            }
+            preparedRuns.push([worldY, preparedRunStart, alreadyQueued ? worldX - 1 : worldX]);
+            preparedRunStart = null;
+          }
+        }
+        return { exceeded: false, runs: preparedRuns, pixelCount };
+      }
+      function updateSelectionActive({ cancelWork = false } = {}) {
+        state.active = state.manualActive || state.hotkeyHeld;
+        document.body?.classList.toggle("bm-paint-area-active", state.active);
+        if (!state.active) {
+          state.dragging = false;
+          state.pointerID = null;
+          removeMarquee();
+          if (cancelWork) {
+            state.fillRevision++;
+            state.busy = false;
+            state.pendingRequestID = null;
+          }
+        }
+        if (!state.busy) {
+          setButtonState(state.active ? "active" : "idle", state.active ? "Stop selecting matching template areas" : "Select matching template area");
+        }
+      }
+      function isEditableTarget(target) {
+        return target instanceof Element && !!target.closest('input, textarea, select, [contenteditable="true"]');
+      }
+      function handleHotkeyDown(event) {
+        if (event.code != state.hotkeyCode || event.repeat || state.hotkeyHeld || !state.toggleButton || state.toggleButton.hidden) {
+          return;
+        }
+        if (document.body?.classList.contains("bm-hotkey-recording") || isEditableTarget(event.target)) {
+          return;
+        }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        state.hotkeyHeld = true;
+        updateSelectionActive();
+      }
+      function releaseHotkey(event = null) {
+        if (!state.hotkeyHeld || event && event.code != state.hotkeyCode) {
+          return;
+        }
+        event?.preventDefault();
+        event?.stopImmediatePropagation();
+        state.hotkeyHeld = false;
+        updateSelectionActive();
+      }
+      function ensureToggleButton() {
+        if (state.toggleButton?.isConnected) {
+          return state.toggleButton;
+        }
+        const button = document.createElement("button");
+        button.id = "bm-paint-area-toggle";
+        button.type = "button";
+        button.className = "bm-paint-area-toggle";
+        button.innerHTML = selectAreaIcon;
+        button.hidden = true;
+        button.onclick = async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (state.busy) {
+            return;
+          }
+          if (!state.runtimeStore?.["map"]) {
+            await discoverWplaceRuntime();
+          }
+          if (!state.runtimeStore?.["map"]) {
+            setButtonState("error", "Wplace paint runtime is unavailable");
+            return;
+          }
+          state.manualActive = !state.active;
+          updateSelectionActive();
+        };
+        document.body?.appendChild(button);
+        state.toggleButton = button;
+        setButtonState("idle", "Select matching template area");
+        return button;
+      }
+      async function discoverWplaceRuntime() {
+        if (state.runtimeStore?.["map"]) {
+          return state.runtimeStore["map"];
+        }
+        const resourceURLs = performance.getEntriesByType("resource").map((entry) => entry.name);
+        const preloadURLs = Array.from(document.querySelectorAll('link[rel="modulepreload"][href]'), (link) => link.href);
+        const moduleURLs = Array.from(new Set([...resourceURLs, ...preloadURLs].filter((url) => {
+          try {
+            const parsedURL = new URL(url, window.location.href);
+            return parsedURL.origin == window.location.origin && parsedURL.pathname.includes("/_app/immutable/chunks/") && parsedURL.pathname.endsWith(".js");
+          } catch {
+            return false;
+          }
+        })));
+        for (const moduleURL of moduleURLs) {
+          if (scannedModuleURLs.has(moduleURL)) {
+            continue;
+          }
+          scannedModuleURLs.add(moduleURL);
+          try {
+            const module = await import(moduleURL);
+            for (const candidate of Object.values(module)) {
+              if (!candidate || typeof candidate != "object" && typeof candidate != "function") {
+                continue;
+              }
+              try {
+                if (!state.runtimeStore && "automatedClicks" in candidate && "map" in candidate) {
+                  state.runtimeStore = candidate;
+                }
+                if (!state.userStore && "charges" in candidate && "data" in candidate && typeof candidate["refresh"] == "function") {
+                  state.userStore = candidate;
+                }
+              } catch {
+              }
+            }
+            if (state.runtimeStore?.["map"] && state.userStore) {
+              break;
+            }
+          } catch {
+          }
+        }
+        return state.runtimeStore?.["map"] ?? null;
+      }
+      function getPaintClickListener(map) {
+        const listeners = map?.["_listeners"]?.["click"];
+        if (!Array.isArray(listeners)) {
+          return null;
+        }
+        return listeners.slice().reverse().find((listener) => {
+          try {
+            const source = Function.prototype.toString.call(listener);
+            return source.includes("automatedClicks") && source.includes("originalEvent");
+          } catch {
+            return false;
+          }
+        }) ?? null;
+      }
+      function getTileZoom(map) {
+        const pixelSource = map?.["getSource"]?.("pixel-art-layer");
+        const tileZoom = Number(pixelSource?.["maxzoom"] ?? pixelSource?.["_options"]?.["maxzoom"]);
+        return Number.isFinite(tileZoom) ? tileZoom : 11;
+      }
+      function latLonToWorldPixel(lat, lng, tileZoom) {
+        const halfWorldMeters = Math.PI * 6378137;
+        const initialResolution = 2 * halfWorldMeters / tileSize;
+        const metersX = lng / 180 * halfWorldMeters;
+        const metersY = Math.log(Math.tan((90 + lat) * Math.PI / 360)) / (Math.PI / 180) * halfWorldMeters / 180;
+        const resolution = initialResolution / 2 ** tileZoom;
+        return [
+          Math.floor((metersX + halfWorldMeters) / resolution),
+          Math.floor((halfWorldMeters - metersY) / resolution)
+        ];
+      }
+      function worldPixelToLatLon(pixelX, pixelY, tileZoom) {
+        const halfWorldMeters = Math.PI * 6378137;
+        const initialResolution = 2 * halfWorldMeters / tileSize;
+        const resolution = initialResolution / 2 ** tileZoom;
+        const metersX = pixelX * resolution - halfWorldMeters;
+        const metersY = halfWorldMeters - pixelY * resolution;
+        const lng = metersX / halfWorldMeters * 180;
+        let lat = metersY / halfWorldMeters * 180;
+        lat = 180 / Math.PI * (2 * Math.atan(Math.exp(lat * Math.PI / 180)) - Math.PI / 2);
+        return { "lat": lat, "lng": lng };
+      }
+      function clientPointToWorldPixel(map, clientX, clientY) {
+        const canvas = map["getCanvas"]();
+        const rect = canvas.getBoundingClientRect();
+        const lngLat = map["unproject"]([clientX - rect.left, clientY - rect.top]);
+        return latLonToWorldPixel(lngLat["lat"], lngLat["lng"], getTileZoom(map));
+      }
+      function updateMarquee() {
+        if (!state.dragStart || !state.dragEnd) {
+          return;
+        }
+        if (!state.marquee) {
+          state.marquee = document.createElement("div");
+          state.marquee.className = "bm-paint-area-marquee";
+          document.body.appendChild(state.marquee);
+        }
+        const left = Math.min(state.dragStart.x, state.dragEnd.x);
+        const top = Math.min(state.dragStart.y, state.dragEnd.y);
+        const width = Math.abs(state.dragStart.x - state.dragEnd.x);
+        const height = Math.abs(state.dragStart.y - state.dragEnd.y);
+        state.marquee.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+        state.marquee.style.width = `${Math.max(1, width)}px`;
+        state.marquee.style.height = `${Math.max(1, height)}px`;
+      }
+      function isMapCanvasTarget(target, map) {
+        return target instanceof Node && !!map?.["getCanvasContainer"]?.().contains(target);
+      }
+      function handlePointerDown(event) {
+        const map = state.runtimeStore?.["map"];
+        if (!state.active || state.busy || !map || event.button != 0 || !event.isTrusted || !isMapCanvasTarget(event.target, map)) {
+          return;
+        }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        state.dragging = true;
+        state.pointerID = event.pointerId;
+        state.dragStart = { x: event.clientX, y: event.clientY };
+        state.dragEnd = { ...state.dragStart };
+        state.trustedEvent = event;
+        state.suppressClickUntil = Date.now() + 750;
+        setButtonState("selecting", "Selecting template area");
+        updateMarquee();
+      }
+      function handlePointerMove(event) {
+        if (!state.dragging || event.pointerId != state.pointerID) {
+          return;
+        }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        state.dragEnd = { x: event.clientX, y: event.clientY };
+        state.trustedEvent = event;
+        updateMarquee();
+      }
+      function handlePointerUp(event) {
+        const map = state.runtimeStore?.["map"];
+        if (!state.dragging || !map || event.pointerId != state.pointerID) {
+          return;
+        }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        state.dragging = false;
+        state.pointerID = null;
+        state.dragEnd = { x: event.clientX, y: event.clientY };
+        state.trustedEvent = event;
+        state.suppressClickUntil = Date.now() + 750;
+        removeMarquee();
+        const colorID = Number(localStorage.getItem("selected-color"));
+        if (!Number.isInteger(colorID) || colorID <= 0) {
+          setButtonState("error", "Select a non-transparent Wplace color first");
+          return;
+        }
+        const startPixel = clientPointToWorldPixel(map, state.dragStart.x, state.dragStart.y);
+        const endPixel = clientPointToWorldPixel(map, state.dragEnd.x, state.dragEnd.y);
+        const budget = getAvailableDraftPixels();
+        if (budget.charges == null) {
+          showAreaAlert("Could not determine available Wplace pixels. Try again after the charge counter loads.");
+          return;
+        }
+        if (budget.available <= 0) {
+          showAreaAlert("No Wplace pixels are available. Paint or clear the current draft before selecting another area.");
+          return;
+        }
+        const requestID = crypto.randomUUID();
+        state.pendingRequestID = requestID;
+        state.busy = true;
+        setButtonState("loading", "Finding matching template pixels");
+        window.postMessage({
+          source: "blue-marble",
+          action: "paint-area-selected",
+          requestID,
+          colorID,
+          maxPixels: Math.min(100001, budget.charges + 1),
+          bounds: {
+            minX: Math.min(startPixel[0], endPixel[0]),
+            minY: Math.min(startPixel[1], endPixel[1]),
+            maxX: Math.max(startPixel[0], endPixel[0]),
+            maxY: Math.max(startPixel[1], endPixel[1])
+          }
+        }, "*");
+      }
+      function handleClickCapture(event) {
+        const map = state.runtimeStore?.["map"];
+        if (!state.active || !map || !isMapCanvasTarget(event.target, map)) {
+          return;
+        }
+        if (state.dragging || Date.now() <= state.suppressClickUntil) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }
+      function handleDraftActionCapture(event) {
+        const button = event.target instanceof Element ? event.target.closest("button") : null;
+        if (!button || button == state.toggleButton) {
+          return;
+        }
+        const label = String(button.getAttribute("aria-label") || button.textContent || "").trim().toLowerCase();
+        if (label == "clear" || label == "clear draft") {
+          queueMicrotask(resetQueuedDraftPixels);
+        }
+      }
+      function beginPreviewCoalescing(map) {
+        const serviceWorkers = navigator.serviceWorker;
+        const controller = serviceWorkers?.controller;
+        const originalPostMessage = controller?.postMessage;
+        const originalRefreshTiles = map?.["refreshTiles"];
+        let latestPreviewMessage = null;
+        let pendingSourceID = null;
+        let postMessagePatched = false;
+        let refreshPatched = false;
+        try {
+          if (controller && typeof originalPostMessage == "function") {
+            controller.postMessage = function(message, ...args) {
+              if (message?.["type"] == "previewPixels") {
+                latestPreviewMessage = message;
+                queueMicrotask(() => serviceWorkers.dispatchEvent(new MessageEvent("message", { "data": { "id": message["id"] } })));
+                return;
+              }
+              return originalPostMessage.call(this, message, ...args);
+            };
+            postMessagePatched = true;
+          }
+        } catch {
+        }
+        try {
+          if (map && typeof originalRefreshTiles == "function") {
+            map["refreshTiles"] = function(sourceID) {
+              pendingSourceID = sourceID ?? pendingSourceID;
+              return this;
+            };
+            refreshPatched = true;
+          }
+        } catch {
+        }
+        const restore = () => {
+          if (postMessagePatched) {
+            controller.postMessage = originalPostMessage;
+          }
+          if (refreshPatched) {
+            map["refreshTiles"] = originalRefreshTiles;
+          }
+        };
+        const flush = async () => {
+          restore();
+          if (latestPreviewMessage && controller && typeof originalPostMessage == "function") {
+            await new Promise((resolve) => {
+              const finish = () => {
+                clearTimeout(timeoutID);
+                serviceWorkers.removeEventListener("message", responseHandler);
+                resolve();
+              };
+              const responseHandler = (event) => {
+                if (event.data?.["id"] == latestPreviewMessage["id"]) {
+                  finish();
+                }
+              };
+              const timeoutID = setTimeout(finish, 1200);
+              serviceWorkers.addEventListener("message", responseHandler);
+              originalPostMessage.call(controller, latestPreviewMessage);
+            });
+          }
+          if (map && typeof originalRefreshTiles == "function") {
+            originalRefreshTiles.call(map, pendingSourceID ?? "pixel-art-layer");
+          }
+        };
+        return { flush, restore };
+      }
+      async function fillPaintDraft(data) {
+        if (data.requestID != state.pendingRequestID) {
+          return;
+        }
+        const map = state.runtimeStore?.["map"] ?? await discoverWplaceRuntime();
+        const paintClickListener = getPaintClickListener(map);
+        if (!map || !paintClickListener) {
+          throw new Error("Wplace paint handler is unavailable.");
+        }
+        const selectedColorID = Number(localStorage.getItem("selected-color"));
+        if (selectedColorID != Number(data.colorID)) {
+          throw new Error("Selected Wplace color changed during area scan.");
+        }
+        const budget = getAvailableDraftPixels();
+        if (budget.charges == null) {
+          state.pendingRequestID = null;
+          state.busy = false;
+          showAreaAlert("Could not determine available Wplace pixels. Nothing was added.");
+          return;
+        }
+        const prepared = prepareDraftRuns(Array.isArray(data.runs) ? data.runs : [], budget.available);
+        if (prepared.exceeded) {
+          state.pendingRequestID = null;
+          state.busy = false;
+          showAreaAlert(`Selected area exceeds the available pixel limit (${budget.available}). Nothing was added.`);
+          return;
+        }
+        const runs = prepared.runs;
+        const fillRevision = ++state.fillRevision;
+        const previousMuted = state.runtimeStore["muted"];
+        const preview = beginPreviewCoalescing(map);
+        state.runtimeStore["muted"] = true;
+        state.busy = true;
+        setButtonState("filling", `Adding ${Number(data.pixelCount) || 0} pixels to Wplace draft`);
+        let queuedPixels = 0;
+        let workSliceStarted = performance.now();
+        try {
+          for (const run of runs) {
+            const worldY = Number(run?.[0]);
+            const startX = Number(run?.[1]);
+            const endX = Number(run?.[2]);
+            if (![worldY, startX, endX].every(Number.isFinite)) {
+              continue;
+            }
+            for (let worldX = startX; worldX <= endX; worldX++) {
+              if (fillRevision != state.fillRevision) {
+                return;
+              }
+              const lngLat = worldPixelToLatLon(worldX + 0.5, worldY + 0.5, getTileZoom(map));
+              const point = map["project"]({ "lng": lngLat["lng"], "lat": lngLat["lat"] });
+              paintClickListener.call(map, {
+                "type": "click",
+                "target": map,
+                "originalEvent": state.trustedEvent,
+                "lngLat": lngLat,
+                "point": point
+              });
+              state.queuedDraftPixels.add(`${worldX},${worldY}`);
+              queuedPixels++;
+              if (performance.now() - workSliceStarted >= 5) {
+                await nextFrame();
+                workSliceStarted = performance.now();
+              }
+            }
+          }
+          await Promise.resolve();
+          await nextFrame();
+          await preview.flush();
+          state.pendingRequestID = null;
+          state.busy = false;
+          setButtonState("success", queuedPixels ? `Processed ${queuedPixels} matching pixels in Wplace draft` : "No matching template pixels in selected area");
+          setTimeout(() => {
+            if (!state.busy) {
+              setButtonState(state.active ? "active" : "idle", state.active ? "Stop selecting matching template areas" : "Select matching template area");
+            }
+          }, 1600);
+        } finally {
+          preview.restore();
+          state.runtimeStore["muted"] = previousMuted;
+          if (fillRevision == state.fillRevision) {
+            state.busy = false;
+          }
+        }
+      }
+      window.addEventListener("message", (event) => {
+        const data = event.data;
+        if (data?.source != "blue-marble") {
+          return;
+        }
+        if (data.action == "paint-area-hotkey-setting") {
+          const hotkeyCode = String(data.code ?? "");
+          if (!/^[A-Za-z][A-Za-z0-9]{1,31}$/.test(hotkeyCode)) {
+            return;
+          }
+          state.hotkeyHeld = false;
+          state.hotkeyCode = hotkeyCode;
+          updateSelectionActive();
+        } else if (data.action == "paint-area-fill") {
+          void fillPaintDraft(data).catch((error) => {
+            if (data.requestID != state.pendingRequestID) {
+              return;
+            }
+            state.pendingRequestID = null;
+            state.busy = false;
+            setButtonState("error", error instanceof Error ? error.message : String(error));
+          });
+        } else if (data.action == "paint-area-error" && data.requestID == state.pendingRequestID) {
+          state.pendingRequestID = null;
+          state.busy = false;
+          setButtonState("error", data.message || "Could not fill selected area");
+        }
+      });
+      async function syncPaintMode() {
+        state.syncFrame = null;
+        const paintModeVisible = !!document.querySelector("#color-1");
+        if (paintModeVisible) {
+          await discoverWplaceRuntime();
+        }
+        const button = ensureToggleButton();
+        button.hidden = !paintModeVisible;
+        if (!paintModeVisible && (state.active || state.busy)) {
+          state.manualActive = false;
+          state.hotkeyHeld = false;
+          updateSelectionActive({ cancelWork: true });
+          resetQueuedDraftPixels();
+          removeAreaAlert();
+        }
+      }
+      const schedulePaintModeSync = () => {
+        if (state.syncFrame != null) {
+          return;
+        }
+        state.syncFrame = requestAnimationFrame(() => void syncPaintMode());
+      };
+      const paintModeObserver = new MutationObserver(schedulePaintModeSync);
+      paintModeObserver.observe(document.documentElement, { childList: true, subtree: true });
+      window.addEventListener("pointerdown", handlePointerDown, true);
+      window.addEventListener("pointermove", handlePointerMove, true);
+      window.addEventListener("pointerup", handlePointerUp, true);
+      window.addEventListener("pointercancel", handlePointerUp, true);
+      window.addEventListener("click", handleClickCapture, true);
+      window.addEventListener("click", handleDraftActionCapture, true);
+      window.addEventListener("keydown", handleHotkeyDown, true);
+      window.addEventListener("keyup", releaseHotkey, true);
+      window.addEventListener("blur", () => releaseHotkey());
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState == "hidden") {
+          releaseHotkey();
+        }
+      });
+      schedulePaintModeSync();
+    }
+    setupPaintAreaBridge();
     const originalFetch = window.fetch;
     window.fetch = async function(...args) {
       const endpointName = (args[0] instanceof Request ? args[0]?.url : args[0])?.toString() || "ignore";
@@ -6405,6 +7295,7 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
       let activeTelemetryWindow = null;
       let stopSpontaneousResponseListener = null;
       let stopBlackObserver = null;
+      let stopPaintAreaSelectionBridge = null;
       try {
         let observeBlack = function() {
           const observer = new MutationObserver((mutations, observer2) => {
@@ -6428,8 +7319,9 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
                 roundedBox.style.borderBottomRightRadius = shouldMoveUp ? "var(--radius-box)" : "0px";
                 this.textContent = shouldMoveUp ? "Move \u2193" : "Move \u2191";
               };
-              const paintPixel = black.parentNode.parentNode.parentNode.parentNode.querySelector("h2");
-              paintPixel.parentNode?.appendChild(move);
+              const paintPixelContainer = black.parentNode?.parentNode?.parentNode?.parentNode;
+              const paintPixel = paintPixelContainer?.querySelector("h2");
+              paintPixel?.parentNode?.appendChild(move);
             }
           });
           observer.observe(document.body, { childList: true, subtree: true });
@@ -6445,6 +7337,7 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
         windowMain.setApiManager(apiManager);
         templateManager.setWindowMain(windowMain);
         templateManager.setSettingsManager(settingsManager);
+        stopPaintAreaSelectionBridge = templateManager.startPaintAreaSelectionBridge();
         const storageTemplates = readStoredJSON("bmTemplates");
         console.log(storageTemplates);
         runtimeMarker = document.createElement("meta");
@@ -6505,6 +7398,7 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
         }
         stopBlackObserver?.();
         stopSpontaneousResponseListener?.();
+        stopPaintAreaSelectionBridge?.();
         activeWindowMain?.windowFilter?.dispose();
         document.getElementById(activeWindowMain?.windowID)?.remove();
         document.getElementById(activeTelemetryWindow?.windowID)?.remove();
@@ -6515,4 +7409,4 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   }
 })();
 
-// Build Hash: 8fcd608cd370
+// Build Hash: dd0d2387d0d4

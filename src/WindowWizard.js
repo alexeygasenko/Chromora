@@ -113,30 +113,30 @@ export default class WindowWizard extends Overlay {
         schemaHealthBanner = 'Template storage health: <b style="color:#0f0;">Healthy!</b><br>No futher action required. (Reason: Semantic version matches)';
         this.schemaHealth = 'Good';
       } else { // ...else, the MINOR version is out-of-date
-        schemaHealthBanner = 'Template storage health: <b style="color:#ff0;">Poor!</b><br>You can still use your template, but some features may not work. It is recommended that you update Blue Marble\'s template storage. (Reason: MINOR version mismatch)';
+        schemaHealthBanner = `Template storage health: <b style="color:#ff0;">Poor!</b><br>You can still use your template, but some features may not work. Update ${escapeHTML(this.name)}'s template storage. (Reason: MINOR version mismatch)`;
         this.schemaHealth = 'Poor';
       }
     } else if (schemaVersionArray[0] < schemaVersionBleedingEdgeArray[0]) {
       // ...ELSE IF the MAJOR version is out-of-date
       
-      schemaHealthBanner = 'Template storage health: <b style="color:#f00;">Bad!</b><br>It is guaranteed that some features are broken. You <em>might</em> still be able to use the template. It is HIGHLY recommended that you download all templates and update Blue Marble\'s template storage before continuing. (Reason: MAJOR version mismatch)';
+      schemaHealthBanner = `Template storage health: <b style="color:#f00;">Bad!</b><br>Some features are broken. Download all templates and update ${escapeHTML(this.name)}'s template storage before continuing. (Reason: MAJOR version mismatch)`;
       this.schemaHealth = 'Bad';
     } else {
       // ...ELSE the Semantic version is unknown
 
-      schemaHealthBanner = 'Template storage health: <b style="color:#f00">Dead!</b><br>Blue Marble can not load the template storage. (Reason: MAJOR version unknown)';
+      schemaHealthBanner = `Template storage health: <b style="color:#f00">Dead!</b><br>${escapeHTML(this.name)} cannot load the template storage. (Reason: MAJOR version unknown)`;
       this.schemaHealth = 'Dead';
     }
 
     // Further recovery directions (only displayed if health is NOT 'Good')
-    const recoveryInstructions = `<hr style="margin:.5ch">If you want to continue using your current templates, then make sure the template storage (schema) is up-to-date.<br>If you don't want to update the template storage, then downgrade Blue Marble to version <b>${escapeHTML(this.scriptVersion)}</b> to continue using your templates.<br>Alternatively, if you don't care about corrupting the templates listed below, you can fix any issues with the template storage by uploading a new template.`;
+    const recoveryInstructions = `<hr style="margin:.5ch">To keep using the current templates, update the template storage schema.<br>Otherwise, downgrade ${escapeHTML(this.name)} to version <b>${escapeHTML(this.scriptVersion)}</b>.<br>You can also rebuild storage by uploading a new template.`;
 
     // Obtains the last time Wplace was updated
     const wplaceUpdateTime = getWplaceVersion();
     let wplaceUpdateTimeLocalized = wplaceUpdateTime ? localizeDate(wplaceUpdateTime) : '???';
 
     // Display schema health to user
-    this.updateInnerHTML('#bm-wizard-status', `${schemaHealthBanner}<br>Your templates were created during Blue Marble version <b>${escapeHTML(this.scriptVersion)}</b> with schema version <b>${escapeHTML(this.schemaVersion)}</b>.<br>The current Blue Marble version is <b>${escapeHTML(this.version)}</b> and requires schema version <b>${escapeHTML(this.schemaVersionBleedingEdge)}</b>.<br>Wplace was last updated on <b>${wplaceUpdateTimeLocalized}</b>.${(this.schemaHealth != 'Good') ? recoveryInstructions : ''}`);
+    this.updateInnerHTML('#bm-wizard-status', `${schemaHealthBanner}<br>Your templates were created with script version <b>${escapeHTML(this.scriptVersion)}</b> and schema version <b>${escapeHTML(this.schemaVersion)}</b>.<br>The current ${escapeHTML(this.name)} version is <b>${escapeHTML(this.version)}</b> and requires schema version <b>${escapeHTML(this.schemaVersionBleedingEdge)}</b>.<br>Wplace was last updated on <b>${wplaceUpdateTimeLocalized}</b>.${(this.schemaHealth != 'Good') ? recoveryInstructions : ''}`);
     
     // Create button options (only if schema is not 'Dead')
     const buttonOptions = new Overlay(this.name, this.version);

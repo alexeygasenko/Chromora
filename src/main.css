@@ -5,6 +5,7 @@
 
 @import './confettiManager.css';
 @import './overlay.css';
+@import './PaintAreaSelector.css';
 @import './WindowFilter.css';
 @import './WindowMain.css';
 @import './WindowSettings.css';

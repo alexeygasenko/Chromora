@@ -120,6 +120,8 @@ export default class TemplateManager {
     this.canvasRefreshRevision = 0;
     this.templateStatisticsState = 'idle';
     this.templateChangeListeners = new Set();
+    this.paintAreaMessageHandler = null;
+    this.paintAreaAbortController = null;
   }
 
   /** Updates the stored instance of the main window.
@@ -170,6 +172,165 @@ export default class TemplateManager {
       } catch (error) {
         consoleWarn('A template-change listener failed.', error);
       }
+    }
+  }
+
+  /** Starts the bridge that turns a user-selected map rectangle into Wplace draft pixels.
+   * @returns {function():void} Cleanup callback
+   * @since 0.99.0
+   */
+  startPaintAreaSelectionBridge() {
+    if (this.paintAreaMessageHandler) {
+      return () => this.stopPaintAreaSelectionBridge();
+    }
+
+    this.paintAreaMessageHandler = event => {
+      const data = event.data;
+      if ((data?.source != 'blue-marble') || (data?.action != 'paint-area-selected')) {return;}
+
+      this.paintAreaAbortController?.abort();
+      const abortController = new AbortController();
+      this.paintAreaAbortController = abortController;
+      void this.#processPaintAreaSelection(data, abortController.signal);
+    };
+
+    window.addEventListener('message', this.paintAreaMessageHandler);
+    return () => this.stopPaintAreaSelectionBridge();
+  }
+
+  /** Stops area-selection work and removes its message listener.
+   * @since 0.99.0
+   */
+  stopPaintAreaSelectionBridge() {
+    this.paintAreaAbortController?.abort();
+    this.paintAreaAbortController = null;
+    if (!this.paintAreaMessageHandler) {return;}
+    window.removeEventListener('message', this.paintAreaMessageHandler);
+    this.paintAreaMessageHandler = null;
+  }
+
+  /** Finds template pixels of one palette color inside inclusive world-pixel bounds.
+   * Results are compact horizontal runs: [worldY, worldXStart, worldXEnd].
+   * @param {{minX:number, minY:number, maxX:number, maxY:number}} bounds
+   * @param {number} colorID
+   * @param {{maxPixels?:number, signal?:AbortSignal}} options
+   * @returns {Promise<{runs:Array<[number, number, number]>, pixelCount:number}>}
+   * @since 0.99.0
+   */
+  async findTemplatePixelRuns(bounds, colorID, {maxPixels = 100000, signal} = {}) {
+    const normalizedColorID = Number(colorID);
+    if (!Number.isInteger(normalizedColorID) || (normalizedColorID <= 0)) {
+      throw new TypeError('Select a non-transparent Wplace color first.');
+    }
+
+    const normalizedBounds = {
+      minX: Math.floor(Math.min(Number(bounds?.minX), Number(bounds?.maxX))),
+      minY: Math.floor(Math.min(Number(bounds?.minY), Number(bounds?.maxY))),
+      maxX: Math.floor(Math.max(Number(bounds?.minX), Number(bounds?.maxX))),
+      maxY: Math.floor(Math.max(Number(bounds?.minY), Number(bounds?.maxY)))
+    };
+    if (!Object.values(normalizedBounds).every(Number.isFinite)) {
+      throw new TypeError('Selected map area has invalid coordinates.');
+    }
+
+    const pixelLimit = Math.max(1, Math.min(Math.floor(Number(maxPixels) || 1), 100001));
+    const runs = [];
+    let pixelCount = 0;
+    let workSliceStarted = performance.now();
+    const chunkEntries = value => value instanceof Map
+      ? value.entries()
+      : Object.entries(value ?? {});
+    const centerOffset = Math.floor(this.drawMult / 2);
+
+    for (const template of this.templatesArray) {
+      for (const [chunkKey, pixelBuffer] of chunkEntries(template?.chunked32)) {
+        if (signal?.aborted) {throw new DOMException('Area selection cancelled.', 'AbortError');}
+        if (!(pixelBuffer instanceof Uint32Array)) {continue;}
+
+        const [tileX, tileY, pixelX, pixelY] = String(chunkKey).split(',').map(Number);
+        if (![tileX, tileY, pixelX, pixelY].every(Number.isFinite)) {continue;}
+
+        const bitmap = template?.chunked instanceof Map
+          ? template.chunked.get(chunkKey)
+          : template?.chunked?.[chunkKey];
+        const bitmapWidth = Number(bitmap?.width);
+        const bitmapHeight = Number(bitmap?.height);
+        if (!Number.isFinite(bitmapWidth) || !Number.isFinite(bitmapHeight) || !bitmapWidth || !bitmapHeight) {continue;}
+
+        const chunkWidth = Math.floor(bitmapWidth / this.drawMult);
+        const chunkHeight = Math.floor(bitmapHeight / this.drawMult);
+        const pixelState = template?.pixelStateByChunk?.get(chunkKey);
+        if (!(pixelState instanceof Uint8Array) || (pixelState.length != (chunkWidth * chunkHeight))) {continue;}
+        const chunkMinX = (tileX * this.tileSize) + pixelX;
+        const chunkMinY = (tileY * this.tileSize) + pixelY;
+        const localMinX = Math.max(0, normalizedBounds.minX - chunkMinX);
+        const localMinY = Math.max(0, normalizedBounds.minY - chunkMinY);
+        const localMaxX = Math.min(chunkWidth - 1, normalizedBounds.maxX - chunkMinX);
+        const localMaxY = Math.min(chunkHeight - 1, normalizedBounds.maxY - chunkMinY);
+        if ((localMinX > localMaxX) || (localMinY > localMaxY)) {continue;}
+
+        for (let localY = localMinY; localY <= localMaxY; localY++) {
+          let runStart = null;
+
+          for (let localX = localMinX; localX <= localMaxX; localX++) {
+            const bufferX = (localX * this.drawMult) + centerOffset;
+            const bufferY = (localY * this.drawMult) + centerOffset;
+            const packedColor = pixelBuffer[(bufferY * bitmapWidth) + bufferX];
+            const matchesColor = (this.paletteBM.LUT.get(packedColor) == normalizedColorID)
+              && (pixelState[(localY * chunkWidth) + localX] == 2);
+
+            if (matchesColor && (runStart == null)) {runStart = localX;}
+            const closesRun = (runStart != null) && (!matchesColor || (localX == localMaxX));
+            if (!closesRun) {continue;}
+
+            const localRunEnd = matchesColor && (localX == localMaxX) ? localX : localX - 1;
+            const remaining = pixelLimit - pixelCount;
+            const runEnd = Math.min(localRunEnd, runStart + remaining - 1);
+            runs.push([chunkMinY + localY, chunkMinX + runStart, chunkMinX + runEnd]);
+            pixelCount += runEnd - runStart + 1;
+            runStart = null;
+            if (pixelCount >= pixelLimit) {return {runs, pixelCount};}
+          }
+
+          if ((performance.now() - workSliceStarted) >= 4) {
+            await this.#yieldToBrowser();
+            workSliceStarted = performance.now();
+          }
+        }
+      }
+    }
+
+    return {runs, pixelCount};
+  }
+
+  /** Resolves a map selection and sends compact matching runs back to the page bridge.
+   * @param {Object} data
+   * @param {AbortSignal} signal
+   * @since 0.99.0
+   */
+  async #processPaintAreaSelection(data, signal) {
+    try {
+      const result = await this.findTemplatePixelRuns(data.bounds, data.colorID, {
+        maxPixels: data.maxPixels,
+        signal: signal
+      });
+      if (signal.aborted) {return;}
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'paint-area-fill',
+        requestID: data.requestID,
+        colorID: Number(data.colorID),
+        runs: result.runs,
+        pixelCount: result.pixelCount
+      }, '*');
+    } catch (error) {
+      if (signal.aborted || (error?.name == 'AbortError')) {return;}
+      window.postMessage({
+        source: 'blue-marble',
+        action: 'paint-area-error',
+        requestID: data.requestID,
+        message: error instanceof Error ? error.message : String(error)
+      }, '*');
     }
   }
 
@@ -378,7 +539,7 @@ export default class TemplateManager {
     this.#emitTemplatesChanged('create-started');
 
     try {
-      const hasWritableTemplateStore = this.templatesJSON?.whoami == this.name.replace(' ', '')
+      const hasWritableTemplateStore = ['BlueMarble', 'Chromora'].includes(this.templatesJSON?.whoami)
         && this.templatesJSON?.schemaVersion == this.schemaVersion
         && this.templatesJSON?.templates
         && (typeof this.templatesJSON.templates == 'object')
@@ -733,6 +894,7 @@ export default class TemplateManager {
             instance: template,
             bitmap: template.chunked[tile],
             chunked32: template.chunked32?.[tile],
+            chunkKey: tile,
             tileCoords: [coords[0], coords[1]],
             pixelCoords: [coords[2], coords[3]]
           }
@@ -866,7 +1028,9 @@ export default class TemplateManager {
         highlightDisabled: highlightDisabled && !hasIncorrectHighlightColor,
         highlightColorID: incorrectHighlightColorID,
         highlightMode: incorrectHighlightMode,
-        highlightGridOrigin: highlightGridOrigin
+        highlightGridOrigin: highlightGridOrigin,
+        pixelState: template.instance.pixelStateByChunk,
+        chunkKey: template.chunkKey
       });
 
       let pixelsCorrectTotal = 0;
@@ -918,7 +1082,7 @@ export default class TemplateManager {
 
     try {
       // If the passed in JSON is a Blue Marble template object...
-      if (json?.whoami == 'BlueMarble') {
+      if (['BlueMarble', 'Chromora'].includes(json?.whoami)) {
         const {templatesArray: importedTemplates, skippedTemplates} = await this.#parseBlueMarble(json); // ...parse the template object as Blue Marble
         if (Object.keys(json.templates).length && !importedTemplates.length) {
           throw new AggregateError(
@@ -1005,7 +1169,7 @@ export default class TemplateManager {
     } else {
       // We don't know what the schema is. Unsupported?
 
-      this.windowMain.handleDisplayError(`Template version ${schemaVersion} is unsupported.\nUse Blue Marble version ${scriptVersion} or load a new template.`);
+      this.windowMain.handleDisplayError(`Template version ${schemaVersion} is unsupported.\nUse ${this.name} version ${scriptVersion} or load a new template.`);
       throw new Error(`Template schema ${schemaVersion} is unsupported.`);
     }
 
@@ -1122,6 +1286,8 @@ export default class TemplateManager {
    * @param {number | null} params.highlightColorID - Restricts highlighting to one template color when set
    * @param {'incorrect' | 'missing'} params.highlightMode - Which color-specific highlight mode to use
    * @param {Array<number>} params.highlightGridOrigin - Absolute subpixel origin used to keep 16x16 zones aligned across map tiles
+   * @param {Map<string, Uint8Array>} params.pixelState - Cached current board state for each template pixel
+   * @param {string} params.chunkKey - Template chunk key owning this tile fragment
    * @returns {Promise<{correctPixels: Map<number, number>, filteredTemplate: Uint32Array}>} A Map containing the color IDs (keys) and how many correct pixels there are for that color (values)
    */
   async #calculateCorrectPixelsOnTile_And_FilterTile({
@@ -1132,7 +1298,9 @@ export default class TemplateManager {
     highlightDisabled: highlightDisabled,
     highlightColorID: highlightColorID = null,
     highlightMode: highlightMode = 'incorrect',
-    highlightGridOrigin: highlightGridOrigin = null
+    highlightGridOrigin: highlightGridOrigin = null,
+    pixelState: pixelStateByChunk = null,
+    chunkKey: chunkKey = null
   }) {
 
     // Size of a pixel in actuality
@@ -1149,6 +1317,9 @@ export default class TemplateManager {
     const templateCoordY = templateInformation[1];
     const templateWidth = templateInformation[2];
     const templateHeight = templateInformation[3];
+    const templatePixelWidth = Math.floor(templateWidth / pixelSize);
+    const templatePixelHeight = Math.floor(templateHeight / pixelSize);
+    const currentPixelState = new Uint8Array(templatePixelWidth * templatePixelHeight);
     const highlightGridOriginX = Number.isFinite(Number(highlightGridOrigin?.[0])) ? Number(highlightGridOrigin[0]) : templateCoordX;
     const highlightGridOriginY = Number.isFinite(Number(highlightGridOrigin?.[1])) ? Number(highlightGridOrigin[1]) : templateCoordY;
     const tolerance = this.paletteTolerance;
@@ -1253,6 +1424,14 @@ export default class TemplateManager {
 
         // Finds the best matching color ID for the tile pixel. If none is found, default to "-2"
         const bestTileColorID = lookupTable.get(tilePixelAbove) ?? -2;
+
+        const stateIndex = (Math.floor((templateRow - 1) / pixelSize) * templatePixelWidth)
+          + Math.floor((templateColumn - 1) / pixelSize);
+        if ((templatePixelAlpha > tolerance) && (bestTemplateColorID > 0)) {
+          currentPixelState[stateIndex] = (tilePixelAlpha <= tolerance)
+            ? 2
+            : (bestTileColorID == bestTemplateColorID ? 1 : 3);
+        }
 
         // -----     COLOR FILTER      -----
         // If this pixel on the template is a color the user wants to hide on the canvas...
@@ -1426,6 +1605,10 @@ export default class TemplateManager {
           workSliceStarted = performance.now();
         }
       }
+    }
+
+    if ((pixelStateByChunk instanceof Map) && chunkKey) {
+      pixelStateByChunk.set(chunkKey, currentPixelState);
     }
 
     console.log(`List of template pixels that match the tile:`);

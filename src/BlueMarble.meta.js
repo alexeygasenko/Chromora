@@ -18,7 +18,7 @@
 // @grant           GM_getValue
 // @grant           GM_deleteValue
 // @grant           GM.download
-// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/34041aef63a7354063db8d6c8881dc5327671ef0/dist/BlueMarble.user.css
+// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/c9067fbe6ecfcaa497075fe1c4aafe9d4ad16042/dist/BlueMarble.user.css
 // @noframes
 // ==/UserScript==
 

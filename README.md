@@ -2,13 +2,13 @@
 
 Chromora is a feature-focused fork of [Blue Marble](https://github.com/SwingTheVine/Wplace-BlueMarble) for [wplace.live](https://wplace.live/).
 
-The project started with Blue Marble, then grew into a separate liquid-glass toolkit for checking artwork, finding unfinished areas, and preparing pixels faster.
+The project started with Blue Marble, then grew into a separate toolkit for checking artwork, finding unfinished areas, and preparing pixels faster.
 
 ## Features
 
 ### Smooth interface
 
-- New Y2K liquid-glass look across every window.
+- New Y2K look across every window.
 - Windows open, close, minimize, expand, and change shape smoothly.
 - Large templates stay responsive while Chromora works in the background.
 - Windows remember where you placed them and how large they were.

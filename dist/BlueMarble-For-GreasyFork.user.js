@@ -18,7 +18,7 @@
 // @grant           GM_getValue
 // @grant           GM_deleteValue
 // @grant           GM.download
-// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/c9067fbe6ecfcaa497075fe1c4aafe9d4ad16042/dist/BlueMarble-For-GreasyFork.user.css
+// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/eebbfd6a53fa890fdbd202f4b98040b15e668a8c/dist/BlueMarble-For-GreasyFork.user.css
 // @noframes
 // ==/UserScript==
 
@@ -7706,4 +7706,4 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   }
 })();
 
-// Build Hash: fe7496d94451
+// Build Hash: 073e9e2b6fdb

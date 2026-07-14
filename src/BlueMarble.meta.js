@@ -9,8 +9,8 @@
 // @license         MPL-2.0
 // @supportURL      https://github.com/alexeygasenko/Chromora/issues
 // @homepageURL     https://github.com/alexeygasenko/Chromora
-// @updateURL       https://raw.githubusercontent.com/alexeygasenko/Chromora/main/dist/BlueMarble.user.js
-// @downloadURL     https://raw.githubusercontent.com/alexeygasenko/Chromora/main/dist/BlueMarble.user.js
+// @updateURL       https://raw.githubusercontent.com/alexeygasenko/Chromora/main/dist/Chromora.user.js
+// @downloadURL     https://raw.githubusercontent.com/alexeygasenko/Chromora/main/dist/Chromora.user.js
 // @match           https://wplace.live/*
 // @grant           GM_getResourceText
 // @grant           GM_addStyle
@@ -18,7 +18,6 @@
 // @grant           GM_getValue
 // @grant           GM_deleteValue
 // @grant           GM.download
-// @resource        CSS-BM-File https://raw.githubusercontent.com/alexeygasenko/Chromora/d6d0b4e67ca5d849d1e48a1cb6c37da24cd369b5/dist/BlueMarble.user.css
 // @noframes
 // ==/UserScript==
 

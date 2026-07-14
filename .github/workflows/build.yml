@@ -104,11 +104,7 @@ jobs:
       
       - name: Update compression badge
         run: |
-          dist_size=$(find dist -type f \
-          ! -name "BlueMarble-Standalone.user.js" \
-          ! -name "BlueMarble-For-GreasyFork.user.js" \
-          ! -name "BlueMarble-For-GreasyFork.user.css" \
-          -exec cat {} + | wc -c)
+          dist_size=$(wc -c < dist/Chromora.user.js)
 
           src_size=$(find src dist/assets -type f -exec cat {} + | wc -c)
           percentage=$(awk "BEGIN {printf \"%.2f\", 100 - ($dist_size * 100) / $src_size}")
@@ -152,15 +148,15 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git checkout auto || git checkout -b auto
-          git add dist/*
+          git add -A dist
           git add src/BlueMarble.meta.js
           git add package.json
           git add docs/README.md
           git commit -m "Bumped version; ${{ steps.get-commit-message.outputs.TITLE }}" -m "${{ steps.get-commit-message.outputs.BODY }}" || echo "No changes to commit"
           git push --set-upstream origin auto
 
-  # Updates the requirement link SHA
-  update-requirements:
+  # Merges the generated userscript back to main
+  merge-auto:
 
     permissions:
       contents: write
@@ -176,35 +172,11 @@ jobs:
           ref: auto # Checks out the auto branch
           fetch-depth: 0
 
-      - name: Get SHA of origin/auto
-        run: |
-          git fetch origin auto
-          AUTO_SHA=$(git rev-parse origin/auto)
-          echo "Auto SHA: $AUTO_SHA"
-          echo "AUTO_SHA=$AUTO_SHA" >> $GITHUB_ENV
-
-      - name: Update Resource Link SHA
-        run: |
-          echo "Auto SHA: $AUTO_SHA"
-          sed -i "/@resource/ s#/[a-f0-9]\{40\}/#/${AUTO_SHA}/#g" dist/BlueMarble.user.js src/BlueMarble.meta.js
-          echo "Updated resourceLinkSHA:"
-          grep "@resource" dist/BlueMarble.user.js src/BlueMarble.meta.js
-        env:
-          AUTO_SHA: ${{ env.AUTO_SHA }}
-
-      - name: Commit Resource Link SHA
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git add dist/BlueMarble.user.js
-          git add src/BlueMarble.meta.js
-          git commit -m "Merge version; ${{ needs.build.outputs.TITLE }}" -m "${{ needs.build.outputs.BODY }}" || echo "No changes to commit"
-          git push
-
       - name: Merge Auto -> Main
         run: |
           git fetch origin
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git checkout origin/main -B main
           git merge --squash origin/auto
           git commit -m "v${{ needs.build.outputs.CURRENT_VERSION }}; ${{ needs.build.outputs.TITLE }}" -m "${{ needs.build.outputs.BODY }}" || echo "No changes to commit"
@@ -217,7 +189,7 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    needs: [update-auto, build, update-requirements] # Needs the update-auto, build, and update-requirements jobs to finish first
+    needs: [update-auto, build, merge-auto] # Needs the generated userscript to be merged first
 
     steps:
       - name: Checkout main branch

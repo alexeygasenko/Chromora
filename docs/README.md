@@ -29,9 +29,9 @@ It keeps the original Blue Marble workflow and adds a cleaner UI, better window 
 
 Install the latest userscript release:
 
-[Download latest release](https://github.com/alexeygasenko/Wplace-BlueMarble/releases/latest)
+[Download latest release](https://github.com/alexeygasenko/Chromora/releases/latest)
 
-Use `BlueMarble.user.js` with a userscript manager such as Tampermonkey, then refresh [wplace.live](https://wplace.live/).
+Use `Chromora.user.js` with a userscript manager such as Tampermonkey, then refresh [wplace.live](https://wplace.live/).
 
 ## Upstream
 

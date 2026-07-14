@@ -77,7 +77,7 @@ Install the latest userscript release:
 
 [Download latest release](https://github.com/alexeygasenko/Chromora/releases/latest)
 
-Use `BlueMarble.user.js` with a userscript manager such as Tampermonkey, then refresh [wplace.live](https://wplace.live/). The filename is retained for compatibility; the installed userscript is named **Chromora**.
+Use `Chromora.user.js` with a userscript manager such as Tampermonkey, then refresh [wplace.live](https://wplace.live/).
 
 ## Fork and upstream
 

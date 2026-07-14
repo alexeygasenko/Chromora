@@ -287,13 +287,13 @@ classDiagram
       +minify()
     }
 
-    class `dist/BlueMarble.user.js` {
+    class `dist/Chromora.user.js` {
     }
 
-    class `dist/BlueMarble.user.css` {
+    class `dist/Chromora.user.css` {
     }
 
-    class `dist/BlueMarble.user.css.map.json` {
+    class `dist/Chromora.user.css.map.json` {
     }
 
     class `src/BlueMarble.meta.js` {
@@ -312,16 +312,16 @@ classDiagram
   `build.js` ..> `update-version.js` : executes
   `build.js` ..> `src/BlueMarble.meta.js` : reads
   `build.js` ..> esbuild : calls build()
-  `build.js` ..> `dist/BlueMarble.user.css` : writes
+  `build.js` ..> `dist/Chromora.user.css` : writes temporarily
   esbuild ..> `src/main.js` : reads
-  `build.js` ..> `dist/BlueMarble.user.js` : writes
-  terser ..> `dist/BlueMarble.user.js` : reads & writes
+  `build.js` ..> `dist/Chromora.user.js` : writes
+  terser ..> `dist/Chromora.user.js` : reads & writes
   `build.js` ..> `cssMangler.js` : calls manglerSelectors()
-  `cssMangler.js` ..> `dist/BlueMarble.user.css.map.json` : reads
-  `cssMangler.js` ..> `dist/BlueMarble.user.js` : reads & writes
-  `cssMangler.js` ..> `dist/BlueMarble.user.css` : reads & writes
+  `cssMangler.js` ..> `dist/Chromora.user.css.map.json` : reads
+  `cssMangler.js` ..> `dist/Chromora.user.js` : reads & writes
+  `cssMangler.js` ..> `dist/Chromora.user.css` : reads & writes
   `build.js` <.. `cssMangler.js` : returns mapCSS
-  `build.js` ..> `dist/BlueMarble.user.css.map.json` : writes mapCSS
+  `build.js` ..> `dist/Chromora.user.css.map.json` : writes mapCSS
   `patch.js` ..> `docs/README.md` : reads & writes
   `patch.js` ..> `utils.js` : calls consoleStyle()
   `update-version.js` ..> `package.json` : reads

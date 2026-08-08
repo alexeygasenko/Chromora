@@ -36,3 +36,15 @@
   align-items: flex-start;
   gap: 0;
 }
+
+.bm-status-success {
+  color: #78f0b8;
+}
+
+.bm-status-warning {
+  color: #ffe076;
+}
+
+.bm-status-error {
+  color: #ff8fa1;
+}

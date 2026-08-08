@@ -1,6 +1,13 @@
 import { sleep } from "./utils";
 import WindowSettings from "./WindowSettings";
 
+const interfaceThemes = Object.freeze([
+  {id: 'glass', label: 'Glass', description: 'Transparent & blurred'},
+  {id: 'light', label: 'Light', description: 'Solid light surfaces'},
+  {id: 'dark', label: 'Dark', description: 'Solid dark surfaces'}
+]);
+const interfaceThemeIDs = new Set(interfaceThemes.map(({id}) => id));
+
 /** SettingsManager class for handling user settings and making them persist between sessions.
  * Logic for {@link WindowSettings} is managed here.
  * "Flags" should follow the same styling as `.classList()` and should not contain spaces.
@@ -12,6 +19,7 @@ import WindowSettings from "./WindowSettings";
  * @since 0.91.11
  * @example
  * {
+ *   "theme": "dark",
  *   "flags": ["hl-noTrans", "ftr-oWin", "te-noSkip"],
  *   "highlight": [[1,0,-1],[1,-1,0],[2,1,0],[1,0,1]],
  *   "filter": [-2,0,4,5,6,29,63],
@@ -35,17 +43,54 @@ export default class SettingsManager extends WindowSettings {
     if (!this.userSettings.hotkeys || (typeof this.userSettings.hotkeys != 'object') || Array.isArray(this.userSettings.hotkeys)) {
       this.userSettings.hotkeys = {};
     }
-    this.userSettings.hotkeys.paintArea = this.#normalizeHotkeyCode(this.userSettings.hotkeys.paintArea, 'AltLeft');
-    this.userSettings.hotkeys.paintAllArea = this.#normalizeHotkeyCode(this.userSettings.hotkeys.paintAllArea, 'ControlLeft');
-    delete this.userSettings.hotkeys.clearPaintArea;
+    this.userSettings.hotkeys['paintArea'] = this.#normalizeHotkeyCode(this.userSettings.hotkeys['paintArea'], 'AltLeft');
+    this.userSettings.hotkeys['paintAllArea'] = this.#normalizeHotkeyCode(this.userSettings.hotkeys['paintAllArea'], 'ControlLeft');
+    delete this.userSettings.hotkeys['clearPaintArea'];
+    this.userSettings['theme'] = this.#normalizeTheme(this.userSettings['theme']);
+    this.#applyTheme(this.userSettings['theme']);
     this.userSettingsOld = structuredClone(this.userSettings); // Creates a duplicate of the user settings to store the old version of user settings from 5+ seconds ago
     this.userSettingsSaveLocation = 'bmUserSettings'; // Storage save location
+    this.userSettingsSavePromise = Promise.resolve(); // Keeps storage writes in the order they were requested
 
     this.updateFrequency = 5000; // Cooldown between saving to storage (throttle)
     this.lastUpdateTime = 0; // When this unix timestamp is within the last 5 seconds, we should save this.userSettings to storage
 
     setInterval(this.updateUserStorage.bind(this), this.updateFrequency); // Runs every X seconds (see updateFrequency)
     this.#broadcastPaintAreaHotkeys();
+  }
+
+  /** Normalizes a persisted interface theme.
+   * @param {string} theme
+   * @returns {'glass'|'light'|'dark'}
+   * @since 1.1.0
+   */
+  #normalizeTheme(theme) {
+    const normalizedTheme = String(theme ?? '').toLowerCase();
+    return interfaceThemeIDs.has(normalizedTheme) ? normalizedTheme : 'glass';
+  }
+
+  /** Applies an interface theme to every Chromora surface in the page.
+   * @param {string} theme
+   * @since 1.1.0
+   */
+  #applyTheme(theme) {
+    document.documentElement?.setAttribute('data-chromora-theme', this.#normalizeTheme(theme));
+  }
+
+  /** Applies and immediately persists a new interface theme.
+   * @param {string} theme
+   * @returns {Promise<string>}
+   * @since 1.1.0
+   */
+  async setTheme(theme) {
+    const normalizedTheme = this.#normalizeTheme(theme);
+    const themeChanged = this.userSettings['theme'] != normalizedTheme;
+    this.userSettings['theme'] = normalizedTheme;
+    this.#applyTheme(normalizedTheme);
+    if (themeChanged) {
+      await this.saveUserStorageNow();
+    }
+    return normalizedTheme;
   }
 
   /** Normalizes a persisted KeyboardEvent.code value.
@@ -87,8 +132,8 @@ export default class SettingsManager extends WindowSettings {
    */
   #broadcastPaintAreaHotkeys() {
     const hotkeys = [
-      ['matching', this.userSettings.hotkeys.paintArea],
-      ['template', this.userSettings.hotkeys.paintAllArea]
+      ['matching', this.userSettings.hotkeys['paintArea']],
+      ['template', this.userSettings.hotkeys['paintAllArea']]
     ];
     for (const [mode, code] of hotkeys) {
       window.postMessage({
@@ -130,18 +175,24 @@ export default class SettingsManager extends WindowSettings {
    * @since 0.92.0
    */
   async saveUserStorage(force = false) {
+    const saveTask = async () => {
+      const userSettingsSnapshot = structuredClone(this.userSettings);
+      const userSettingsCurrent = JSON.stringify(userSettingsSnapshot);
+      const userSettingsOld = JSON.stringify(this.userSettingsOld);
 
-    // Turns the objects into a string
-    const userSettingsCurrent = JSON.stringify(this.userSettings);
-    const userSettingsOld = JSON.stringify(this.userSettingsOld);
+      // If the user settings have changed, AND the last update to user storage was over 5 seconds ago (5sec throttle)...
+      if ((userSettingsCurrent != userSettingsOld) && (force || ((Date.now() - this.lastUpdateTime) > this.updateFrequency))) {
+        await GM.setValue(this.userSettingsSaveLocation, userSettingsCurrent); // Updates user storage
+        this.userSettingsOld = userSettingsSnapshot; // Tracks exactly the snapshot that was written
+        this.lastUpdateTime = Date.now(); // Updates the variable that contains the last time updated
+        console.log(userSettingsCurrent);
+      }
+    };
 
-    // If the user settings have changed, AND the last update to user storage was over 5 seconds ago (5sec throttle)...
-    if ((userSettingsCurrent != userSettingsOld) && (force || ((Date.now() - this.lastUpdateTime) > this.updateFrequency))) {
-      await GM.setValue(this.userSettingsSaveLocation, userSettingsCurrent); // Updates user storage
-      this.userSettingsOld = structuredClone(this.userSettings); // Updates the old user settings with a duplicate of the current user settings
-      this.lastUpdateTime = Date.now(); // Updates the variable that contains the last time updated
-      console.log(userSettingsCurrent);
-    }
+    this.userSettingsSavePromise = this.userSettingsSavePromise
+      .catch(() => {})
+      .then(saveTask);
+    await this.userSettingsSavePromise;
   }
 
   /** Immediately saves the user settings in userscript storage.
@@ -173,6 +224,89 @@ export default class SettingsManager extends WindowSettings {
   }
 
   // This is one of the most insane OOP setups I have ever laid my eyes on
+
+  /** Builds the appearance category of the settings window.
+   * @since 1.1.0
+   * @see WindowSettings#buildAppearance
+   */
+  buildAppearance() {
+    const syncButtons = (group, selectedTheme) => {
+      for (const button of group.querySelectorAll('.bm-settings-theme-option')) {
+        const isSelected = button.dataset['theme'] == selectedTheme;
+        button.setAttribute('aria-checked', String(isSelected));
+        button.tabIndex = isSelected ? 0 : -1;
+      }
+    };
+
+    this.window = this.addDiv({'class': 'bm-container'})
+      .addHeader(2, {'textContent': 'Appearance'}).buildElement()
+      .addHr().buildElement()
+      .addDiv({
+        'class': 'bm-settings-theme-grid',
+        'role': 'radiogroup',
+        'aria-label': 'Interface theme'
+      }, (instance, group) => {
+        const selectButton = button => {
+          const selectedTheme = this.#normalizeTheme(button.dataset['theme']);
+          syncButtons(group, selectedTheme);
+          void this.setTheme(selectedTheme).catch(error => {
+            console.error('Chromora: Could not save the interface theme.', error);
+          });
+        };
+
+        for (const theme of interfaceThemes) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'bm-settings-theme-option';
+          button.dataset['theme'] = theme.id;
+          button.setAttribute('role', 'radio');
+          button.setAttribute('aria-label', `${theme.label}: ${theme.description}`);
+
+          const preview = document.createElement('span');
+          preview.className = 'bm-settings-theme-preview';
+          preview.dataset['themePreview'] = theme.id;
+          preview.setAttribute('aria-hidden', 'true');
+          for (let previewLineIndex = 0; previewLineIndex < 3; previewLineIndex++) {
+            preview.appendChild(document.createElement('span'));
+          }
+
+          const label = document.createElement('span');
+          label.className = 'bm-settings-theme-label';
+          label.textContent = theme.label;
+
+          const description = document.createElement('span');
+          description.className = 'bm-settings-theme-description';
+          description.textContent = theme.description;
+
+          button.append(preview, label, description);
+          button.onclick = () => selectButton(button);
+          button.onkeydown = event => {
+            const buttons = Array.from(group.querySelectorAll('.bm-settings-theme-option'));
+            const currentIndex = buttons.indexOf(button);
+            let nextIndex = currentIndex;
+            if (['ArrowRight', 'ArrowDown'].includes(event['key'])) {
+              nextIndex = (currentIndex + 1) % buttons.length;
+            } else if (['ArrowLeft', 'ArrowUp'].includes(event['key'])) {
+              nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+            } else if (event['key'] == 'Home') {
+              nextIndex = 0;
+            } else if (event['key'] == 'End') {
+              nextIndex = buttons.length - 1;
+            } else {
+              return;
+            }
+            event.preventDefault();
+            const nextButton = buttons[nextIndex];
+            nextButton.focus({'preventScroll': true});
+            selectButton(nextButton);
+          };
+          group.appendChild(button);
+        }
+
+        syncButtons(group, this.userSettings['theme']);
+      }).buildElement()
+    .buildElement();
+  }
 
   /** Builds the hotkey category of the settings window.
    * @since 0.99.0
@@ -215,14 +349,14 @@ export default class SettingsManager extends WindowSettings {
         button.dataset['recording'] = 'true';
         button.textContent = '...';
         document.body?.classList.add('bm-hotkey-recording');
-        button.focus({preventScroll: true});
+        button.focus({'preventScroll': true});
         window.addEventListener('keydown', handleRecordingKeyDown, true);
       };
       button.onblur = stopRecording;
     };
 
-    const matchingCode = this.userSettings.hotkeys.paintArea;
-    const templateCode = this.userSettings.hotkeys.paintAllArea;
+    const matchingCode = this.userSettings.hotkeys['paintArea'];
+    const templateCode = this.userSettings.hotkeys['paintAllArea'];
 
     this.window = this.addDiv({'class': 'bm-container'})
       .addHeader(2, {'textContent': 'Hotkeys'}).buildElement()

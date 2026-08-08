@@ -431,7 +431,11 @@
 .bm-button-pin svg {
   width: 50%;
   margin: 0 auto;
-  fill: #111;
+  fill: currentColor;
+}
+
+.bm-button-pin svg circle {
+  fill: var(--chromora-icon-cutout, #fff);
 }
 
 /* Transparent buttons */

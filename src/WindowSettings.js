@@ -55,6 +55,7 @@ export default class WindowSettings extends Overlay {
         .addHr({'class': 'bm-window-divider-top'}).buildElement()
         .addDiv({'class': 'bm-container bm-scrollable'}, (instance, div) => {
           // Each category in the settings window
+          this.buildAppearance();
           this.buildHotkeys();
           this.buildHighlight();
           this.buildTemplate();
@@ -183,6 +184,14 @@ export default class WindowSettings extends Overlay {
    */
   buildHighlight() {
     this.#errorOverrideFailure('Pixel Highlight');
+  }
+
+  /** Builds the appearance section of the window.
+   * This should be overriden by {@link SettingsManager}
+   * @since 1.1.0
+   */
+  buildAppearance() {
+    this.#errorOverrideFailure('Appearance');
   }
 
   /** Builds the hotkey section of the window.

@@ -432,8 +432,7 @@ export default class WindowFilter extends Overlay {
         'title': 'Resize Color Filter window',
         'aria-label': 'Resize Color Filter window',
         'role': 'presentation',
-        'textContent': '◢',
-        'style': 'position: absolute; right: 0; bottom: 0; width: 28px; height: 28px; display: flex; align-items: flex-end; justify-content: flex-end; padding-right: 4px; padding-bottom: 4px; box-sizing: border-box; z-index: 5; cursor: nwse-resize; pointer-events: auto; touch-action: none; user-select: none; font-size: 8px; line-height: 1; color: rgba(255,255,255,0.95); background: transparent; border: none; box-shadow: none;'
+        'textContent': '◢'
       }).buildElement()
     .buildElement().buildOverlay(this.windowParent);
 

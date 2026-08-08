@@ -1,0 +1,462 @@
+/* Solid light and dark interface themes. The existing glass theme remains the default. */
+
+:root[data-chromora-theme="light"] {
+  --chromora-window-bg: #f4f7fb;
+  --chromora-dragbar-bg: #e9eff6;
+  --chromora-panel-bg: #ffffff;
+  --chromora-panel-soft-bg: #edf2f7;
+  --chromora-control-bg: #f8fafc;
+  --chromora-control-hover-bg: #e7f0f8;
+  --chromora-control-selected-bg: #d9eff6;
+  --chromora-border: #c6d1df;
+  --chromora-border-strong: #4a9dbc;
+  --chromora-text: #16243a;
+  --chromora-text-secondary: #52647b;
+  --chromora-heading: #0d1c31;
+  --chromora-placeholder: #718198;
+  --chromora-link: #17689b;
+  --chromora-primary-bg: #ccecf5;
+  --chromora-primary-hover-bg: #b9e4f0;
+  --chromora-primary-text: #082738;
+  --chromora-focus: #1689ad;
+  --chromora-focus-ring: rgba(22, 137, 173, 0.2);
+  --chromora-shadow: 0 14px 34px rgba(25, 44, 70, 0.2);
+  --chromora-panel-shadow: 0 6px 16px rgba(25, 44, 70, 0.1);
+  --chromora-divider: #cbd6e3;
+  --chromora-scrollbar: #6ba9c1;
+  --chromora-scrollbar-track: #e3eaf2;
+  --chromora-checkmark: #082738;
+  --chromora-icon-cutout: #ffffff;
+  --chromora-checker-bg: #53657b;
+}
+
+:root[data-chromora-theme="dark"] {
+  --chromora-window-bg: #101824;
+  --chromora-dragbar-bg: #172235;
+  --chromora-panel-bg: #1a2638;
+  --chromora-panel-soft-bg: #202e43;
+  --chromora-control-bg: #223147;
+  --chromora-control-hover-bg: #2a405c;
+  --chromora-control-selected-bg: #17485b;
+  --chromora-border: #36475f;
+  --chromora-border-strong: #67d7ec;
+  --chromora-text: #edf5ff;
+  --chromora-text-secondary: #aebdd0;
+  --chromora-heading: #f7fbff;
+  --chromora-placeholder: #8495ab;
+  --chromora-link: #83dff2;
+  --chromora-primary-bg: #65d3e8;
+  --chromora-primary-hover-bg: #83e2f3;
+  --chromora-primary-text: #08202d;
+  --chromora-focus: #74e7ff;
+  --chromora-focus-ring: rgba(116, 231, 255, 0.22);
+  --chromora-shadow: 0 18px 42px rgba(0, 0, 0, 0.5);
+  --chromora-panel-shadow: 0 7px 18px rgba(0, 0, 0, 0.28);
+  --chromora-divider: #34465f;
+  --chromora-scrollbar: #528ea5;
+  --chromora-scrollbar-track: #162235;
+  --chromora-checkmark: #071b27;
+  --chromora-icon-cutout: #101824;
+  --chromora-checker-bg: #53657b;
+}
+
+/* Opaque foundation shared by both solid themes. */
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window {
+  --bm-text-primary: var(--chromora-text);
+  --bm-text-secondary: var(--chromora-text-secondary);
+  color: var(--chromora-text);
+  color-scheme: light;
+  background: var(--chromora-window-bg);
+  border-color: var(--chromora-border);
+  box-shadow: var(--chromora-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-chromora-theme="dark"] .bm-window {
+  color-scheme: dark;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window::before,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window::after,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-shell::before,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color::before {
+  content: none;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-dragbar {
+  background: var(--chromora-dragbar-bg);
+  border-color: var(--chromora-border);
+  box-shadow: var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(h1, h2, h3),
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-dragbar :is(h1, .bm-dragbar-text) {
+  color: var(--chromora-heading);
+  text-shadow: none;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window hr {
+  background: var(--chromora-divider);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button {
+  color: var(--chromora-text);
+  background: var(--chromora-control-bg);
+  border-color: var(--chromora-border);
+  box-shadow: var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button:focus-visible {
+  background: var(--chromora-control-hover-bg);
+  border-color: var(--chromora-border-strong);
+  box-shadow: var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button:focus-visible,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window input:focus-visible,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window select:focus-visible,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window textarea:focus-visible {
+  border-color: var(--chromora-focus);
+  box-shadow: 0 0 0 3px var(--chromora-focus-ring);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-primary {
+  color: var(--chromora-primary-text);
+  background: var(--chromora-primary-bg);
+  border-color: var(--chromora-border-strong);
+  box-shadow: var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-primary:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-primary:focus-visible {
+  background: var(--chromora-primary-hover-bg);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-secondary,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-button-circle {
+  background: var(--chromora-control-bg) !important;
+  border-color: var(--chromora-border) !important;
+  box-shadow: var(--chromora-panel-shadow) !important;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-secondary:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-secondary:focus-visible,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-button-circle:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-button-circle:focus-visible {
+  background: var(--chromora-control-hover-bg) !important;
+  border-color: var(--chromora-border-strong) !important;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-button-circle:focus-visible {
+  border-color: var(--chromora-focus) !important;
+  box-shadow: 0 0 0 3px var(--chromora-focus-ring), var(--chromora-panel-shadow) !important;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(input[type="number"], select, textarea) {
+  color: var(--chromora-text);
+  background: var(--chromora-panel-bg);
+  border-color: var(--chromora-border);
+  box-shadow: none;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(textarea, input)::placeholder {
+  color: var(--chromora-placeholder);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window a:not(:has(*)) {
+  color: var(--chromora-link);
+  text-decoration-color: currentColor;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window .bm-container.bm-scrollable {
+  scrollbar-color: var(--chromora-scrollbar) var(--chromora-scrollbar-track);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window .bm-container.bm-scrollable::-webkit-scrollbar-thumb {
+  background: var(--chromora-scrollbar);
+  border-color: var(--chromora-scrollbar-track);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window .bm-container.bm-scrollable::-webkit-scrollbar-track {
+  background: var(--chromora-scrollbar-track);
+}
+
+/* Main window surfaces and labels. */
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-shell,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-stat-card {
+  color: var(--chromora-text);
+  background: var(--chromora-panel-bg);
+  border-color: var(--chromora-border);
+  box-shadow: var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-stat-value {
+  color: var(--chromora-heading);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-stat-label {
+  color: var(--chromora-text-secondary);
+}
+
+/* Settings window, including the theme picker itself. */
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-settings :is(
+  .bm-settings-drag-title,
+  .bm-settings-hotkey-button
+) {
+  color: var(--chromora-heading);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-settings :is(
+  .bm-settings-subheading,
+  .bm-settings-hotkey-row,
+  .bm-settings-checkbox,
+  .bm-settings-theme-description
+) {
+  color: var(--chromora-text-secondary);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-settings .bm-settings-theme-option[aria-checked="true"] {
+  background: var(--chromora-control-selected-bg);
+  border-color: var(--chromora-border-strong);
+  box-shadow: 0 0 0 3px var(--chromora-focus-ring), var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) :is(
+  #bm-window-settings .bm-settings-checkbox,
+  #bm-window-filter .bm-filter-sort-checkbox
+) input[type="checkbox"] {
+  background: var(--chromora-control-bg);
+  border-color: var(--chromora-border);
+  box-shadow: none;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) :is(
+  #bm-window-settings .bm-settings-checkbox,
+  #bm-window-filter .bm-filter-sort-checkbox
+) input[type="checkbox"]:is(:hover, :focus-visible) {
+  background: var(--chromora-control-hover-bg);
+  border-color: var(--chromora-border-strong);
+  box-shadow: 0 0 0 3px var(--chromora-focus-ring);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) :is(
+  #bm-window-settings .bm-settings-checkbox,
+  #bm-window-filter .bm-filter-sort-checkbox
+) input[type="checkbox"]:checked {
+  background: var(--chromora-primary-bg);
+  border-color: var(--chromora-border-strong);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) :is(
+  #bm-window-settings .bm-settings-checkbox,
+  #bm-window-filter .bm-filter-sort-checkbox
+) input[type="checkbox"]::before {
+  border-color: var(--chromora-checkmark);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-settings .bm-highlight-grid > button[data-status="Disabled"] {
+  background: var(--chromora-panel-bg);
+  border-color: var(--chromora-border);
+}
+
+/* Filter window chrome. Palette-colored fullscreen cards remain untouched. */
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter :is(
+  .bm-filter-windowed-summary,
+  .bm-filter-windowed-summary-value,
+  .bm-filter-drag-title,
+  .bm-filter-stat-card,
+  .bm-filter-stat-value,
+  .bm-filter-sort-dropdown-option
+) {
+  color: var(--chromora-heading);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter :is(
+  .bm-filter-windowed-summary-label,
+  .bm-filter-stat-label,
+  .bm-filter-sort-heading,
+  .bm-filter-sort-prefix,
+  .bm-filter-sort-suffix,
+  .bm-filter-sort-checkbox
+) {
+  color: var(--chromora-text-secondary);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter :is(
+  .bm-filter-stat-card,
+  .bm-filter-sort-panel
+),
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color {
+  background: var(--chromora-panel-bg);
+  border-color: var(--chromora-border);
+  box-shadow: var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color:focus-within {
+  border-color: var(--chromora-border-strong);
+  box-shadow: var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color[data-highlight="incorrect"] {
+  border-color: rgba(255, 82, 82, 0.72);
+  box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.18), var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color[data-highlight="missing"] {
+  border-color: rgba(84, 211, 239, 0.76);
+  box-shadow: 0 0 0 3px rgba(84, 211, 239, 0.2), var(--chromora-panel-shadow);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter .bm-filter-sort-dropdown-menu {
+  background: var(--chromora-panel-bg);
+  border-color: var(--chromora-border);
+  box-shadow: var(--chromora-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter .bm-filter-sort-dropdown-option:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter .bm-filter-sort-dropdown-option:focus-visible {
+  background: var(--chromora-control-hover-bg) !important;
+  border-color: var(--chromora-border) !important;
+  box-shadow: none !important;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter .bm-filter-sort-dropdown-option.is-selected {
+  color: var(--chromora-text);
+  background: var(--chromora-control-selected-bg) !important;
+  border-color: var(--chromora-border-strong) !important;
+  box-shadow: none !important;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-resize-corner {
+  color: var(--chromora-text-secondary) !important;
+  background: var(--chromora-control-bg);
+  border-color: var(--chromora-border);
+  box-shadow: none;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter:not(.bm-windowed) .bm-filter-color:is([data-id="-1"], [data-id="0"]),
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color:is([data-id="-1"], [data-id="0"]) .bm-filter-container-rgb {
+  background-color: var(--chromora-checker-bg) !important;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color:is([data-id="-1"], [data-id="0"]) :is(h2, .bm-filter-color-pxl-cnt) {
+  color: var(--chromora-text) !important;
+}
+
+/* Template wizard cards. */
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-wizard-tlist > .bm-container {
+  color: var(--chromora-text);
+  background: var(--chromora-panel-bg);
+  border: 1px solid var(--chromora-border);
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-wizard-tlist > .bm-container:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-wizard-tlist > .bm-container:focus-within {
+  background: var(--chromora-panel-soft-bg);
+}
+
+:root[data-chromora-theme="light"] .bm-status-success { color: #16734f; }
+:root[data-chromora-theme="light"] .bm-status-warning { color: #8a5b00; }
+:root[data-chromora-theme="light"] .bm-status-error { color: #b52e45; }
+:root[data-chromora-theme="dark"] .bm-status-success { color: #78e8b8; }
+:root[data-chromora-theme="dark"] .bm-status-warning { color: #ffd478; }
+:root[data-chromora-theme="dark"] .bm-status-error { color: #ff8fa1; }
+
+/* Floating area-selection controls live outside .bm-window. */
+:root[data-chromora-theme="light"] .bm-paint-area-controls .bm-paint-area-toggle {
+  color: #182941;
+  color-scheme: light;
+  background: #ffffff;
+  border-color: #c6d1df;
+  box-shadow: 0 10px 24px rgba(25, 44, 70, 0.2);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-chromora-theme="dark"] .bm-paint-area-controls .bm-paint-area-toggle {
+  color: #edf5ff;
+  color-scheme: dark;
+  background: #1a2638;
+  border-color: #40536e;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.46);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-chromora-theme="dark"] .bm-paint-area-controls .bm-paint-area-toggle img {
+  filter: brightness(0) invert(1) opacity(0.92);
+}
+
+:root[data-chromora-theme="light"] .bm-paint-area-controls .bm-paint-area-toggle[data-state="active"],
+:root[data-chromora-theme="light"] .bm-paint-area-controls .bm-paint-area-toggle[data-state="selecting"] {
+  color: #082738;
+  background: #ccecf5;
+  border-color: #4a9dbc;
+}
+
+:root[data-chromora-theme="dark"] .bm-paint-area-controls .bm-paint-area-toggle[data-state="active"],
+:root[data-chromora-theme="dark"] .bm-paint-area-controls .bm-paint-area-toggle[data-state="selecting"] {
+  color: #e6fbff;
+  background: #17485b;
+  border-color: #67d7ec;
+}
+
+:root[data-chromora-theme="light"] .bm-paint-area-controls .bm-paint-area-toggle[data-state="success"] {
+  color: #14533f;
+  background: #dcf5e9;
+  border-color: #69aa91;
+}
+
+:root[data-chromora-theme="dark"] .bm-paint-area-controls .bm-paint-area-toggle[data-state="success"] {
+  color: #ddfff1;
+  background: #1b4438;
+  border-color: #58ad8c;
+}
+
+:root[data-chromora-theme="light"] .bm-paint-area-controls .bm-paint-area-toggle[data-state="error"] {
+  color: #762844;
+  background: #fde4ec;
+  border-color: #c87994;
+}
+
+:root[data-chromora-theme="dark"] .bm-paint-area-controls .bm-paint-area-toggle[data-state="error"] {
+  color: #ffe9f0;
+  background: #51283a;
+  border-color: #d37c9b;
+}
+
+:root[data-chromora-theme="light"] .bm-paint-area-alert {
+  color: #762844;
+  color-scheme: light;
+  background: #fde8ef;
+  border-color: #d29aae;
+  box-shadow: 0 14px 32px rgba(54, 28, 40, 0.22);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-chromora-theme="dark"] .bm-paint-area-alert {
+  color: #ffe9f0;
+  color-scheme: dark;
+  background: #51283a;
+  border-color: #9b546e;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Keep keyboard focus visible after all solid-theme component overrides. */
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(button, input, select, textarea):focus-visible {
+  border-color: var(--chromora-focus) !important;
+  box-shadow: 0 0 0 3px var(--chromora-focus-ring), var(--chromora-panel-shadow) !important;
+}
+
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter :is(.bm-filter-sort-dropdown-trigger, .bm-filter-sort-dropdown-option):focus-visible {
+  border-color: var(--chromora-focus) !important;
+  box-shadow: 0 0 0 3px var(--chromora-focus-ring), var(--chromora-panel-shadow) !important;
+}

@@ -111,21 +111,21 @@ export default class WindowWizard extends Overlay {
 
       // ...AND IF the MINOR version is up-to-date...
       if (schemaVersionArray[1] == schemaVersionBleedingEdgeArray[1]) {
-        schemaHealthBanner = 'Template storage health: <b style="color:#0f0;">Healthy!</b><br>No futher action required. (Reason: Semantic version matches)';
+        schemaHealthBanner = 'Template storage health: <b class="bm-status-success">Healthy!</b><br>No futher action required. (Reason: Semantic version matches)';
         this.schemaHealth = 'Good';
       } else { // ...else, the MINOR version is out-of-date
-        schemaHealthBanner = `Template storage health: <b style="color:#ff0;">Poor!</b><br>You can still use your template, but some features may not work. Update ${escapeHTML(this.name)}'s template storage. (Reason: MINOR version mismatch)`;
+        schemaHealthBanner = `Template storage health: <b class="bm-status-warning">Poor!</b><br>You can still use your template, but some features may not work. Update ${escapeHTML(this.name)}'s template storage. (Reason: MINOR version mismatch)`;
         this.schemaHealth = 'Poor';
       }
     } else if (schemaVersionArray[0] < schemaVersionBleedingEdgeArray[0]) {
       // ...ELSE IF the MAJOR version is out-of-date
       
-      schemaHealthBanner = `Template storage health: <b style="color:#f00;">Bad!</b><br>Some features are broken. Download all templates and update ${escapeHTML(this.name)}'s template storage before continuing. (Reason: MAJOR version mismatch)`;
+      schemaHealthBanner = `Template storage health: <b class="bm-status-error">Bad!</b><br>Some features are broken. Download all templates and update ${escapeHTML(this.name)}'s template storage before continuing. (Reason: MAJOR version mismatch)`;
       this.schemaHealth = 'Bad';
     } else {
       // ...ELSE the Semantic version is unknown
 
-      schemaHealthBanner = `Template storage health: <b style="color:#f00">Dead!</b><br>${escapeHTML(this.name)} cannot load the template storage. (Reason: MAJOR version unknown)`;
+      schemaHealthBanner = `Template storage health: <b class="bm-status-error">Dead!</b><br>${escapeHTML(this.name)} cannot load the template storage. (Reason: MAJOR version unknown)`;
       this.schemaHealth = 'Dead';
     }
 

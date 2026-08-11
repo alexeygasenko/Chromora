@@ -9,6 +9,7 @@ The project started with Blue Marble, then grew into a separate toolkit for chec
 ### Smooth interface
 
 - New Y2K look across every window.
+- Choose between Glass, Light, and Dark themes; Light and Dark use solid surfaces without background blur.
 - Windows open, close, minimize, expand, and change shape smoothly.
 - Large templates stay responsive while Chromora works in the background.
 - Windows remember where you placed them and how large they were.
@@ -47,7 +48,51 @@ The project started with Blue Marble, then grew into a separate toolkit for chec
 - A warning appears only when no droplets are available at all.
 - Change either hotkey in Settings whenever you need.
 
+## What's new
+
+### [Chromora 1.3.0](https://github.com/alexeygasenko/Chromora/releases/tag/v1.3.0)
+
+- Keep multiple templates in one library, with a preview, coordinates, and progress for each template.
+- Enable, disable, remove, or jump to any template from its card. Disabled templates stay out of map rendering, area drafting, and color statistics.
+- Add templates in two steps: choose an image, then click the map or enter and confirm its top-left coordinate in a focused picker.
+- Work from a cleaner main window, with version information moved to Settings and simpler window controls throughout Chromora.
+- Template storage and map navigation now handle multiple tabs, legacy data, stale requests, and late responses more safely.
+
+### [Chromora 1.2.0](https://github.com/alexeygasenko/Chromora/releases/tag/v1.2.0)
+
+- Choose between Glass, Light, and Dark themes in Settings, with Glass kept as the default.
+- Use solid, blur-free surfaces in Light and Dark while retaining the original translucent Glass appearance.
+- Apply theme changes immediately and keep them after page reloads across every Chromora window and area-selection control.
+- Use adaptive icons, controls, focus states, and a keyboard-accessible theme selector in every theme.
+- Keep rapid settings changes and area-drafting hotkeys reliably persisted.
+
 ## Screenshots
+
+The gallery uses the real Chromora interface rendered over an isolated Wplace-style map sandbox in Glass, Light, and Dark themes.
+
+### Main window
+
+<img src="./docs/assets/chromora-main.png" alt="Chromora main window in the Glass theme" width="640">
+
+Check droplets and charges, open the template library or Settings, and keep the map visible behind the compact controls.
+
+### Template library
+
+<img src="./docs/assets/chromora-templates.png" alt="Chromora template library in the Dark theme with two template cards" width="700">
+
+Review each template's preview, coordinates, and progress, then enable, disable, remove, or jump to it from the same card.
+
+### Template coordinates
+
+<img src="./docs/assets/chromora-template-coordinates.png" alt="Chromora template coordinate picker in the Light theme" width="640">
+
+Choose the template's top-left pixel from the map or enter its tile and pixel coordinates manually before creating it.
+
+### Settings and themes
+
+<img src="./docs/assets/chromora-settings.png" alt="Chromora Settings in the Light theme with Glass, Light, and Dark choices" width="640">
+
+Switch themes, customize hotkeys and highlights, and find the installed Chromora version at the bottom of Settings.
 
 ### Color Filter: horizontal
 
@@ -65,7 +110,7 @@ Keep a compact color checklist open beside your artwork.
 
 <img src="./docs/assets/chromora-filter-fullscreen.png" alt="Chromora Color Filter in fullscreen mode with artwork statistics and color cards" width="700">
 
-See overall progress, sort colors, and compare every color's remaining pixels in one view.
+See artwork progress, sort colors, and compare every color's remaining pixels in one view.
 
 ## Installation
 

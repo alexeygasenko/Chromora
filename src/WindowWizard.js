@@ -25,8 +25,12 @@ export default class WindowWizard extends Overlay {
     this.windowID = 'bm-window-wizard'; // The ID attribute for this window
     this.windowParent = document.body; // The parent of the window DOM tree
 
-    // Retrieves data from storage
-    this.currentJSON = JSON.parse(GM_getValue('bmTemplates', '{}')); // The current Blue Marble storage
+    // Retrieves data from storage. Keep the exact source snapshot so migration can
+    // prove that the legacy store has not changed before replacing its schema.
+    this.currentTemplateStorage = GM_getValue('bmTemplates', '{}');
+    this.currentJSON = (typeof this.currentTemplateStorage == 'string')
+      ? JSON.parse(this.currentTemplateStorage || '{}')
+      : this.currentTemplateStorage; // The current Blue Marble storage
     this.scriptVersion = this.currentJSON?.scriptVersion; // Script version when template was created
     this.schemaVersion = this.currentJSON?.schemaVersion; // Schema version when template was created
 
@@ -265,31 +269,119 @@ export default class WindowWizard extends Overlay {
 
     // Obtains the templates from JSON storage
     const templates = this.currentJSON?.templates;
+    const originalTemplateStorage = this.currentTemplateStorage;
+    const previousTemplatesJSON = this.templateManager.templatesJSON;
+    const previousTemplatesArray = [...this.templateManager.templatesArray];
+    const previousStatisticsState = this.templateManager.templateStatisticsState;
+    const serializeStorage = value => (typeof value == 'string') ? value : JSON.stringify(value);
+    const normalizeStorage = value => JSON.stringify((typeof value == 'string') ? JSON.parse(value || '{}') : value);
+    const migrationOwnedRecords = new Map();
+    let lastMigrationStorage = serializeStorage(originalTemplateStorage);
+    let mayReplaceOldSchema = true;
 
-    // If there is at least one template loaded...
-    if (Object.keys(templates).length > 0) {
+    try {
+      // If there is at least one template loaded...
+      if (Object.keys(templates).length > 0) {
 
-      // For each template loaded...
-      for (const [key, template] of Object.entries(templates)) {
+        // For each template loaded...
+        for (const [key, template] of Object.entries(templates)) {
 
-        // If the template is a direct child of the templates Object...
-        if (templates.hasOwnProperty(key)) {
+          // If the template is a direct child of the templates Object...
+          if (templates.hasOwnProperty(key)) {
 
-          // Creates a dummy Template class instance
-          const _template = new Template({
-            displayName: template.name,
-            chunked: template.tiles
-          });
+            // Creates a dummy Template class instance
+            const _template = new Template({
+              displayName: template.name,
+              chunked: template.tiles
+            });
 
-          _template.calculateCoordsFromChunked(); // Updates `Template.coords`
+            _template.calculateCoordsFromChunked(); // Updates `Template.coords`
 
-          // Converts the template to a Blob
-          const blob = await this.templateManager.convertTemplateToBlob(_template);
+            // Converts the template to a Blob
+            const blob = await this.templateManager.convertTemplateToBlob(_template);
 
-          // Uses the information from the dummy Template class instance to make the actual Template
-          await this.templateManager.createTemplate(blob, _template.displayName, _template.coords);
+            // Uses the information from the dummy Template class instance to make the actual Template
+            const migratedTemplate = await this.templateManager.createTemplate(blob, _template.displayName, _template.coords, {
+              allowSchemaReplacement: mayReplaceOldSchema,
+              expectedSchemaReplacementStorage: mayReplaceOldSchema ? this.currentJSON : undefined,
+              enabled: template.enabled !== false
+            });
+            migrationOwnedRecords.set(
+              migratedTemplate.storageKey,
+              JSON.stringify(this.templateManager.templatesJSON.templates[migratedTemplate.storageKey])
+            );
+            lastMigrationStorage = JSON.stringify(this.templateManager.templatesJSON);
+            mayReplaceOldSchema = false;
+          }
         }
+      } else {
+        // Even an empty legacy store must advance its schema or future additions stay blocked.
+        const upgradedStore = await this.templateManager.createJSON();
+        const persistEmptyUpgrade = async () => {
+          const currentStorage = GM_getValue('bmTemplates', '{}');
+          if (normalizeStorage(currentStorage) !== JSON.stringify(this.currentJSON)) {
+            throw new Error('Template storage changed in another tab before migration could start.');
+          }
+          await GM.setValue('bmTemplates', JSON.stringify(upgradedStore));
+        };
+        const lockManager = globalThis.navigator?.locks;
+        if (lockManager?.request) {
+          await lockManager.request('chromora-template-storage', persistEmptyUpgrade);
+        } else {
+          await persistEmptyUpgrade();
+        }
+        lastMigrationStorage = JSON.stringify(upgradedStore);
+        this.templateManager.templatesJSON = upgradedStore;
+        this.templateManager.templatesArray = [];
+        this.templateManager.templateStatisticsState = 'ready';
       }
+    } catch (error) {
+      // Roll back only if another tab has not changed storage after this migration's last write.
+      const rollbackIfUnchanged = async () => {
+        const currentStorage = GM_getValue('bmTemplates', '{}');
+        if (migrationOwnedRecords.size) {
+          let currentJSON;
+          try {
+            currentJSON = (typeof currentStorage == 'string') ? JSON.parse(currentStorage) : currentStorage;
+          } catch (parseError) {
+            return false;
+          }
+          const currentTemplates = currentJSON?.templates;
+          if (!currentTemplates || (typeof currentTemplates != 'object') || Array.isArray(currentTemplates)) {return false;}
+          if (Object.keys(currentTemplates).length !== migrationOwnedRecords.size) {return false;}
+          for (const [storageKey, ownedRecord] of migrationOwnedRecords) {
+            if (!Object.hasOwn(currentTemplates, storageKey) || JSON.stringify(currentTemplates[storageKey]) !== ownedRecord) {
+              return false;
+            }
+          }
+          let ownedNextSortID = 0;
+          for (const storageKey of migrationOwnedRecords.keys()) {
+            ownedNextSortID = Math.max(ownedNextSortID, Number(storageKey.split(' ')?.[0]) + 1);
+          }
+          if (Number(currentJSON.nextSortID) !== ownedNextSortID) {return false;}
+        } else if (serializeStorage(currentStorage) !== lastMigrationStorage) {
+          return false;
+        }
+        await GM.setValue('bmTemplates', originalTemplateStorage);
+        return true;
+      };
+      const lockManager = globalThis.navigator?.locks;
+      const storageRolledBack = lockManager?.request
+        ? await lockManager.request('chromora-template-storage', rollbackIfUnchanged)
+        : await rollbackIfUnchanged();
+
+      if (storageRolledBack) {
+        this.templateManager.templatesJSON = previousTemplatesJSON;
+        this.templateManager.templatesArray = previousTemplatesArray;
+        this.templateManager.templateStatisticsState = previousStatisticsState;
+        throw error;
+      }
+
+      // Keep newer external data untouched and stop this tab from rendering a stale partial migration.
+      this.templateManager.templatesJSON = null;
+      this.templateManager.templatesArray = [];
+      this.templateManager.templateStatisticsState = 'error';
+      throw new Error('Template storage changed in another tab during migration. Reload before continuing.', {cause: error});
     }
 
     // If it has been requested that we open a new Template Wizard window, we do so

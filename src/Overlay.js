@@ -84,7 +84,6 @@ export default class Overlay {
     /** The Settings Manager instance. Later populated when setSettingsManager is called @type {SettingsManager} */
     this.settingsManager = null;
     
-    this.outputStatusId = 'bm-output-status'; // ID for status element
 
     this.overlay = null; // The overlay root DOM HTMLElement
     this.currentParent = null; // The current parent HTMLElement in the overlay
@@ -1816,27 +1815,23 @@ export default class Overlay {
     iResizeThings.addEventListener('lostpointercapture', endResize);
   }
 
-  /** Handles status display.
-   * This will output plain text into the output Status box.
-   * Additionally, this will output an info message to the console.
+  /** Handles status reporting.
+   * Outputs an info message to the console.
    * @param {string} text - The status text to display.
    * @since 0.58.4
    */
   handleDisplayStatus(text) {
     const consoleInfo = console.info; // Creates a copy of the console.info function
     consoleInfo(`${this.name}: ${text}`); // Outputs something like "ScriptName: text" as an info message to the console
-    this.updateInnerHTML(this.outputStatusId, 'Status: ' + text, true); // Update output Status box
   }
 
-  /** Handles error display.
-   * This will output plain text into the output Status box.
-   * Additionally, this will output an error to the console.
+  /** Handles error reporting.
+   * Outputs an error to the console.
    * @param {string} text - The error text to display.
    * @since 0.41.6
    */
   handleDisplayError(text) {
     const consoleError = console.error; // Creates a copy of the console.error function
     consoleError(`${this.name}: ${text}`); // Outputs something like "ScriptName: text" as an error message to the console
-    this.updateInnerHTML(this.outputStatusId, 'Error: ' + text, true); // Update output Status box
   }
 }

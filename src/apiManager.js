@@ -19,7 +19,34 @@ export default class ApiManager {
     this.chargeRefillTimerID = ''; // Contains the Charge refill timer element ID attribute so we can update the timer.
     this.coordsTilePixel = []; // Contains the last detected tile/pixel coordinate pair requested
     this.templateCoordsTilePixel = []; // Contains the last "enabled" template coords
+    this.coordinateChangeListeners = new Set(); // Subscribers waiting for a valid map coordinate selection
     this.spontaneousMessageHandler = null;
+  }
+
+  /** Subscribes to valid tile/pixel coordinate changes.
+   * Each listener receives its own copy of [tileX, tileY, pixelX, pixelY].
+   * @param {function(Array<number>):void} listener - Coordinate change listener
+   * @returns {function():void} Unsubscribe callback
+   * @since 1.3.0
+   */
+  onCoordinatesChanged(listener) {
+    if (typeof listener != 'function') {return () => {};}
+    this.coordinateChangeListeners.add(listener);
+    return () => this.coordinateChangeListeners.delete(listener);
+  }
+
+  /** Notifies coordinate subscribers without sharing mutable coordinate arrays.
+   * @param {Array<number>} coords - Valid tile/pixel coordinates
+   * @since 1.3.0
+   */
+  #emitCoordinatesChanged(coords) {
+    for (const listener of this.coordinateChangeListeners) {
+      try {
+        listener(coords.slice());
+      } catch (error) {
+        consoleError('A coordinate-change listener failed.', error);
+      }
+    }
   }
 
   /** Determines if the spontaneously received response is something we want.
@@ -61,17 +88,28 @@ export default class ApiManager {
           break;
 
         case 'pixel': // Request to retrieve pixel data
-          const coordsTile = data['endpoint'].split('?')[0].split('/').filter(s => s && !isNaN(Number(s))); // Retrieves the tile coords as [x, y]
-          const payloadExtractor = new URLSearchParams(data['endpoint'].split('?')[1]); // Declares a new payload deconstructor and passes in the fetch request payload
-          const coordsPixel = [payloadExtractor.get('x'), payloadExtractor.get('y')]; // Retrieves the deconstructed pixel coords from the payload
+          const coordsTile = data['endpoint'].split('?')[0].split('/')
+            .filter(s => s && !isNaN(Number(s)))
+            .slice(-2)
+            .map(Number); // Retrieves the tile coords as [x, y]
+          const payloadExtractor = new URLSearchParams(data['endpoint'].split('?')[1] ?? ''); // Declares a new payload deconstructor and passes in the fetch request payload
+          const coordsPixel = [payloadExtractor.get('x'), payloadExtractor.get('y')]
+            .map(value => (value === null || value.trim() === '') ? NaN : Number(value)); // Retrieves the deconstructed pixel coords from the payload
+          const coordsCombined = [...coordsTile, ...coordsPixel];
+          const tileSize = Number(this.templateManager?.tileSize) || 1000;
+          const coordsAreValid = (coordsCombined.length == 4)
+            && coordsCombined.every(coord => Number.isInteger(coord) && (coord >= 0))
+            && (coordsPixel[0] < tileSize)
+            && (coordsPixel[1] < tileSize);
           
-          // Don't save the coords if there are previous coords that could be used
-          if (this.coordsTilePixel.length && (!coordsTile.length || !coordsPixel.length)) {
-            overlay.handleDisplayError(`Coordinates are malformed!\nDid you try clicking the canvas first?`);
+          // Keep the last valid coordinates when an incomplete pixel endpoint is received.
+          if (!coordsAreValid) {
+            overlay?.handleDisplayError?.(`Coordinates are malformed!\nDid you try clicking the canvas first?`);
             return; // Kills itself
           }
           
-          this.coordsTilePixel = [...coordsTile, ...coordsPixel]; // Combines the two arrays such that [x, y, x, y]
+          this.coordsTilePixel = coordsCombined; // Combines the two arrays such that [x, y, x, y]
+          this.#emitCoordinatesChanged(this.coordsTilePixel);
           
           const displayTP = serverTPtoDisplayTP(coordsTile, coordsPixel); // Retrieves the coordinates that Wplace displays for this region
 
@@ -93,8 +131,6 @@ export default class ApiManager {
               // All 4 coordinate labels, IDs, and values
               const coordsLabel = ['Tl X:', 'Tl Y:', 'Px X:', 'Px Y:'];
               const coordsID = ['bm-tile-x', 'bm-tile-y', 'bm-pixel-x', 'bm-pixel-y'];
-              const coordsCombined = [...coordsTile, ...coordsPixel];
-
               // If we could not find the addition coord span, we make it then update the textContent with the new coords
               if (!displayCoords) {
                 displayCoords = document.createElement('span');
@@ -106,7 +142,7 @@ export default class ApiManager {
 
                   const coordElement = document.createElement('span'); // Creates a `<span>` element
 
-                  coordElement.id = coordsID[coordsCombined.indexOf(coordValue) ?? '']; // Applys the ID to the coord element
+                  coordElement.id = coordsID[coordIndex] ?? ''; // Applys the ID to the coord element
 
                   // Outputs something like "Tl X: 483"
                   coordElement.textContent = `${coordsLabel[coordIndex] ?? '??:'} ${coordValue}`;

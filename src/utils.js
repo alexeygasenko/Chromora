@@ -265,39 +265,6 @@ export function base64ToUint8(base64) {
   return array;
 }
 
-/** Handles reading from the clipboard.
- * Assume this only returns text.
- * Assume this requires user input.
- * @param {ClipboardEvent} [event=undefined] - (Optional) The clipboard event that triggered this to run
- * @since 0.88.426
- * @returns {string} The clipboard data as a string
- */
-export async function getClipboardData(event = undefined) {
-
-  let data = ''; // Data from clipboard
-
-  // Try using the event, if any was provided
-  if (event) {
-    data = event.clipboardData.getData('text/plain');
-  }
-
-  if (data.length != 0) {return data;} // Continue only if data is still empty
-  
-  // Try using the navigator clipboard
-  await navigator.clipboard.readText().then(text => {
-    data = text;
-  }).catch(error => {
-    consoleLog(`Failed to retrieve clipboard data using navigator! Using fallback methods...`);
-  });
-
-  if (data.length != 0) {return data;} // Continue only if data is still empty
-
-  // Try using IE clipboard
-  data = window.clipboardData?.getData('Text');
-
-  return data;
-}
-
 /** Calcualtes the relative luminance of an RGB value
  * @param {Array<Number, Number, Number>} array - The RGB values as an array
  * @returns {Number} The relative luminance as a Number
@@ -338,21 +305,6 @@ export function hexToRGB(hex) {
   hex = (hex[0] == '#') ? hex.slice(1) : hex; // Removes the octothorpe, if any
   const packedIntRGB = parseInt(hex, 16); // Converts (base16) into an integer
   return [(packedIntRGB >> 16 & 255), (packedIntRGB >> 8 & 255), (packedIntRGB & 255)]; // Unpacks the integer into the RGB channels
-}
-
-/** Returns the coordinate input fields
- * @returns {Element[]} The 4 coordinate Inputs
- * @since 0.74.0
- */
-export function selectAllCoordinateInputs(document) {
-  coords = [];
-
-  coords.push(document.querySelector('#bm-input-tx'));
-  coords.push(document.querySelector('#bm-input-ty'));
-  coords.push(document.querySelector('#bm-input-px'));
-  coords.push(document.querySelector('#bm-input-py'));
-
-  return coords;
 }
 
 /** Processes the palette used for Blue Marble.

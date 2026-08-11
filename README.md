@@ -13,6 +13,14 @@ The project started with Blue Marble, then grew into a separate toolkit for chec
 - Large templates stay responsive while Chromora works in the background.
 - Windows remember where you placed them and how large they were.
 
+### Template library
+
+- Open the template list from the main window to see previews, coordinates, and progress for each template.
+- Add several templates without replacing the ones that are already loaded.
+- Enable, disable, or remove individual templates directly from their cards.
+- Jump straight to any template from its card.
+- Choose each template's top-left pixel in a focused coordinate picker, either by clicking the map or entering coordinates manually.
+
 ### Color Filter
 
 - Switch between horizontal, vertical, and fullscreen views.
@@ -41,12 +49,6 @@ The project started with Blue Marble, then grew into a separate toolkit for chec
 
 ## Screenshots
 
-### Main window
-
-<img src="./docs/assets/chromora-main.png" alt="Chromora main window with template controls and droplet statistics" width="560">
-
-Upload a template, set its coordinates, check your droplets, and open the Color Filter from one compact window.
-
 ### Color Filter: horizontal
 
 <img src="./docs/assets/chromora-filter-horizontal.png" alt="Chromora Color Filter in horizontal mode" width="900">
@@ -64,12 +66,6 @@ Keep a compact color checklist open beside your artwork.
 <img src="./docs/assets/chromora-filter-fullscreen.png" alt="Chromora Color Filter in fullscreen mode with artwork statistics and color cards" width="700">
 
 See overall progress, sort colors, and compare every color's remaining pixels in one view.
-
-### Settings
-
-<img src="./docs/assets/chromora-settings.png" alt="Chromora settings window with hotkeys and pixel highlight patterns" width="560">
-
-Set area-selection hotkeys and choose how unfinished pixels are highlighted.
 
 ## Installation
 

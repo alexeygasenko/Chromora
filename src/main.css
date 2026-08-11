@@ -9,5 +9,7 @@
 @import './WindowFilter.css';
 @import './WindowMain.css';
 @import './WindowSettings.css';
+@import './WindowTemplateCoordinates.css';
+@import './WindowTemplates.css';
 @import './WindowWizard.css';
 @import './zThemes.css';

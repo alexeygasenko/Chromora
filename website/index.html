@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en" data-theme="glass">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Chromora is a fluid template, color analysis, pixel highlighting, and assisted drafting toolkit for Wplace.live.">
+  <meta name="theme-color" content="#0b284f">
+  <title>Chromora — See every pixel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Rajdhani:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./script.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <header class="site-header">
+    <div class="nav-shell">
+      <a class="brand" href="#top" aria-label="Chromora home">
+        <span class="brand-type">
+          <strong>Chromora</strong>
+        </span>
+      </a>
+
+      <nav class="primary-nav" id="primary-nav" aria-label="Primary navigation">
+        <a href="#features">Features</a>
+        <a href="#workspace">Workspace</a>
+        <a href="#install">Install</a>
+      </nav>
+
+      <div class="nav-actions">
+        <div class="theme-switcher" role="radiogroup" aria-label="Site appearance">
+          <button class="theme-choice" type="button" role="radio" aria-label="Glass theme" aria-checked="true" data-theme-choice="glass">
+            <span class="theme-swatch theme-swatch--glass" aria-hidden="true"></span>
+            <span class="theme-label">Glass</span>
+          </button>
+          <button class="theme-choice" type="button" role="radio" aria-label="Light theme" aria-checked="false" data-theme-choice="light" tabindex="-1">
+            <span class="theme-swatch theme-swatch--light" aria-hidden="true"></span>
+            <span class="theme-label">Light</span>
+          </button>
+          <button class="theme-choice" type="button" role="radio" aria-label="Dark theme" aria-checked="false" data-theme-choice="dark" tabindex="-1">
+            <span class="theme-swatch theme-swatch--dark" aria-hidden="true"></span>
+            <span class="theme-label">Dark</span>
+          </button>
+        </div>
+
+        <a class="nav-download" href="https://github.com/alexeygasenko/Chromora/releases/latest">Get Chromora</a>
+      </div>
+
+      <button class="menu-toggle" type="button" aria-controls="primary-nav" aria-expanded="false" aria-label="Open navigation">
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="hero section-shell" id="top">
+      <div class="hero-copy reveal">
+        <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Open-source Wplace toolkit <span class="eyebrow-version">v1.3.0</span></div>
+        <h1>See every pixel.<br><span>Finish with confidence.</span></h1>
+        <p class="hero-lede">Chromora keeps your templates organized, turns color progress into a clear checklist, and helps prepare the next area while your canvas stays responsive.</p>
+        <div class="hero-actions">
+          <a class="button button--primary" href="https://github.com/alexeygasenko/Chromora/releases/latest">
+            <span>Download latest release</span><span class="download-icon" aria-hidden="true"></span>
+          </a>
+          <a class="button button--quiet" href="#features">Explore the toolkit <span aria-hidden="true">↓</span></a>
+        </div>
+        <ul class="hero-meta" aria-label="Chromora details">
+          <li><span aria-hidden="true">◆</span> Userscript</li>
+          <li><span aria-hidden="true">◆</span> Wplace.live</li>
+          <li><span aria-hidden="true">◆</span> MPL-2.0</li>
+        </ul>
+      </div>
+
+      <div class="hero-stage reveal">
+        <div class="float-chip float-chip--top"><span>03</span> interface themes</div>
+        <figure class="product-frame product-frame--hero">
+          <div class="product-frame__bar">
+            <span class="window-dot" aria-hidden="true"></span>
+            <span>Live workspace</span>
+            <span class="frame-status"><i aria-hidden="true"></i> Ready</span>
+          </div>
+          <div class="product-frame__demo">
+            <div class="app-window app-window--main" aria-hidden="true">
+              <div class="app-titlebar">
+                <span class="app-round-control app-round-control--chevron"></span>
+                <strong>Chromora</strong>
+                <span class="app-title-actions"><i class="app-round-control app-round-control--list"></i><i class="app-round-control app-round-control--settings"></i></span>
+              </div>
+              <div class="app-stat-grid">
+                <span><small>Droplets</small><b>28</b></span>
+                <span><small>Next level</small><b>1,240 <i>px</i></b></span>
+                <span><small>Charges</small><b>00:42</b></span>
+              </div>
+              <div class="app-action-row"><span>Disable</span><span>Filter</span></div>
+            </div>
+          </div>
+          <figcaption>
+            <span>Chromora main controls</span>
+            <span class="mono">GLASS / DEFAULT</span>
+          </figcaption>
+        </figure>
+        <div class="float-chip float-chip--bottom"><span>+</span> every template, one library</div>
+      </div>
+    </section>
+
+    <section class="proof section-shell reveal" aria-label="Product highlights">
+      <div class="proof-item">
+        <strong>Multi-template</strong>
+        <span>Add without replacing</span>
+      </div>
+      <div class="proof-item">
+        <strong>Live counts</strong>
+        <span>Correct · remaining · total</span>
+      </div>
+      <div class="proof-item">
+        <strong>3 layouts</strong>
+        <span>Horizontal · vertical · full</span>
+      </div>
+      <div class="proof-item">
+        <strong>You stay in control</strong>
+        <span>Review first, press Paint yourself</span>
+      </div>
+    </section>
+
+    <section class="section-shell feature-section" id="features">
+      <div class="section-heading reveal">
+        <div>
+          <p class="kicker">Built for the final pass</p>
+          <h2>Less hunting.<br>More finishing.</h2>
+        </div>
+        <p>Chromora brings the decisions that slow pixel work down—what is missing, where it belongs, and what to do next—into one focused workspace.</p>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature-card feature-card--wide reveal">
+          <div class="feature-copy">
+            <span class="feature-number">01 / LIBRARY</span>
+            <h3>Every overlay, one place.</h3>
+            <p>See each template’s preview, coordinates, and progress. Enable, disable, remove, or jump to any template without replacing the rest.</p>
+            <ul class="tag-list" aria-label="Template library features">
+              <li>Multiple templates</li>
+              <li>Progress per card</li>
+              <li>Direct map jump</li>
+            </ul>
+          </div>
+          <div class="feature-visual" aria-hidden="true">
+            <div class="app-window app-window--dark app-window--templates">
+              <div class="app-titlebar">
+                <span class="app-round-control app-round-control--chevron"></span>
+                <strong>Templates</strong>
+                <span class="app-round-control app-round-control--close"></span>
+              </div>
+              <div class="template-toolbar">
+                <span><b>Template library</b><small>Manage every active overlay in one place.</small></span>
+                <i>Add template</i>
+              </div>
+              <div class="template-item">
+                <span class="pixel-preview pixel-preview--aurora"></span>
+                <span class="template-details"><b>Aurora Badge</b><small>Tile 1024, 730 · Pixel 76, 288</small><i><em style="--progress: 77%"></em></i><small>7,865 / 10,270 pixels</small></span>
+                <span class="template-meta"><small>10,270 pixels</small><i>Go to</i><i class="is-danger">Delete</i></span>
+              </div>
+              <div class="template-item is-muted">
+                <span class="pixel-preview pixel-preview--garden"></span>
+                <span class="template-details"><b>Pixel Garden</b><small>Tile 1025, 730 · Pixel 16, 288</small><i><em style="--progress: 56%"></em></i><small>Paused · 4,675 / 8,354 pixels</small></span>
+                <span class="template-meta"><small>8,354 pixels</small><i>Go to</i><i class="is-danger">Delete</i></span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="feature-card feature-card--filter reveal">
+          <span class="feature-number">02 / COLOR FILTER</span>
+          <h3>A checklist made of color.</h3>
+          <p>Hide colors you do not need, arrange the list your way, and see what is correct, what remains, and how far each color has progressed.</p>
+          <div class="mini-window" aria-hidden="true">
+            <div><span class="mini-swatch mini-swatch--cyan"></span><b>Cyan</b><strong>82.70%</strong></div>
+            <div><span class="mini-swatch mini-swatch--violet"></span><b>Purple</b><strong>59.09%</strong></div>
+            <div><span class="mini-swatch mini-swatch--blue"></span><b>Dark Blue</b><strong>63.46%</strong></div>
+          </div>
+        </article>
+
+        <article class="feature-card feature-card--finder reveal">
+          <span class="feature-number">03 / HIGHLIGHT</span>
+          <h3>Find the pixels that are still wrong.</h3>
+          <p>Pick a color to reveal incorrect pixels or empty pixels that still need it. Clean, even outlines keep unfinished areas easy to read.</p>
+          <div class="pixel-field" aria-hidden="true">
+            <span></span><span></span><span class="is-lit"></span><span></span><span></span><span></span>
+            <span></span><span class="is-lit"></span><span class="is-lit"></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span class="is-missing"></span><span></span>
+            <span></span><span></span><span></span><span class="is-missing"></span><span class="is-missing"></span><span></span>
+          </div>
+        </article>
+
+        <article class="feature-card feature-card--draft reveal">
+          <span class="feature-number">04 / ASSISTED DRAFTING</span>
+          <h3>Prepare an area in one drag.</h3>
+          <p>Drag with your selected Wplace color or every template color. Chromora uses the droplets available, then leaves the final Paint press to you.</p>
+          <div class="hotkey-row">
+            <span><kbd>Left Alt</kbd> selected color</span>
+            <span><kbd>Left Ctrl</kbd> template colors</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="modes-section" id="filters">
+      <div class="section-shell">
+        <div class="section-heading section-heading--compact reveal">
+          <div>
+            <p class="kicker">Shape-shifting workspace</p>
+            <h2>One filter.<br>Three working modes.</h2>
+          </div>
+          <p>Keep a compact checklist beside the artwork, stretch it along an edge, or open the complete progress view when you need the whole picture.</p>
+        </div>
+
+        <div class="mode-gallery reveal">
+          <figure class="mode-card mode-card--horizontal">
+            <figcaption class="mode-card__label"><span>01</span><strong>Horizontal</strong><small>Edge scan</small></figcaption>
+            <div class="filter-demo filter-demo--horizontal" role="img" aria-label="Chromora Color Filter in its horizontal windowed layout, with None and All controls beside two rows of palette colors.">
+              <div class="filter-window filter-window--windowed filter-window--horizontal" aria-hidden="true">
+                <div class="filter-dragbar">
+                  <span class="filter-window-control filter-window-control--minimize"><svg class="bm-button-icon bm-button-icon-minimize" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 9.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span class="filter-drag-copy"><small>1356/1852</small><strong>Color Filter</strong></span>
+                  <span class="filter-window-actions">
+                    <i class="filter-window-control filter-window-control--layout-vertical"></i>
+                    <i class="filter-window-control filter-window-control--fullscreen"></i>
+                    <i class="filter-window-control filter-window-control--close"></i>
+                  </span>
+                </div>
+                <div class="filter-window-content">
+                  <span class="filter-divider"></span>
+                  <div class="filter-windowed-toolbar filter-windowed-toolbar--horizontal">
+                    <span class="filter-ui-button">None</span>
+                    <span class="filter-ui-button">All</span>
+                  </div>
+                  <div class="filter-window-scroll">
+                    <div class="filter-window-palette">
+                      <span class="filter-window-color filter-palette--purple">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Purple</b><small><strong>312</strong><span>out of 528</span></small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--indigo">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Light Indigo</b><small><strong>284</strong><span>out of 345</span></small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--blue">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Dark Blue</b><small><strong>198</strong><span>out of 312</span></small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--cyan" data-highlight="missing">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Cyan</b><small><strong>244</strong><span>out of 295</span></small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--light-cyan">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Light Cyan</b><small><strong>200</strong><span>out of 226</span></small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--light-purple">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Light Purple</b><small><strong>118</strong><span>out of 146</span></small></span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <span class="filter-resize-corner">◢</span>
+              </div>
+            </div>
+          </figure>
+          <figure class="mode-card mode-card--vertical">
+            <figcaption class="mode-card__label"><span>02</span><strong>Vertical</strong><small>Side checklist</small></figcaption>
+            <div class="filter-demo filter-demo--vertical" role="img" aria-label="Chromora Color Filter in its vertical windowed layout, showing painted totals, visibility controls, and a vertical palette list.">
+              <div class="filter-window filter-window--windowed filter-window--vertical" aria-hidden="true">
+                <div class="filter-dragbar">
+                  <span class="filter-window-control filter-window-control--minimize"><svg class="bm-button-icon bm-button-icon-minimize" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 9.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <strong>Color Filter</strong>
+                  <span class="filter-window-actions">
+                    <i class="filter-window-control filter-window-control--layout-horizontal"></i>
+                    <i class="filter-window-control filter-window-control--fullscreen"></i>
+                    <i class="filter-window-control filter-window-control--close"></i>
+                  </span>
+                </div>
+                <div class="filter-window-content">
+                  <span class="filter-divider"></span>
+                  <div class="filter-windowed-summary"><small>Painted</small><strong>1,356 / 1,852</strong></div>
+                  <span class="filter-divider"></span>
+                  <div class="filter-windowed-toolbar">
+                    <span class="filter-ui-button">None</span>
+                    <span class="filter-ui-button">All</span>
+                  </div>
+                  <span class="filter-divider"></span>
+                  <div class="filter-window-scroll">
+                    <div class="filter-window-palette">
+                      <span class="filter-window-color filter-palette--purple">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Purple</b><small>312 / 528</small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--indigo">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Light Indigo</b><small>284 / 345</small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--blue">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Dark Blue</b><small>198 / 312</small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--cyan" data-highlight="missing">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Cyan</b><small>244 / 295</small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--light-cyan">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Light Cyan</b><small>200 / 226</small></span>
+                      </span>
+                      <span class="filter-window-color filter-palette--light-purple">
+                        <span class="filter-window-color__rgb"><i class="filter-eye"></i><i class="filter-highlight"></i><b>Light Purple</b><small>118 / 146</small></span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <span class="filter-resize-corner">◢</span>
+              </div>
+            </div>
+          </figure>
+          <figure class="mode-card mode-card--fullscreen">
+            <figcaption class="mode-card__label"><span>03</span><strong>Fullscreen</strong><small>Complete overview</small></figcaption>
+            <div class="filter-demo filter-demo--fullscreen" role="img" aria-label="Chromora Color Filter in its fullscreen layout, with template statistics, sorting controls, and large palette-colored progress cards.">
+              <div class="filter-window filter-window--fullscreen" aria-hidden="true">
+                <div class="filter-dragbar">
+                  <span class="filter-window-control filter-window-control--minimize"><svg class="bm-button-icon bm-button-icon-minimize" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 9.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <strong>Color Filter</strong>
+                  <span class="filter-window-actions">
+                    <i class="filter-window-control filter-window-control--exit-fullscreen"></i>
+                    <i class="filter-window-control filter-window-control--close"></i>
+                  </span>
+                </div>
+                <div class="filter-window-content">
+                  <span class="filter-divider"></span>
+                  <div class="filter-fullscreen-toolbar">
+                    <span class="filter-ui-button">Hide All Colors</span>
+                    <span class="filter-ui-button">Show All Colors</span>
+                  </div>
+                  <span class="filter-divider"></span>
+                  <div class="filter-window-scroll">
+                    <div class="filter-insights">
+                      <div class="filter-stat-grid">
+                        <span><small>Tiles</small><strong>2 / 2</strong></span>
+                        <span><small>Correct</small><strong>1,356</strong></span>
+                        <span><small>Total</small><strong>1,852</strong></span>
+                        <span><small>Remaining</small><strong>496 (26.78%)</strong></span>
+                        <span class="filter-stat-wide"><small>Finish At</small><strong>12.08.26 23:14</strong></span>
+                      </div>
+                      <span class="filter-divider"></span>
+                      <div class="filter-sort-panel">
+                        <div>
+                          <strong>Sort Options</strong>
+                          <span class="filter-sort-row"><small>Show</small><i>total pixels</i><small>in</small><i>descending</i><small>order</small></span>
+                          <span class="filter-checkbox"><i></i>Show unused colors</span>
+                        </div>
+                        <span class="filter-ui-button filter-ui-button--primary">Sort Colors</span>
+                      </div>
+                    </div>
+                    <div class="filter-full-palette">
+                      <span class="filter-full-color filter-palette--purple">
+                        <span class="filter-full-color__main"><span><i class="filter-eye"></i><i class="filter-highlight"></i></span><b>Purple</b></span>
+                        <span class="filter-full-color__meta"><strong>312<span>out of 528</span></strong><small>59.09% done<br>216 off</small></span>
+                      </span>
+                      <span class="filter-full-color filter-palette--indigo">
+                        <span class="filter-full-color__main"><span><i class="filter-eye"></i><i class="filter-highlight"></i></span><b>Light Indigo</b></span>
+                        <span class="filter-full-color__meta"><strong>284<span>out of 345</span></strong><small>82.32% done<br>61 off</small></span>
+                      </span>
+                      <span class="filter-full-color filter-palette--blue">
+                        <span class="filter-full-color__main"><span><i class="filter-eye"></i><i class="filter-highlight"></i></span><b>Dark Blue</b></span>
+                        <span class="filter-full-color__meta"><strong>198<span>out of 312</span></strong><small>63.46% done<br>114 off</small></span>
+                      </span>
+                      <span class="filter-full-color filter-palette--cyan" data-highlight="missing">
+                        <span class="filter-full-color__main"><span><i class="filter-eye"></i><i class="filter-highlight"></i></span><b>Cyan</b></span>
+                        <span class="filter-full-color__meta"><strong>244<span>out of 295</span></strong><small>82.71% done<br>51 off</small></span>
+                      </span>
+                      <span class="filter-full-color filter-full-color--premium filter-palette--light-cyan">
+                        <span class="filter-full-color__main"><span><i class="filter-eye"></i><i class="filter-highlight"></i></span><b>Light Cyan</b></span>
+                        <span class="filter-full-color__meta"><strong>200<span>out of 226</span></strong><small>88.50% done<br>26 off</small></span>
+                      </span>
+                      <span class="filter-full-color filter-palette--light-purple">
+                        <span class="filter-full-color__main"><span><i class="filter-eye"></i><i class="filter-highlight"></i></span><b>Light Purple</b></span>
+                        <span class="filter-full-color__meta"><strong>118<span>out of 146</span></strong><small>80.82% done<br>28 off</small></span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-shell workspace-section" id="workspace">
+      <div class="section-heading reveal">
+        <div>
+          <p class="kicker">A calmer workflow</p>
+          <h2>From image to<br>next pixel.</h2>
+        </div>
+        <p>Move through template management, exact placement, and personal settings without losing sight of the map behind your tools.</p>
+      </div>
+
+      <div class="workspace-tabs reveal">
+        <div class="tab-list" role="tablist" aria-label="Chromora workspace views" aria-orientation="vertical">
+          <button id="tab-library" type="button" role="tab" aria-selected="true" aria-controls="panel-library">
+            <span class="tab-index">01</span>
+            <span><strong>Template library</strong><small>Manage every overlay</small></span>
+            <i class="tab-chevron" aria-hidden="true"></i>
+          </button>
+          <button id="tab-coordinates" type="button" role="tab" aria-selected="false" aria-controls="panel-coordinates" tabindex="-1">
+            <span class="tab-index">02</span>
+            <span><strong>Exact coordinates</strong><small>Click the map or enter them</small></span>
+            <i class="tab-chevron" aria-hidden="true"></i>
+          </button>
+          <button id="tab-themes" type="button" role="tab" aria-selected="false" aria-controls="panel-themes" tabindex="-1">
+            <span class="tab-index">03</span>
+            <span><strong>Your setup</strong><small>Themes, hotkeys, highlights</small></span>
+            <i class="tab-chevron" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="tab-panels">
+          <article class="tab-panel is-active" id="panel-library" role="tabpanel" aria-labelledby="tab-library">
+            <div class="panel-visual" aria-hidden="true">
+              <div class="app-window app-window--dark app-window--templates app-window--panel">
+                <div class="app-titlebar"><span class="app-round-control app-round-control--chevron"></span><strong>Templates</strong><span class="app-round-control app-round-control--close"></span></div>
+                <div class="template-toolbar"><span><b>Template library</b><small>Two overlays · one enabled</small></span><i>Add template</i></div>
+                <div class="template-item"><span class="pixel-preview pixel-preview--aurora"></span><span class="template-details"><b>Aurora Badge</b><small>Tile 1024, 730 · Pixel 76, 288</small><i><em style="--progress: 77%"></em></i><small>76.58% complete</small></span><span class="template-meta"><i>Go to</i><i class="is-danger">Delete</i></span></div>
+                <div class="template-item is-muted"><span class="pixel-preview pixel-preview--garden"></span><span class="template-details"><b>Pixel Garden</b><small>Tile 1025, 730 · Pixel 16, 288</small><i><em style="--progress: 56%"></em></i><small>Paused · 55.96%</small></span><span class="template-meta"><i>Go to</i><i class="is-danger">Delete</i></span></div>
+              </div>
+            </div>
+            <div class="panel-caption"><span>Template library</span><p>Preview status at a glance, pause a template without deleting it, or jump directly to its place on the map.</p></div>
+          </article>
+          <article class="tab-panel" id="panel-coordinates" role="tabpanel" aria-labelledby="tab-coordinates">
+            <div class="panel-visual" aria-hidden="true">
+              <div class="app-window app-window--light coordinate-window">
+                <div class="app-titlebar"><span class="app-round-control app-round-control--chevron"></span><strong>Place template</strong><span class="app-round-control app-round-control--close"></span></div>
+                <div class="coordinate-lede"><small>Step 2 of 2</small><b>Choose the top-left pixel</b><span>Click the map or enter exact coordinates.</span></div>
+                <div class="coordinate-grid"><span><small>Tile X</small><i>1024</i></span><span><small>Tile Y</small><i>730</i></span><span><small>Pixel X</small><i>76</i></span><span><small>Pixel Y</small><i>288</i></span></div>
+                <div class="coordinate-preview"><span class="coordinate-crosshair"></span><small>Map selection ready</small></div>
+                <div class="app-action-row"><span>Back</span><span>Confirm position</span></div>
+              </div>
+            </div>
+            <div class="panel-caption"><span>Focused placement</span><p>Choose a template’s top-left pixel by clicking the map or entering tile and pixel coordinates manually.</p></div>
+          </article>
+          <article class="tab-panel" id="panel-themes" role="tabpanel" aria-labelledby="tab-themes">
+            <div class="panel-visual" aria-hidden="true">
+              <div class="app-window app-window--light settings-window">
+                <div class="app-titlebar"><span class="app-round-control app-round-control--chevron"></span><strong>Settings</strong><span class="app-round-control app-round-control--close"></span></div>
+                <small class="settings-heading">Interface theme</small>
+                <div class="settings-themes"><span class="is-selected"><i class="theme-mini theme-mini--glass"></i><b>Glass</b><small>Fluid &amp; translucent</small></span><span><i class="theme-mini theme-mini--light"></i><b>Light</b><small>Solid &amp; bright</small></span><span><i class="theme-mini theme-mini--dark"></i><b>Dark</b><small>Solid &amp; focused</small></span></div>
+                <small class="settings-heading">Area drafting</small>
+                <div class="settings-row"><span>Selected color</span><kbd>Left Alt</kbd></div><div class="settings-row"><span>Template colors</span><kbd>Left Ctrl</kbd></div>
+                <div class="settings-toggle"><i></i><span>Show pixel highlight outlines</span></div>
+              </div>
+            </div>
+            <div class="panel-caption"><span>Made for your canvas</span><p>Switch theme instantly, customize both drafting hotkeys, and choose the pixel highlight that reads best to you.</p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="install-section" id="install">
+      <div class="section-shell">
+        <div class="install-intro reveal">
+          <p class="kicker">Install Chromora</p>
+          <h2>Three steps.<br>Then back to the canvas.</h2>
+          <p>Chromora runs as a userscript on Wplace.live. No separate desktop app is required.</p>
+        </div>
+
+        <ol class="install-steps reveal">
+          <li>
+            <span class="step-number">01</span>
+            <div><h3>Add a userscript manager</h3><p>Use a userscript manager such as Tampermonkey in your browser.</p></div>
+          </li>
+          <li>
+            <span class="step-number">02</span>
+            <div><h3>Get the latest release</h3><p>Open Chromora’s latest release and install <code>Chromora.user.js</code>.</p><a href="https://github.com/alexeygasenko/Chromora/releases/latest">Open latest release <span aria-hidden="true">↗</span></a></div>
+          </li>
+          <li>
+            <span class="step-number">03</span>
+            <div><h3>Refresh Wplace</h3><p>Return to <a href="https://wplace.live/">wplace.live</a>, refresh the page, and open Chromora on the map.</p></div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="final-cta section-shell reveal">
+      <p class="kicker">Your artwork is almost there</p>
+      <h2>Make the missing pixels<br><span>impossible to miss.</span></h2>
+      <p>Organize every template, read progress color by color, and prepare the next area with a toolkit built to stay out of your way.</p>
+      <div class="hero-actions hero-actions--center">
+        <a class="button button--primary" href="https://github.com/alexeygasenko/Chromora/releases/latest"><span>Download Chromora</span><span class="download-icon" aria-hidden="true"></span></a>
+        <a class="button button--quiet" href="https://github.com/alexeygasenko/Chromora">View source</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer section-shell">
+    <div class="footer-brand">
+      <span><strong>Chromora</strong></span>
+    </div>
+    <p>Feature-focused fork of Blue Marble for Wplace.live. Maintained independently; not an official Blue Marble or Wplace project.</p>
+    <div class="footer-links">
+      <a href="https://github.com/alexeygasenko/Chromora">Repository</a>
+      <a href="https://github.com/alexeygasenko/Chromora/releases">Releases</a>
+      <a href="https://github.com/alexeygasenko/Chromora/blob/main/LICENSE.txt">MPL-2.0</a>
+    </div>
+  </footer>
+</body>
+</html>

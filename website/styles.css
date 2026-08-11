@@ -420,12 +420,6 @@ figure {
   font-size: 0.64rem;
 }
 
-.eyebrow-version {
-  padding-left: 0.48rem;
-  border-left: 1px solid var(--border);
-  color: var(--heading);
-}
-
 .status-dot,
 .frame-status i {
   width: 0.48rem;

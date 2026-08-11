@@ -79,15 +79,14 @@
 
 :root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window::before,
 :root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window::after,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-shell::before,
 :root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color::before {
   content: none;
 }
 
 :root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-dragbar {
-  background: var(--chromora-dragbar-bg);
-  border-color: var(--chromora-border);
-  box-shadow: var(--chromora-panel-shadow);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 :root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(h1, h2, h3),
@@ -184,7 +183,6 @@
 }
 
 /* Main window surfaces and labels. */
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-shell,
 :root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-stat-card {
   color: var(--chromora-text);
   background: var(--chromora-panel-bg);

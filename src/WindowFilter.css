@@ -1187,7 +1187,9 @@
   transform: translateZ(0);
 }
 
-#bm-window-filter.bm-windowed .bm-dragbar .bm-flex-center {
+#bm-window-filter.bm-windowed .bm-dragbar > .bm-flex-center {
+  grid-column: 3;
+  justify-self: end;
   gap: 0.22rem;
 }
 

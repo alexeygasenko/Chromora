@@ -17,6 +17,7 @@ import WindowWizard from "./WindowWizard";
  *   "whoami": "BlueMarble",
  *   "scriptVersion": "1.13.0",
  *   "schemaVersion": "2.0.0",
+ *   "nextSortID": 2,
  *   "templates": {
  *     "0 $Z": {
  *       "name": "My Template",
@@ -120,6 +121,8 @@ export default class TemplateManager {
     this.canvasRefreshRevision = 0;
     this.templateStatisticsState = 'idle';
     this.templateChangeListeners = new Set();
+    this.templateStatisticsEmitTimeout = null;
+    this.templateMutationQueue = Promise.resolve();
     this.paintAreaMessageHandler = null;
     this.paintAreaAbortController = null;
   }
@@ -173,6 +176,18 @@ export default class TemplateManager {
         consoleWarn('A template-change listener failed.', error);
       }
     }
+  }
+
+  /** Coalesces frequent tile statistics updates into at most one UI event every 250ms.
+   * @since 1.3.0
+   */
+  #scheduleTemplateStatisticsChanged() {
+    if (this.templateStatisticsEmitTimeout !== null) {return;}
+
+    this.templateStatisticsEmitTimeout = setTimeout(() => {
+      this.templateStatisticsEmitTimeout = null;
+      this.#emitTemplatesChanged('statistics-updated');
+    }, 250);
   }
 
   /** Starts the bridge that turns a user-selected map rectangle into Wplace draft pixels.
@@ -250,6 +265,7 @@ export default class TemplateManager {
     let chunkOrder = 0;
     for (let templateOrder = 0; templateOrder < this.templatesArray.length; templateOrder++) {
       const template = this.templatesArray[templateOrder];
+      if (template?.enabled === false) {continue;}
       for (const [chunkKey, pixelBuffer] of chunkEntries(template?.chunked32)) {
         if (signal?.aborted) {throw new DOMException('Area selection cancelled.', 'AbortError');}
         if (!(pixelBuffer instanceof Uint32Array)) {continue;}
@@ -630,7 +646,7 @@ export default class TemplateManager {
   }
 
   /** Creates the JSON object to store templates in
-   * @returns {{ whoami: string, scriptVersion: string, schemaVersion: string, templates: Object }} The JSON object
+   * @returns {{ whoami: string, scriptVersion: string, schemaVersion: string, nextSortID: number, templates: Object }} The JSON object
    * @since 0.65.4
    */
   async createJSON() {
@@ -638,40 +654,171 @@ export default class TemplateManager {
       "whoami": this.name.replace(' ', ''), // Name of userscript without spaces
       "scriptVersion": this.version, // Version of userscript
       "schemaVersion": this.schemaVersion, // Version of JSON schema
+      "nextSortID": 0, // Monotonic ID cursor; prevents deleted keys from being reused across tabs
       "templates": {} // The templates
     };
+  }
+
+  /** Returns whether a value has the recognized template-store shape.
+   * @param {Object} templatesJSON - Candidate template store
+   * @returns {boolean}
+   * @since 1.3.0
+   */
+  #isRecognizedTemplateStore(templatesJSON) {
+    return ['BlueMarble', 'Chromora'].includes(templatesJSON?.whoami)
+      && (typeof templatesJSON?.schemaVersion == 'string')
+      && templatesJSON?.templates
+      && (typeof templatesJSON.templates == 'object')
+      && !Array.isArray(templatesJSON.templates);
+  }
+
+  /** Returns whether a template store can be extended without migration.
+   * Patch-level schema changes are backwards-compatible; major/minor changes are not.
+   * @param {Object} templatesJSON - Candidate template store
+   * @returns {boolean}
+   * @since 1.3.0
+   */
+  #isWritableTemplateStore(templatesJSON) {
+    const storedSchema = (typeof templatesJSON?.schemaVersion == 'string')
+      ? templatesJSON.schemaVersion.split(/[-\.\+]/)
+      : [];
+    const currentSchema = this.schemaVersion.split(/[-\.\+]/);
+    return this.#isRecognizedTemplateStore(templatesJSON)
+      && (storedSchema[0] == currentSchema[0])
+      && (storedSchema[1] == currentSchema[1]);
+  }
+
+  /** Reads the latest writable template store without risking an overwrite of invalid data.
+   * @param {boolean} allowSchemaReplacement - Whether an explicit schema migration may replace a recognized old store
+   * @param {Object} [expectedSchemaReplacementStorage] - Legacy snapshot that the migration is allowed to replace
+   * @returns {Object|null} Latest template store, or null when storage is empty
+   * @since 1.3.0
+   */
+  #readWritableTemplateStore(allowSchemaReplacement = false, expectedSchemaReplacementStorage = undefined) {
+    const storedValue = GM_getValue('bmTemplates', '{}');
+    let storedJSON;
+    try {
+      storedJSON = (typeof storedValue == 'string') ? JSON.parse(storedValue || '{}') : storedValue;
+    } catch (error) {
+      throw new Error('Stored template data is invalid and was not overwritten.', {cause: error});
+    }
+
+    // A migration may replace only the exact snapshot it was built from. Check
+    // before the empty/writable fast paths so clearing or completing migration in
+    // another tab cannot resurrect or duplicate stale templates.
+    if (allowSchemaReplacement) {
+      if ((expectedSchemaReplacementStorage === undefined)
+        || (JSON.stringify(storedJSON) !== JSON.stringify(expectedSchemaReplacementStorage))) {
+        throw new Error('Template storage changed in another tab before migration could start.');
+      }
+    }
+
+    if (storedJSON == null) {return null;}
+    if ((typeof storedJSON != 'object') || Array.isArray(storedJSON)) {
+      throw new Error('Stored template data is invalid and was not overwritten.');
+    }
+    if (!Object.keys(storedJSON).length) {return null;}
+    if (!this.#isWritableTemplateStore(storedJSON)) {
+      if (allowSchemaReplacement && this.#isRecognizedTemplateStore(storedJSON)) {return null;}
+      throw new Error('Stored template data must be migrated before adding another template.');
+    }
+    return storedJSON;
+  }
+
+  /** Serializes a storage commit across same-origin tabs when Web Locks are available.
+   * @param {function():Promise<*>} operation - Fresh-read/write operation
+   * @returns {Promise<*>}
+   * @since 1.3.0
+   */
+  async #withTemplateStorageLock(operation) {
+    const lockManager = globalThis.navigator?.locks;
+    return lockManager?.request
+      ? await lockManager.request('chromora-template-storage', operation)
+      : await operation();
+  }
+
+  /** Keeps creates, toggles, and deletes ordered within this runtime.
+   * @param {function():Promise<*>} operation - Mutation to enqueue
+   * @returns {Promise<*>}
+   * @since 1.3.0
+   */
+  #queueTemplateMutation(operation) {
+    const mutationPromise = this.templateMutationQueue.then(operation);
+    this.templateMutationQueue = mutationPromise.then(() => undefined, () => undefined);
+    return mutationPromise;
   }
 
   /** Creates the template from the inputed file blob
    * @param {File} blob - The file blob to create a template from
    * @param {string} name - The display name of the template
    * @param {Array<number, number, number, number>} coords - The coordinates of the top left corner of the template
+   * @param {Object} [options]
+   * @param {boolean} [options.allowSchemaReplacement=false] - Reserved for the Template Wizard migration flow
+   * @param {Object} [options.expectedSchemaReplacementStorage] - Legacy snapshot allowed to be replaced
+   * @param {boolean} [options.enabled=true] - Initial enabled state
+   * @returns {Promise<Template>} Created template
    * @since 0.65.77
    */
-  async createTemplate(blob, name, coords) {
+  createTemplate(blob, name, coords, {allowSchemaReplacement = false, expectedSchemaReplacementStorage = undefined, enabled = true} = {}) {
+    return this.#queueTemplateMutation(() => this.#createTemplate(blob, name, coords, allowSchemaReplacement, expectedSchemaReplacementStorage, enabled));
+  }
 
+  /** Creates and commits one template after earlier creation requests have settled.
+   * @param {File} blob - The file blob to create a template from
+   * @param {string} name - The display name of the template
+   * @param {Array<number, number, number, number>} coords - The coordinates of the top left corner of the template
+   * @param {boolean} allowSchemaReplacement - Whether this is an explicit Template Wizard migration
+   * @param {Object} expectedSchemaReplacementStorage - Legacy snapshot allowed to be replaced
+   * @param {boolean} enabled - Initial enabled state
+   * @returns {Promise<Template>} Created template
+   * @since 1.3.0
+   */
+  async #createTemplate(blob, name, coords, allowSchemaReplacement, expectedSchemaReplacementStorage, enabled) {
+
+    const previousStatisticsState = this.templateStatisticsState;
+    const reportStatus = text => {
+      try {
+        this.windowMain?.handleDisplayStatus?.(text);
+      } catch (error) {
+        consoleWarn('Could not display template creation status.', error);
+      }
+    };
     this.templateStatisticsState = 'loading';
     this.#emitTemplatesChanged('create-started');
 
     try {
-      const hasWritableTemplateStore = ['BlueMarble', 'Chromora'].includes(this.templatesJSON?.whoami)
-        && this.templatesJSON?.schemaVersion == this.schemaVersion
-        && this.templatesJSON?.templates
-        && (typeof this.templatesJSON.templates == 'object')
-        && !Array.isArray(this.templatesJSON.templates);
+      const normalizedCoords = Array.isArray(coords)
+        ? coords.map(coord => (typeof coord == 'string' && coord.trim() === '') ? NaN : Number(coord))
+        : [];
+      const coordsAreValid = (normalizedCoords.length == 4)
+        && normalizedCoords.every(coord => Number.isInteger(coord) && (coord >= 0))
+        && (normalizedCoords[2] < this.tileSize)
+        && (normalizedCoords[3] < this.tileSize);
+      if (!coordsAreValid) {
+        throw new TypeError('Template coordinates must contain four valid non-negative integers.');
+      }
+      const normalizedEnabled = enabled !== false;
 
-      // Rebuilds missing, stale, or damaged storage before writing a new template.
-      if (!hasWritableTemplateStore) {this.templatesJSON = await this.createJSON(); console.log(`Creating JSON...`);}
+      const hasWritableTemplateStore = this.#isWritableTemplateStore(this.templatesJSON);
+      const mayReplaceLoadedStore = allowSchemaReplacement && this.#isRecognizedTemplateStore(this.templatesJSON);
+      if (this.templatesJSON && !hasWritableTemplateStore && !mayReplaceLoadedStore) {
+        throw new Error('Loaded template data must be migrated before adding another template.');
+      }
 
-      this.windowMain.handleDisplayStatus(`Creating template at ${coords.join(', ')}...`);
+      // Build against a detached store so a failed creation cannot mutate loaded template data.
+      const templatesJSONBase = hasWritableTemplateStore ? this.templatesJSON : await this.createJSON();
+      if (!hasWritableTemplateStore) {console.log(`Creating JSON...`);}
+      const authorID = numberToEncoded(this.userID || 0, this.encodingBase);
+
+      reportStatus(`Creating template at ${normalizedCoords.join(', ')}...`);
 
       // Creates a new template instance
       const template = new Template({
         displayName: name,
-        sortID: 0, // Object.keys(this.templatesJSON.templates).length || 0, // Uncomment this to enable multiple templates (1/2)
-        authorID: numberToEncoded(this.userID || 0, this.encodingBase),
+        authorID: authorID,
         file: blob,
-        coords: coords
+        coords: normalizedCoords,
+        enabled: normalizedEnabled
       });
 
       // Does the user want to skip transparent tiles while creating templates?
@@ -689,32 +836,79 @@ export default class TemplateManager {
       // Converts total pixel Object/Map variables into JSON-ready format
       const _pixels = { "total": template.pixelCount.total, "colors": Object.fromEntries(template.pixelCount.colors) }
 
-      // Appends a child into the templates object
-      // The child's name is the number of templates already in the list (sort order) plus the encoded player ID
-      this.templatesJSON.templates[`${template.sortID} ${template.authorID}`] = {
-        "name": template.displayName, // Display name of template
-        "coords": coords.join(', '), // The coords of the template
-        "enabled": true,
-        "pixels": _pixels, // The total pixels in the template
-        "tiles": templateTilesBuffers // Stores the chunked tile buffers
-      };
+      // Re-read and merge storage at commit time so a stale tab cannot discard newer templates.
+      const commitTemplate = async () => {
+        const latestTemplatesJSON = this.#readWritableTemplateStore(allowSchemaReplacement, expectedSchemaReplacementStorage);
+        const templatesBase = {...(latestTemplatesJSON?.templates || {})};
+        let highestSortID = -1;
+        const trackSortID = value => {
+          const parsedSortID = Number(value);
+          if (Number.isSafeInteger(parsedSortID) && (parsedSortID >= 0)) {
+            highestSortID = Math.max(highestSortID, parsedSortID);
+          }
+        };
+        for (const templateKey of Object.keys(templatesBase)) {
+          trackSortID(templateKey.split(' ')?.[0]);
+        }
+        for (const loadedTemplate of this.templatesArray) {
+          trackSortID(loadedTemplate?.sortID);
+        }
 
-      this.templatesArray = []; // Remove this to enable multiple templates (2/2)
+        const storedNextSortID = Number(latestTemplatesJSON?.nextSortID ?? templatesJSONBase.nextSortID);
+        let sortID = Math.max(
+          highestSortID + 1,
+          Number.isSafeInteger(storedNextSortID) && storedNextSortID >= 0 ? storedNextSortID : 0
+        );
+        if (!Number.isSafeInteger(sortID) || sortID >= Number.MAX_SAFE_INTEGER) {
+          throw new RangeError('Could not allocate a unique template sort ID.');
+        }
+        let storageKey = `${sortID} ${authorID}`;
+        while (Object.hasOwn(templatesBase, storageKey)) {
+          sortID++;
+          if (!Number.isSafeInteger(sortID) || sortID >= Number.MAX_SAFE_INTEGER) {
+            throw new RangeError('Could not allocate a unique template sort ID.');
+          }
+          storageKey = `${sortID} ${authorID}`;
+        }
+
+        const templatesJSONNext = {
+          ...(latestTemplatesJSON || templatesJSONBase),
+          "scriptVersion": this.version,
+          "nextSortID": sortID + 1,
+          "templates": {
+            ...templatesBase,
+            [storageKey]: {
+              "name": template.displayName, // Display name of template
+              "coords": normalizedCoords.join(', '), // The coords of the template
+              "enabled": normalizedEnabled,
+              "pixels": _pixels, // The total pixels in the template
+              "tiles": templateTilesBuffers // Stores the chunked tile buffers
+            }
+          }
+        };
+
+        await this.#storeTemplates(templatesJSONNext);
+        template.sortID = sortID;
+        template.storageKey = storageKey;
+        return templatesJSONNext;
+      };
+      const templatesJSONNext = await this.#withTemplateStorageLock(commitTemplate);
+
+      this.templatesJSON = templatesJSONNext;
       this.templatesArray.push(template); // Pushes the Template object instance to the Template Array
 
-      this.windowMain.handleDisplayStatus(`Template created at ${coords.join(', ')}!`);
+      reportStatus(`Template created at ${normalizedCoords.join(', ')}!`);
 
-      console.log(Object.keys(this.templatesJSON.templates).length);
+      console.log(Object.keys(templatesJSONNext.templates).length);
       console.log(this.templatesJSON);
       console.log(this.templatesArray);
       console.log(JSON.stringify(this.templatesJSON));
 
-      await this.#storeTemplates();
       this.templateStatisticsState = 'ready';
       this.#emitTemplatesChanged('created');
       return template;
     } catch (error) {
-      this.templateStatisticsState = 'error';
+      this.templateStatisticsState = previousStatisticsState;
       this.#emitTemplatesChanged('create-failed');
       throw error;
     }
@@ -739,6 +933,7 @@ export default class TemplateManager {
       displayName: templateObject.displayName,
       sortID: Object.keys(this.templatesJSON.templates).length || 0,
       authorID: numberToEncoded(this.userID || 0, this.encodingBase),
+      enabled: templateObject.enabled !== false,
       pixelCount: pixelCount,
       chunked: templateObject.tiles
     });
@@ -748,28 +943,268 @@ export default class TemplateManager {
     this.templatesArray.push(template);
   }
 
-  /** Stores the JSON object of the loaded templates into TamperMonkey (GreaseMonkey) storage.
+  /** Stores a JSON object of templates into TamperMonkey (GreaseMonkey) storage.
+   * @param {Object} [templatesJSON=this.templatesJSON] - Detached or live template store
    * @since 0.72.7
    */
-  async #storeTemplates() {
-    await GM.setValue('bmTemplates', JSON.stringify(this.templatesJSON));
+  async #storeTemplates(templatesJSON = this.templatesJSON) {
+    await GM.setValue('bmTemplates', JSON.stringify(templatesJSON));
   }
 
-  /** Deletes a template from the JSON object.
-   * Also delete's the corrosponding {@link Template} class instance
+  /** Resolves a runtime template and its persistent key.
+   * @param {Template|string} templateOrStorageKey - Runtime instance or exact storage key
+   * @returns {{template: Template, storageKey: string}}
+   * @since 1.3.0
    */
-  deleteTemplate() {
-
+  #resolveRuntimeTemplate(templateOrStorageKey) {
+    const requestedTemplate = (templateOrStorageKey && typeof templateOrStorageKey == 'object')
+      ? templateOrStorageKey
+      : null;
+    const storageKey = (typeof templateOrStorageKey == 'string')
+      ? templateOrStorageKey
+      : requestedTemplate?.storageKey;
+    const template = this.templatesArray.find(candidate => (
+      candidate === requestedTemplate || (storageKey && candidate?.storageKey === storageKey)
+    ));
+    if (!template || !storageKey) {
+      throw new Error('The selected template is no longer available.');
+    }
+    return {template, storageKey};
   }
 
-  /** Disables the template from view
+  /** Returns the center of a template in Wplace world-pixel coordinates. */
+  #getTemplateWorldCenter(template) {
+    const tileSize = Math.max(1, Number(this.tileSize) || 1000);
+    const drawMultiplier = Math.max(1, Number(this.drawMult) || 3);
+    const chunkEntries = template?.chunked instanceof Map
+      ? template.chunked.entries()
+      : Object.entries(template?.chunked ?? {});
+    let minimumX = Infinity;
+    let minimumY = Infinity;
+    let maximumX = -Infinity;
+    let maximumY = -Infinity;
+
+    for (const [chunkKey, bitmap] of chunkEntries) {
+      const coordinates = String(chunkKey).split(',').slice(0, 4).map(Number);
+      const sourceWidth = Number(bitmap?.width);
+      const sourceHeight = Number(bitmap?.height);
+      if ((coordinates.length != 4)
+        || !coordinates.every(Number.isFinite)
+        || !(sourceWidth > 0)
+        || !(sourceHeight > 0)) {
+        continue;
+      }
+      const chunkX = (coordinates[0] * tileSize) + coordinates[2];
+      const chunkY = (coordinates[1] * tileSize) + coordinates[3];
+      minimumX = Math.min(minimumX, chunkX);
+      minimumY = Math.min(minimumY, chunkY);
+      maximumX = Math.max(maximumX, chunkX + (sourceWidth / drawMultiplier));
+      maximumY = Math.max(maximumY, chunkY + (sourceHeight / drawMultiplier));
+    }
+
+    if ([minimumX, minimumY, maximumX, maximumY].every(Number.isFinite)) {
+      return {
+        worldX: minimumX + ((maximumX - minimumX) / 2),
+        worldY: minimumY + ((maximumY - minimumY) / 2)
+      };
+    }
+
+    const coordinates = Array.isArray(template?.coords)
+      ? template.coords.map(Number)
+      : String(template?.coords ?? '').split(',').map(Number);
+    if ((coordinates.length == 4) && coordinates.every(Number.isFinite)) {
+      return {
+        worldX: (coordinates[0] * tileSize) + coordinates[2] + 0.5,
+        worldY: (coordinates[1] * tileSize) + coordinates[3] + 0.5
+      };
+    }
+    throw new Error('The selected template has no valid map coordinates.');
+  }
+
+  /** Moves the Wplace map to the visual center of one runtime template. */
+  teleportToTemplate(templateOrStorageKey) {
+    const {template} = this.#resolveRuntimeTemplate(templateOrStorageKey);
+    const target = this.#getTemplateWorldCenter(template);
+    const responseTimeoutMS = 12000;
+    const expiresAt = Date.now() + responseTimeoutMS - 500;
+    const requestID = globalThis.crypto?.randomUUID?.()
+      ?? `template-teleport-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    return new Promise((resolve, reject) => {
+      let timeout = null;
+      const finish = (error = null) => {
+        clearTimeout(timeout);
+        window.removeEventListener('message', handleResult);
+        if (error) {
+          reject(error);
+        } else {
+          resolve(target);
+        }
+      };
+      const handleResult = event => {
+        // Tampermonkey may expose the page WindowProxy as a different object in its sandbox.
+        // Origin + the one-time request ID still authenticate the matching page response.
+        if (event.origin !== window.location.origin) {return;}
+        const data = event.data;
+        if ((data?.source != 'blue-marble')
+          || (data?.action != 'template-teleport-result')
+          || (data?.requestID != requestID)) {
+          return;
+        }
+        finish(data['success']
+          ? null
+          : new Error(data['message'] || 'Wplace could not move to the selected template.'));
+      };
+
+      window.addEventListener('message', handleResult);
+      timeout = setTimeout(() => {
+        finish(new Error('Wplace map did not respond.'));
+      }, responseTimeoutMS);
+
+      try {
+        window.postMessage({
+          source: 'blue-marble',
+          action: 'template-teleport',
+          requestID: requestID,
+          worldX: target.worldX,
+          worldY: target.worldY,
+          expiresAt: expiresAt
+        }, window.location.origin);
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  /** Persists one record update against the latest store before touching runtime state.
+   * Return null from mutation to delete the record.
+   * @param {string} storageKey - Exact template storage key
+   * @param {function(Object):Object|null} mutation - Detached record mutation
+   * @param {Object} [options]
+   * @param {boolean} [options.allowMissing=false] - Treat an already-absent record as success
+   * @returns {Promise<Object>} Updated template store
+   * @since 1.3.0
    */
-  async disableTemplate() {
+  async #commitStoredTemplateMutation(storageKey, mutation, {allowMissing = false} = {}) {
+    return await this.#withTemplateStorageLock(async () => {
+      const latestTemplatesJSON = this.#readWritableTemplateStore();
+      if (!latestTemplatesJSON) {
+        if (allowMissing) {return await this.createJSON();}
+        throw new Error('The selected template no longer exists in storage.');
+      }
+      if (!Object.hasOwn(latestTemplatesJSON.templates, storageKey)) {
+        if (allowMissing) {return latestTemplatesJSON;}
+        throw new Error('The selected template no longer exists in storage.');
+      }
+      const currentRecord = latestTemplatesJSON.templates[storageKey];
+      if (!currentRecord || (typeof currentRecord != 'object') || Array.isArray(currentRecord)) {
+        throw new Error('The selected template has invalid stored data.');
+      }
 
-    // Creates the JSON object if it does not already exist
-    if (!this.templatesJSON) {this.templatesJSON = await this.createJSON(); console.log(`Creating JSON...`);}
+      let minimumNextSortID = 0;
+      for (const templateKey of Object.keys(latestTemplatesJSON.templates)) {
+        const sortID = Number(templateKey.split(' ')?.[0]);
+        if (Number.isSafeInteger(sortID) && sortID >= 0 && sortID < Number.MAX_SAFE_INTEGER) {
+          minimumNextSortID = Math.max(minimumNextSortID, sortID + 1);
+        }
+      }
+      const storedNextSortID = Number(latestTemplatesJSON.nextSortID);
+      const nextSortID = Math.max(
+        minimumNextSortID,
+        Number.isSafeInteger(storedNextSortID) && storedNextSortID >= 0 ? storedNextSortID : 0
+      );
+      const templatesNext = {...latestTemplatesJSON.templates};
+      const recordNext = mutation({...currentRecord});
+      if (recordNext === null) {
+        delete templatesNext[storageKey];
+      } else {
+        templatesNext[storageKey] = recordNext;
+      }
+      const templatesJSONNext = {
+        ...latestTemplatesJSON,
+        "scriptVersion": this.version,
+        "nextSortID": nextSortID,
+        "templates": templatesNext
+      };
+      await this.#storeTemplates(templatesJSONNext);
+      return templatesJSONNext;
+    });
+  }
 
+  /** Requests a redraw without turning a successful storage mutation into an error.
+   * @since 1.3.0
+   */
+  #refreshCanvasAfterTemplateMutation() {
+    try {
+      void this.requestCanvasRefresh().catch(error => {
+        consoleWarn('Could not refresh the canvas after changing a template.', error);
+      });
+    } catch (error) {
+      consoleWarn('Could not request a canvas refresh after changing a template.', error);
+    }
+  }
 
+  /** Enables or disables one template and persists the state.
+   * @param {Template|string} templateOrStorageKey - Runtime instance or exact storage key
+   * @param {boolean} enabled - Desired enabled state
+   * @returns {Promise<Template>} Updated runtime template
+   * @since 1.3.0
+   */
+  setTemplateEnabled(templateOrStorageKey, enabled) {
+    return this.#queueTemplateMutation(async () => {
+      if (typeof enabled != 'boolean') {throw new TypeError('Template enabled state must be a boolean.');}
+      const {template, storageKey} = this.#resolveRuntimeTemplate(templateOrStorageKey);
+      const templatesJSONNext = await this.#commitStoredTemplateMutation(storageKey, record => ({
+        ...record,
+        "enabled": enabled
+      }));
+
+      this.templatesJSON = templatesJSONNext;
+      template.enabled = enabled;
+      if (enabled) {
+        template.pixelStateByChunk?.clear?.();
+        if (template.pixelCount) {delete template.pixelCount.correct;}
+      }
+      this.paintAreaAbortController?.abort();
+      this.#emitTemplatesChanged('enabled-changed');
+      this.#refreshCanvasAfterTemplateMutation();
+      return template;
+    });
+  }
+
+  /** Deletes one template from persistent and runtime state.
+   * @param {Template|string} templateOrStorageKey - Runtime instance or exact storage key
+   * @returns {Promise<Template>} Removed runtime template
+   * @since 1.3.0
+   */
+  deleteTemplate(templateOrStorageKey) {
+    return this.#queueTemplateMutation(async () => {
+      const {template, storageKey} = this.#resolveRuntimeTemplate(templateOrStorageKey);
+      const templatesJSONNext = await this.#commitStoredTemplateMutation(storageKey, () => null, {allowMissing: true});
+
+      this.templatesJSON = templatesJSONNext;
+      this.templatesArray = this.templatesArray.filter(candidate => candidate !== template);
+      this.paintAreaAbortController?.abort();
+      this.#emitTemplatesChanged('deleted');
+      this.#refreshCanvasAfterTemplateMutation();
+      return template;
+    });
+  }
+
+  /** Backwards-compatible convenience method for disabling one template.
+   * @param {Template|string} templateOrStorageKey - Runtime instance or exact storage key
+   * @returns {Promise<Template>}
+   */
+  disableTemplate(templateOrStorageKey) {
+    return this.setTemplateEnabled(templateOrStorageKey, false);
+  }
+
+  /** Convenience method for enabling one template.
+   * @param {Template|string} templateOrStorageKey - Runtime instance or exact storage key
+   * @returns {Promise<Template>}
+   */
+  enableTemplate(templateOrStorageKey) {
+    return this.setTemplateEnabled(templateOrStorageKey, true);
   }
 
   /** Downloads all templates loaded.
@@ -983,7 +1418,7 @@ export default class TemplateManager {
 
     console.log(`Searching for templates in tile: "${tileCoords}"`);
 
-    const templateArray = this.templatesArray; // Stores a copy for sorting
+    const templateArray = this.templatesArray.filter(template => template?.enabled !== false); // Stores enabled templates for sorting
     console.log(templateArray);
 
     // Sorts the array of Template class instances. 0 = first = lowest draw priority
@@ -1048,7 +1483,6 @@ export default class TemplateManager {
       );
     } else {
       //this.overlay.handleDisplayStatus(`Displaying ${templateCount} templates.`);
-      this.windowMain.handleDisplayStatus(`Sleeping\nVersion: ${this.version}`);
       return tileBlob; // No templates are on this tile. Return the original tile early
     }
     
@@ -1177,6 +1611,7 @@ export default class TemplateManager {
 
       // Adds the correct pixel Map to the template instance
       template.instance.pixelCount['correct'][tileCoords] = pixelsCorrect;
+      this.#scheduleTemplateStatisticsChanged();
     }
 
     return await canvas.convertToBlob({ type: 'image/png' });
@@ -1302,6 +1737,20 @@ export default class TemplateManager {
     }) {
 
       const skippedTemplates = [];
+      const normalizeCoords = value => {
+        const values = Array.isArray(value)
+          ? value
+          : (typeof value == 'string' ? value.split(',') : []);
+        const coords = values.map(coord => {
+          const normalizedCoord = String(coord).trim();
+          return normalizedCoord === '' ? NaN : Number(normalizedCoord);
+        });
+        const coordsAreValid = (coords.length == 4)
+          && coords.every(coord => Number.isInteger(coord) && (coord >= 0))
+          && (coords[2] < tileSize)
+          && (coords[3] < tileSize);
+        return coordsAreValid ? coords : null;
+      };
 
       // Each template is isolated so one damaged tile cannot block all remaining templates.
       for (const [templateKey, templateValue] of Object.entries(templates)) {
@@ -1316,7 +1765,7 @@ export default class TemplateManager {
             const sortID = Number(templateKeyArray?.[0]); // Sort ID of the template
             const authorID = templateKeyArray?.[1] || '0'; // User ID of the person who exported the template
             const displayName = templateValue.name || `Template ${sortID || ''}`; // Display name of the template
-            //const coords = templateValue?.coords?.split(',').map(Number); // "1,2,3,4" -> [1, 2, 3, 4]
+            const coords = normalizeCoords(templateValue.coords); // "1,2,3,4" -> [1, 2, 3, 4]
   
             const pixelCount = {
               total: templateValue.pixels?.total,
@@ -1354,12 +1803,19 @@ export default class TemplateManager {
               displayName: displayName,
               sortID: Number.isFinite(sortID) ? sortID : templatesArray.length,
               authorID: authorID || '',
-              //coords: coords,
+              coords: coords,
+              enabled: templateValue.enabled !== false,
+              pixelCount: pixelCount,
+              chunked: templateTiles,
+              chunked32: templateTiles32,
+              tileSize: tileSize
             });
-            template.pixelCount = pixelCount;
-            template.chunked = templateTiles;
-            template.chunked32 = templateTiles32;
-            
+            template.storageKey = templateKey;
+            if (!coords) {
+              template.calculateCoordsFromChunked(); // Best-effort fallback for older storage without explicit coordinates
+              template.coords = normalizeCoords(template.coords);
+            }
+
             templatesArray.push(template);
             console.log(templatesArray);
             console.log(`^^^ This ^^^`);

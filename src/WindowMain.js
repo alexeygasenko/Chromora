@@ -1,7 +1,7 @@
 import Overlay, { minimizeIconExpanded } from "./Overlay";
-import { settingsIcon } from "./uiIcons";
-import { getClipboardData } from "./utils";
+import { settingsIcon, templatesIcon } from "./uiIcons";
 import WindowFilter from "./WindowFilter";
+import WindowTemplates from "./WindowTemplates";
 
 /** The overlay builder for the main Blue Marble window.
  * @description This class handles the overlay UI for the main window of the Blue Marble userscript.
@@ -23,6 +23,7 @@ export default class WindowMain extends Overlay {
     this.windowID = 'bm-window-main'; // The ID attribute for this window
     this.windowParent = document.body; // The parent of the window DOM tree
     this.windowFilter = null; // Single owner for Color Filter timers and DOM
+    this.windowTemplates = null; // Lazily-created owner for the Templates window
   }
 
   /** Creates the main Blue Marble window.
@@ -51,6 +52,9 @@ export default class WindowMain extends Overlay {
           .addHeader(1, {'class': 'bm-dragbar-title-persistent', 'textContent': this.name}).buildElement()
         .buildElement()
         .addDiv({'class': 'bm-flex-center'})
+          .addButton({'class': 'bm-button-circle', 'innerHTML': templatesIcon, 'title': 'Templates', 'aria-label': 'Open templates'}, (instance, button) => {
+            button.onclick = () => instance.buildWindowTemplates();
+          }).buildElement()
           .addButton({'class': 'bm-button-circle', 'innerHTML': settingsIcon, 'title': 'Settings', 'aria-label': 'Open settings'}, (instance, button) => {
             button.onclick = () => {
               instance.settingsManager.buildWindow();
@@ -77,99 +81,41 @@ export default class WindowMain extends Overlay {
           .buildElement()
         .buildElement()
         .addHr().buildElement()
-        .addDiv({'class': 'bm-container bm-main-shell'})
-          .addDiv({'class': 'bm-container bm-main-coords'})
-            .addButton({'class': 'bm-button-circle bm-button-pin', 'style': 'margin-top: 0;', 'innerHTML': '<svg viewBox="0 0 4 6"><path d="M.5,3.4A2,2 0 1 1 3.5,3.4L2,6"/><circle cx="2" cy="2" r=".7" fill="#fff"/></svg>'},
-              (instance, button) => {
-                button.onclick = () => {
-                  const coords = instance.apiManager?.coordsTilePixel; // Retrieves the coords from the API manager
-                  if (!coords?.[0]) {
-                    instance.handleDisplayError('Coordinates are malformed! Did you try clicking on the canvas first?');
-                    return;
-                  }
-                  instance.updateInnerHTML('bm-input-tx', coords?.[0] || '');
-                  instance.updateInnerHTML('bm-input-ty', coords?.[1] || '');
-                  instance.updateInnerHTML('bm-input-px', coords?.[2] || '');
-                  instance.updateInnerHTML('bm-input-py', coords?.[3] || '');
-                }
+        .addDiv({'class': 'bm-flex-between bm-main-actions'})
+          .addButton({'class': 'bm-button-secondary', 'textContent': 'Disable', 'data-button-status': 'shown'}, (instance, button) => {
+            button.onclick = () => {
+              button.disabled = true; // Disables the button until the transition ends
+              if (button.dataset['buttonStatus'] == 'shown') { // If templates are currently being 'shown' then hide them
+                instance.apiManager?.templateManager?.setTemplatesShouldBeDrawn(false); // Disables templates from being drawn
+                button.dataset['buttonStatus'] = 'hidden'; // Swap internal button status tracker
+                button.textContent = 'Enable'; // Swap button text
+                instance.handleDisplayStatus(`Disabled templates!`); // Inform the user
+              } else { // In all other cases, we should show templates instead of hiding them
+                instance.apiManager?.templateManager?.setTemplatesShouldBeDrawn(true); // Allows templates to be drawn
+                button.dataset['buttonStatus'] = 'shown'; // Swap internal button status tracker
+                button.textContent = 'Disable'; // Swap button text
+                instance.handleDisplayStatus(`Enabled templates!`); // Inform the user
               }
-            ).buildElement()
-            .addInput({'type': 'number', 'id': 'bm-input-tx', 'class': 'bm-input-coords', 'placeholder': 'Tl X', 'min': 0, 'max': 2047, 'step': 1, 'required': true}, (instance, input) => {
-              input.addEventListener("paste", event => this.#coordinateInputPaste(instance, input, event));
-            }).buildElement()
-            .addInput({'type': 'number', 'id': 'bm-input-ty', 'class': 'bm-input-coords', 'placeholder': 'Tl Y', 'min': 0, 'max': 2047, 'step': 1, 'required': true}, (instance, input) => {
-              input.addEventListener("paste", event => this.#coordinateInputPaste(instance, input, event));
-            }).buildElement()
-            .addInput({'type': 'number', 'id': 'bm-input-px', 'class': 'bm-input-coords', 'placeholder': 'Px X', 'min': 0, 'max': 2047, 'step': 1, 'required': true}, (instance, input) => {
-              input.addEventListener("paste", event => this.#coordinateInputPaste(instance, input, event));
-            }).buildElement()
-            .addInput({'type': 'number', 'id': 'bm-input-py', 'class': 'bm-input-coords', 'placeholder': 'Px Y', 'min': 0, 'max': 2047, 'step': 1, 'required': true}, (instance, input) => {
-              input.addEventListener("paste", event => this.#coordinateInputPaste(instance, input, event));
-            }).buildElement()
-          .buildElement()
-          .addDiv({'class': 'bm-container bm-main-upload'})
-            .addInputFile({'class': 'bm-input-file', 'textContent': 'Upload Template', 'accept': 'image/png, image/jpeg, image/webp, image/bmp, image/gif'}).buildElement()
-          .buildElement()
-          .addDiv({'class': 'bm-container bm-flex-between bm-main-actions'})
-            .addButton({'class': 'bm-button-secondary', 'textContent': 'Disable', 'data-button-status': 'shown'}, (instance, button) => {
-              button.onclick = () => {
-                button.disabled = true; // Disables the button until the transition ends
-                if (button.dataset['buttonStatus'] == 'shown') { // If templates are currently being 'shown' then hide them
-                  instance.apiManager?.templateManager?.setTemplatesShouldBeDrawn(false); // Disables templates from being drawn
-                  button.dataset['buttonStatus'] = 'hidden'; // Swap internal button status tracker
-                  button.textContent = 'Enable'; // Swap button text
-                  instance.handleDisplayStatus(`Disabled templates!`); // Inform the user
-                } else { // In all other cases, we should show templates instead of hiding them
-                  instance.apiManager?.templateManager?.setTemplatesShouldBeDrawn(true); // Allows templates to be drawn
-                  button.dataset['buttonStatus'] = 'shown'; // Swap internal button status tracker
-                  button.textContent = 'Disable'; // Swap button text
-                  instance.handleDisplayStatus(`Enabled templates!`); // Inform the user
-                }
-                button.disabled = false; // Enables the button
-              }
-            }).buildElement()
-            .addButton({'class': 'bm-button-primary', 'textContent': 'Create'}, (instance, button) => {
-              button.onclick = async () => {
-                const input = document.querySelector(`#${this.windowID} .bm-input-file`);
-
-                // Checks to see if the coordinates are valid. Throws an error if they are not
-                const coordTlX = document.querySelector('#bm-input-tx');
-                if (!coordTlX.checkValidity()) {coordTlX.reportValidity(); instance.handleDisplayError('Coordinates are malformed! Did you try clicking on the canvas first?'); return;}
-                const coordTlY = document.querySelector('#bm-input-ty');
-                if (!coordTlY.checkValidity()) {coordTlY.reportValidity(); instance.handleDisplayError('Coordinates are malformed! Did you try clicking on the canvas first?'); return;}
-                const coordPxX = document.querySelector('#bm-input-px');
-                if (!coordPxX.checkValidity()) {coordPxX.reportValidity(); instance.handleDisplayError('Coordinates are malformed! Did you try clicking on the canvas first?'); return;}
-                const coordPxY = document.querySelector('#bm-input-py');
-                if (!coordPxY.checkValidity()) {coordPxY.reportValidity(); instance.handleDisplayError('Coordinates are malformed! Did you try clicking on the canvas first?'); return;}
-
-                // Kills itself if there is no file
-                if (!input?.files[0]) {instance.handleDisplayError(`No file selected!`); return;}
-
-                button.disabled = true;
-                try {
-                  await instance?.apiManager?.templateManager.createTemplate(input.files[0], input.files[0]?.name.replace(/\.[^/.]+$/, ''), [Number(coordTlX.value), Number(coordTlY.value), Number(coordPxX.value), Number(coordPxY.value)]);
-                  instance.handleDisplayStatus(`Drew to canvas!`);
-                } catch (error) {
-                  console.error('Blue Marble: Template creation failed.', error);
-                  instance.handleDisplayError(`Template creation failed: ${error instanceof Error ? error.message : String(error)}`);
-                } finally {
-                  button.disabled = false;
-                }
-              }
-            }).buildElement()
-            .addButton({'class': 'bm-button-secondary', 'textContent': 'Filter'}, (instance, button) => {
-              button.onclick = () => this.buildWindowFilter();
-            }).buildElement()
-          .buildElement()
-          .addDiv({'class': 'bm-container bm-main-status'})
-            .addTextarea({'id': this.outputStatusId, 'placeholder': `Status: Sleeping...\nVersion: ${this.version}`, 'readOnly': true}).buildElement()
-          .buildElement()
+              button.disabled = false; // Enables the button
+            }
+          }).buildElement()
+          .addButton({'class': 'bm-button-secondary', 'textContent': 'Filter'}, (instance, button) => {
+            button.onclick = () => this.buildWindowFilter();
+          }).buildElement()
         .buildElement()
       .buildElement()
     .buildElement().buildOverlay(this.windowParent);
 
     // Creates dragging capability on the drag bar for dragging the window
     this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
+  }
+
+  /** Displays the Templates window, creating its owner on first use.
+   * @since 1.3.0
+   */
+  buildWindowTemplates() {
+    this.windowTemplates ??= new WindowTemplates(this);
+    this.windowTemplates.buildWindow();
   }
 
   /** Displays a new color filter window.
@@ -187,43 +133,5 @@ export default class WindowMain extends Overlay {
       return;
     }
     windowFilter.buildPreferredWindow();
-  }
-
-  /** Handles pasting into the coordinate input boxes in the main Blue Marble window.
-   * @param {Overlay} instance - The Overlay class instance
-   * @param {HTMLInputElement} input - The input element that was pasted into
-   * @param {ClipboardEvent} event - The event that triggered this
-   * @since 0.88.426
-   */
-  async #coordinateInputPaste(instance, input, event) {
-
-    event.preventDefault(); // Stops the paste so we can process it
-
-    const data = await getClipboardData(event); // Obtains the clipboard text
-
-    const coords = data.split(/[^a-zA-Z0-9]+/) // Split. Delimiter to split on is "alphanumeric" `f00 bar 4` -> `['f00', 'bar', '4', '']`
-      .filter(index => index) // Only preserves non-empty indexes `['f00', 'bar', '4']`
-      .map(Number) // Converts every index to a number `[NaN, NaN, 4]`
-      .filter(number => !isNaN(number) // Removes NaN `[4]`
-    );
-
-    // If there are only two coordinates, and they were pasted into the pixel coords...
-    if ((coords.length == 2) && (input.id == 'bm-input-px')) {
-      // ...then paste into the pixel inputs
-
-      instance.updateInnerHTML('bm-input-px', coords?.[0] || '');
-      instance.updateInnerHTML('bm-input-py', coords?.[1] || '');
-    } else if ((coords.length == 1)) {
-      // Else if there is only 1 coordinate, we paste into the input like normal
-
-      instance.updateInnerHTML(input.id, coords?.[0] || '');
-    } else {
-      // Else we paste like normal
-
-      instance.updateInnerHTML('bm-input-tx', coords?.[0] || '');
-      instance.updateInnerHTML('bm-input-ty', coords?.[1] || '');
-      instance.updateInnerHTML('bm-input-px', coords?.[2] || '');
-      instance.updateInnerHTML('bm-input-py', coords?.[3] || '');
-    }
   }
 }

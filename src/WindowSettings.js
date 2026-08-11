@@ -60,6 +60,7 @@ export default class WindowSettings extends Overlay {
           this.buildHighlight();
           this.buildTemplate();
         }).buildElement()
+        .addSmall({'class': 'bm-settings-version', 'textContent': `${this.name} v${this.version}`}).buildElement()
       .buildElement()
     .buildElement().buildOverlay(this.windowParent);
 

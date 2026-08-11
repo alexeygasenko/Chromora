@@ -15,6 +15,7 @@ export default class Template {
    * @param {string} [params.url=''] - The URL to the source image
    * @param {File} [params.file=null] - The template file (pre-processed File or processed bitmap)
    * @param {Array<number, number, number, number>} [params.coords=null] - The coordinates of the top left corner as (tileX, tileY, pixelX, pixelY)
+   * @param {boolean} [params.enabled=true] - Whether the template participates in drawing and area selection
    * @param {Object} [params.chunked=null] - The affected chunks of the template, and their template for each chunk as a bitmap
    * @param {Object} [params.chunked32={}] - The affected chunks of the template, and their template for each chunk as a Uint32Array
    * @param {number} [params.tileSize=1000] - The size of a tile in pixels (assumes square tiles)
@@ -28,6 +29,7 @@ export default class Template {
     url = '',
     file = null,
     coords = null,
+    enabled = true,
     chunked = null,
     chunked32 = {},
     tileSize = 1000,
@@ -39,6 +41,7 @@ export default class Template {
     this.url = url;
     this.file = file;
     this.coords = coords;
+    this.enabled = enabled !== false;
     this.chunked = chunked;
     this.chunked32 = chunked32;
     /** Current board state per template chunk: 0 unknown, 1 correct, 2 unpainted, 3 painted differently. */

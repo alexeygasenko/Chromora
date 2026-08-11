@@ -21,6 +21,13 @@
   text-transform: uppercase;
 }
 
+#bm-window-settings .bm-settings-version {
+  display: block;
+  margin: 0.48rem 0.35rem 0.12rem;
+  color: var(--bm-text-secondary);
+  text-align: center;
+}
+
 #bm-window-settings .bm-settings-subheading {
   margin: 0.52rem 0 0.36rem;
   color: rgba(49, 71, 105, 0.82);

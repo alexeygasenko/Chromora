@@ -58,6 +58,7 @@ inject((paintAreaIcons) => {
       return;
     }
     if ((source == 'blue-marble') && (action == 'refresh-progress')) {return;}
+    if ((source == 'blue-marble') && ((action == 'template-teleport') || (action == 'template-teleport-result'))) {return;}
 
     const elapsed = Date.now() - blink;
 
@@ -122,7 +123,8 @@ inject((paintAreaIcons) => {
       marquee: null,
       alert: null,
       alertTimer: null,
-      syncFrame: null
+      syncFrame: null,
+      latestTeleportRequestID: null
     };
 
     const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
@@ -823,7 +825,81 @@ inject((paintAreaIcons) => {
       }
     }
 
+    /** Moves Wplace's own map camera to one world-pixel coordinate. */
+    async function teleportToTemplate(data) {
+      const requestID = String(data?.requestID ?? '');
+      const expiresAt = Number(data?.expiresAt);
+      const respond = (success, message = '') => {
+        window.postMessage({
+          source: 'blue-marble',
+          action: 'template-teleport-result',
+          requestID: requestID,
+          success: success,
+          message: message
+        }, window.location.origin);
+      };
+
+      try {
+        const worldX = Number(data?.worldX);
+        const worldY = Number(data?.worldY);
+        if (!requestID || ![worldX, worldY, expiresAt].every(Number.isFinite)) {
+          throw new TypeError('Template coordinates are invalid.');
+        }
+        state.latestTeleportRequestID = requestID;
+        if (Date.now() >= expiresAt) {throw new Error('Teleport request expired.');}
+
+        const map = await discoverWplaceRuntime();
+        if (!map) {throw new Error('Wplace map is unavailable.');}
+        if ((state.latestTeleportRequestID != requestID) || (Date.now() >= expiresAt)) {
+          throw new Error('Teleport request expired.');
+        }
+        const tileZoom = getTileZoom(map);
+        const worldSize = tileSize * (2 ** tileZoom);
+        if ((worldX < 0) || (worldY < 0) || (worldX >= worldSize) || (worldY >= worldSize)) {
+          throw new RangeError('Template coordinates are outside the map.');
+        }
+
+        const lngLat = worldPixelToLatLon(worldX, worldY, tileZoom);
+        if (![lngLat['lng'], lngLat['lat']].every(Number.isFinite)) {
+          throw new RangeError('Template coordinates could not be converted to a map position.');
+        }
+
+        map['stop']?.();
+        const currentZoom = Number(map['getZoom']?.());
+        const maximumZoom = Number(map['getMaxZoom']?.());
+        const preferredZoom = Math.max(Number.isFinite(currentZoom) ? currentZoom : 0, 15);
+        const targetZoom = Number.isFinite(maximumZoom)
+          ? Math.min(preferredZoom, maximumZoom)
+          : preferredZoom;
+        const camera = {
+          'center': [lngLat['lng'], lngLat['lat']],
+          'zoom': targetZoom
+        };
+
+        if (typeof map['flyTo'] == 'function') {
+          map['flyTo']({...camera, 'essential': true});
+        } else if (typeof map['easeTo'] == 'function') {
+          map['easeTo']({...camera, 'duration': 0, 'essential': true});
+        } else if (typeof map['jumpTo'] == 'function') {
+          map['jumpTo'](camera);
+        } else if (typeof map['setCenter'] == 'function') {
+          map['setCenter'](camera['center']);
+          map['setZoom']?.(camera['zoom']);
+        } else {
+          throw new Error('Wplace map navigation is unavailable.');
+        }
+        respond(true);
+      } catch (error) {
+        respond(false, error instanceof Error ? error.message : String(error));
+      } finally {
+        if (state.latestTeleportRequestID == requestID) {
+          state.latestTeleportRequestID = null;
+        }
+      }
+    }
+
     window.addEventListener('message', event => {
+      if ((event.source !== window) || (event.origin !== window.location.origin)) {return;}
       const data = event.data;
       if (data?.source != 'blue-marble') {return;}
       if (data.action == 'paint-area-hotkey-setting') {
@@ -848,6 +924,8 @@ inject((paintAreaIcons) => {
         const operationMode = state.operationMode ?? (data.mode == templateMode ? templateMode : matchingMode);
         setButtonState('error', data.message || 'Could not fill selected area', operationMode);
         state.operationMode = null;
+      } else if (data.action == 'template-teleport') {
+        void teleportToTemplate(data);
       }
     });
 
@@ -1226,6 +1304,7 @@ function observeBlack() {
   stopSpontaneousResponseListener?.();
   stopPaintAreaSelectionBridge?.();
   activeWindowMain?.windowFilter?.dispose();
+  activeWindowMain?.windowTemplates?.dispose();
   document.getElementById(activeWindowMain?.windowID)?.remove();
   runtimeMarker?.remove();
   console.error('Blue Marble: Runtime initialization failed.', error);

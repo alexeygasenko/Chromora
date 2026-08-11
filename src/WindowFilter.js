@@ -82,7 +82,10 @@ export default class WindowFilter extends Overlay {
     this.palette = Array.isArray(rendererPalette) && rendererPalette.length
       ? rendererPalette
       : colorpaletteForBlueMarble(3).palette;
-    this.unsubscribeTemplateChanges = this.templateManager?.onTemplatesChanged?.(() => this.refreshColorList()) ?? null;
+    this.unsubscribeTemplateChanges = this.templateManager?.onTemplatesChanged?.(detail => {
+      // Tile rendering can emit progress frequently; the existing 10-second loop owns those refreshes.
+      if (detail?.reason != 'statistics-updated') {this.refreshColorList();}
+    }) ?? null;
 
     // Tile quantity information
     this.tilesLoadedTotal = 0; // Number of tiles that have been loaded in this session
@@ -1873,6 +1876,7 @@ export default class WindowFilter extends Overlay {
 
     for (const template of templates) {
       if (!template || typeof template != 'object') {continue;}
+      if (template.enabled === false) {continue;}
 
       try {
         const pixelCount = template.pixelCount ?? template.pixels ?? {};

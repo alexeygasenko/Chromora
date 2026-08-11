@@ -1,0 +1,180 @@
+/* Coordinate-only second step of the add-template flow. */
+
+body.bm-template-coordinate-mode .bm-window:not(#bm-window-template-coordinates) {
+  display: none !important;
+}
+
+#bm-window-template-coordinates {
+  top: 50%;
+  left: 50%;
+  display: flex;
+  width: min(28rem, calc(100vw - 1rem));
+  max-height: calc(100vh - 1rem) !important;
+  max-height: calc(100dvh - 1rem) !important;
+  max-width: min(28rem, calc(100vw - 1rem)) !important;
+  box-sizing: border-box;
+  flex-direction: column;
+  z-index: 9200;
+  transform: translate(-50%, -50%);
+}
+
+#bm-window-template-coordinates .bm-window-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-drag-spacer {
+  width: 3.7rem;
+}
+
+#bm-window-template-coordinates .bm-dragbar h1 {
+  justify-self: center;
+  margin: 0;
+  text-align: center;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-step {
+  color: var(--bm-text-secondary);
+  font-family: var(--bm-font-display);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-file {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.38rem 0.5rem;
+  border: 1px solid var(--chromora-border, rgba(255, 255, 255, 0.18));
+  border-radius: 10px;
+  background: var(--chromora-panel-soft-bg, rgba(255, 255, 255, 0.09));
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-file > span {
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-help {
+  margin: 0.5rem 0.15rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-pick {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-pick svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: currentColor;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.38rem;
+  margin-top: 0.52rem;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-field > span {
+  color: var(--bm-text-secondary);
+  font-family: var(--bm-font-display);
+  font-size: 0.61rem;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+#bm-window-template-coordinates input[type="number"].bm-input-coords {
+  width: 100%;
+  min-height: 2rem;
+  margin: 0;
+  box-sizing: border-box;
+  font-family: var(--bm-font-mono);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-status {
+  min-height: 2.35rem;
+  margin: 0.45rem 0 0;
+  padding: 0.38rem 0.5rem;
+  border: 1px solid var(--chromora-border, rgba(255, 255, 255, 0.18));
+  border-radius: 10px;
+  background: var(--chromora-panel-soft-bg, rgba(255, 255, 255, 0.09));
+  font-size: 0.76rem;
+  line-height: 1.3;
+  box-sizing: border-box;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-status[data-tone="success"] {
+  border-color: rgba(36, 176, 117, 0.42);
+  color: #16734f;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-status[data-tone="error"] {
+  border-color: rgba(213, 72, 96, 0.48);
+  color: #a92842;
+}
+
+:root[data-chromora-theme="dark"] #bm-window-template-coordinates .bm-template-coordinate-status[data-tone="success"] {
+  color: #78e8b8;
+}
+
+:root[data-chromora-theme="dark"] #bm-window-template-coordinates .bm-template-coordinate-status[data-tone="error"] {
+  color: #ff8fa1;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-status[data-tone="loading"] {
+  cursor: progress;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-actions {
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+#bm-window-template-coordinates .bm-template-coordinate-actions button {
+  flex: 1 1 0;
+}
+
+@media (max-width: 520px) {
+  #bm-window-template-coordinates {
+    width: calc(100vw - 0.45rem);
+    max-width: calc(100vw - 0.45rem) !important;
+  }
+
+  #bm-window-template-coordinates .bm-template-coordinate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #bm-window-template-coordinates .bm-template-coordinate-drag-spacer {
+    width: 2.4rem;
+  }
+
+  #bm-window-template-coordinates .bm-template-coordinate-step {
+    width: 2.4rem;
+    overflow: hidden;
+    text-indent: -9999px;
+  }
+}

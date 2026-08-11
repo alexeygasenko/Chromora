@@ -27,27 +27,6 @@
   line-height: 1;
 }
 
-#bm-window-main .bm-main-shell {
-  position: relative;
-  overflow: hidden;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 10px 24px rgba(0, 0, 0, 0.1);
-}
-
-#bm-window-main .bm-main-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.2), transparent 26%),
-    radial-gradient(circle at 20% 0%, rgba(186, 246, 255, 0.16), transparent 24%);
-}
-
 #bm-window-main .bm-main-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -107,48 +86,22 @@
   letter-spacing: inherit;
 }
 
-#bm-window-main .bm-main-shell {
-  padding: 0.48rem;
-}
-
-#bm-window-main .bm-main-coords {
-  display: grid;
-  grid-template-columns: auto repeat(4, minmax(0, 1fr));
-  gap: 0.22rem;
-  align-items: center;
-}
-
-#bm-window-main .bm-main-coords .bm-button-pin {
-  width: 1.8rem;
-  height: 1.8rem;
-}
-
-#bm-window-main .bm-main-coords .bm-input-coords {
-  width: 100%;
-  margin-left: 0;
-  text-align: center;
-}
-
-#bm-window-main .bm-main-upload,
-#bm-window-main .bm-main-status {
-  margin-top: 0.24rem;
-}
-
-#bm-window-main .bm-main-upload > div {
-  width: 100%;
-}
-
 #bm-window-main .bm-main-actions {
   gap: 0.24rem;
-  margin-top: 0.3rem;
+  margin: 0;
+  padding: 0 0 0.24em;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 #bm-window-main .bm-main-actions > button {
   flex: 1 1 0;
+  box-shadow: none !important;
 }
 
-#bm-window-main .bm-main-status textarea {
-  min-height: 4.1rem;
+#bm-window-main .bm-main-actions > button:focus-visible {
+  box-shadow: 0 0 0 3px var(--chromora-focus-ring, rgba(116, 231, 255, 0.15)) !important;
 }
 
 @media (max-width: 720px) {
@@ -159,20 +112,5 @@
 
   #bm-window-main .bm-main-stats {
     grid-template-columns: 1fr;
-  }
-
-  #bm-window-main .bm-main-coords {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  #bm-window-main .bm-main-coords .bm-button-pin {
-    grid-column: 1 / -1;
-    width: 100%;
-    aspect-ratio: auto;
-    height: 1.8rem;
-  }
-
-  #bm-window-main .bm-main-actions {
-    flex-direction: column;
   }
 }

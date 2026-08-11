@@ -118,16 +118,12 @@
   gap: 0.28ch;
   padding: 0.18rem 0.24rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background:
-    radial-gradient(circle at 0 0, rgba(255, 255, 255, 0.22) 0, transparent 42%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
+  border: 0;
+  background: transparent;
   cursor: grab;
   width: 100%;
   height: fit-content;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 6px 18px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
   touch-action: none;
 }
 
@@ -265,7 +261,7 @@
   appearance: none;
   color: var(--bm-text-primary);
   font-family: var(--bm-font-display);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(164, 208, 255, 0.14));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(164, 208, 255, 0.18));
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 999px;
   padding: 0.28em 0.62em;
@@ -286,7 +282,7 @@
 /* All window buttons when hovered/focused */
 .bm-window button:hover,
 .bm-window button:focus-visible {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(186, 246, 255, 0.18));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(186, 246, 255, 0.22));
   border-color: rgba(230, 245, 255, 0.36);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.26),
@@ -328,7 +324,7 @@
 /* Button variants */
 .bm-window button.bm-button-primary {
   color: #07203b;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.42), rgba(186, 246, 255, 0.34));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.48), rgba(186, 246, 255, 0.4));
   border-color: rgba(239, 248, 255, 0.42);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.44),
@@ -337,11 +333,11 @@
 
 .bm-window button.bm-button-primary:hover,
 .bm-window button.bm-button-primary:focus-visible {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(204, 250, 255, 0.36));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(204, 250, 255, 0.44));
 }
 
 .bm-window button.bm-button-secondary {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.12));
   border-color: rgba(255, 255, 255, 0.18);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
@@ -350,7 +346,7 @@
 
 .bm-window button.bm-button-secondary:hover,
 .bm-window button.bm-button-secondary:focus-visible {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.24), rgba(186, 246, 255, 0.12));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(186, 246, 255, 0.16));
 }
 
 /* Icon buttons (single character text content buttons) */
@@ -369,7 +365,7 @@
   padding: 0 !important;
   aspect-ratio: 1 / 1;
   border-radius: 50% !important;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.1)) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.14)) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 8px 18px rgba(0, 0, 0, 0.1) !important;
@@ -409,17 +405,22 @@
 .bm-button-circle .bm-button-icon-settings {
   width: 68%;
   height: 68%;
-  transform: translateY(0.5px) translateZ(0);
+  transform: translateZ(0);
 }
 
 .bm-button-circle .bm-button-icon-minimize {
   width: 62%;
   height: 62%;
-  transform: translateY(0.75px) translateZ(0);
+  translate: -0.5px -0.5px;
+  transform: translateZ(0);
 }
 
-#bm-window-filter.bm-windowed .bm-button-circle .bm-button-icon-minimize {
-  transform: translateZ(0);
+.bm-button-circle[data-button-status="collapsed"] .bm-button-icon-minimize {
+  translate: -0.5px -0.5px;
+}
+
+.bm-button-circle .bm-button-icon-templates {
+  transform: translateY(0.75px) translateZ(0);
 }
 
 /* Pin button */

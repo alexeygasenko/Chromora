@@ -576,32 +576,28 @@ h1 span,
   border-radius: var(--radius-lg);
 }
 
-.panel-3d {
-  --panel-3d-x: 0.9deg;
-  --panel-3d-y: -2.4deg;
-  --panel-3d-hover-x: 0deg;
-  --panel-3d-hover-y: -0.35deg;
-  --panel-3d-hover-lift: -4px;
+.window-3d {
+  --window-3d-x: 2deg;
+  --window-3d-y: -5deg;
+  --window-3d-hover-x: 0deg;
+  --window-3d-hover-y: -1deg;
+  --window-3d-hover-lift: -5px;
   transform-origin: center;
   transition: transform 400ms var(--spring);
 }
 
 .product-frame--hero {
-  --panel-3d-x: 2deg;
-  --panel-3d-y: -5deg;
-  --panel-3d-hover-y: -1deg;
-  --panel-3d-hover-lift: -5px;
   box-shadow: var(--shadow), inset 0 1px rgba(255, 255, 255, 0.2);
 }
 
 @media (min-width: 561px) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
-  .panel-3d {
-    transform: perspective(1100px) rotateY(var(--panel-3d-y)) rotateX(var(--panel-3d-x));
+  .window-3d {
+    transform: perspective(1100px) rotateY(var(--window-3d-y)) rotateX(var(--window-3d-x));
   }
 
-  .panel-3d:hover {
+  .window-3d:hover {
     z-index: 2;
-    transform: perspective(1100px) rotateY(var(--panel-3d-hover-y)) rotateX(var(--panel-3d-hover-x)) translateY(var(--panel-3d-hover-lift));
+    transform: perspective(1100px) rotateY(var(--window-3d-hover-y)) rotateX(var(--window-3d-hover-x)) translateY(var(--window-3d-hover-lift));
   }
 }
 
@@ -2467,6 +2463,12 @@ kbd {
 .filter-demo--vertical { min-height: 34rem; }
 .filter-demo--fullscreen { min-height: 36.5rem; }
 
+@media (min-width: 561px) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .filter-demo--horizontal {
+    padding-inline: clamp(1.35rem, 2.8vw, 1.75rem);
+  }
+}
+
 .workspace-section {
   padding-top: clamp(7rem, 12vw, 11rem);
 }
@@ -2711,13 +2713,13 @@ kbd {
 
 .js .reveal {
   opacity: 0;
-  translate: 0 24px;
-  transition: opacity 700ms var(--spring), translate 700ms var(--spring), transform 400ms var(--spring);
+  transform: translateY(24px);
+  transition: opacity 700ms var(--spring), transform 700ms var(--spring);
 }
 
 .js .reveal.is-visible {
   opacity: 1;
-  translate: 0;
+  transform: translateY(0);
 }
 
 @keyframes chip-float {
@@ -3154,7 +3156,6 @@ kbd {
   .js .reveal {
     opacity: 1;
     transform: none;
-    translate: none;
   }
 }
 

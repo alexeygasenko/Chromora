@@ -576,14 +576,38 @@ h1 span,
   border-radius: var(--radius-lg);
 }
 
-.product-frame--hero {
-  transform: perspective(1100px) rotateY(-5deg) rotateX(2deg);
-  box-shadow: var(--shadow), inset 0 1px rgba(255, 255, 255, 0.2);
+.panel-3d {
+  --panel-3d-x: 0.9deg;
+  --panel-3d-y: -2.4deg;
+  --panel-3d-hover-x: 0deg;
+  --panel-3d-hover-y: -0.35deg;
+  --panel-3d-hover-lift: -4px;
+  transform-origin: center;
   transition: transform 400ms var(--spring);
 }
 
-.product-frame--hero:hover {
-  transform: perspective(1100px) rotateY(-1deg) rotateX(0deg) translateY(-5px);
+.panel-3d--right {
+  --panel-3d-y: 2.4deg;
+  --panel-3d-hover-y: 0.35deg;
+}
+
+.product-frame--hero {
+  --panel-3d-x: 2deg;
+  --panel-3d-y: -5deg;
+  --panel-3d-hover-y: -1deg;
+  --panel-3d-hover-lift: -5px;
+  box-shadow: var(--shadow), inset 0 1px rgba(255, 255, 255, 0.2);
+}
+
+@media (min-width: 561px) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .panel-3d {
+    transform: perspective(1100px) rotateY(var(--panel-3d-y)) rotateX(var(--panel-3d-x));
+  }
+
+  .panel-3d:hover {
+    z-index: 2;
+    transform: perspective(1100px) rotateY(var(--panel-3d-hover-y)) rotateX(var(--panel-3d-hover-x)) translateY(var(--panel-3d-hover-lift));
+  }
 }
 
 .product-frame__bar,
@@ -2692,13 +2716,13 @@ kbd {
 
 .js .reveal {
   opacity: 0;
-  transform: translateY(24px);
-  transition: opacity 700ms var(--spring), transform 700ms var(--spring);
+  translate: 0 24px;
+  transition: opacity 700ms var(--spring), translate 700ms var(--spring), transform 400ms var(--spring);
 }
 
 .js .reveal.is-visible {
   opacity: 1;
-  transform: translateY(0);
+  translate: 0;
 }
 
 @keyframes chip-float {
@@ -3135,6 +3159,7 @@ kbd {
   .js .reveal {
     opacity: 1;
     transform: none;
+    translate: none;
   }
 }
 

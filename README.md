@@ -1,5 +1,7 @@
 # Chromora
 
+[Website](https://alexeygasenko.github.io/Chromora/) · [Latest release](https://github.com/alexeygasenko/Chromora/releases/latest)
+
 Chromora is a feature-focused fork of [Blue Marble](https://github.com/SwingTheVine/Wplace-BlueMarble) for [wplace.live](https://wplace.live/).
 
 The project started with Blue Marble, then grew into a separate toolkit for checking artwork, finding unfinished areas, and preparing pixels faster.

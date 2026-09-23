@@ -3,8 +3,6 @@
  * @since 0.88.358
 */
 
-@import './confettiManager.css';
-@import './overlay.css';
 @import './PaintAreaSelector.css';
 @import './WindowFilter.css';
 @import './WindowMain.css';
@@ -12,5 +10,7 @@
 @import './WindowTemplateCoordinates.css';
 @import './WindowTemplates.css';
 @import './WindowWizard.css';
+@import './confettiManager.css';
+@import './overlay.css';
 @import './zThemes.css';
 @import './zzFrutigerAero.css';

@@ -1,0 +1,234 @@
+{
+  "browser": "153.0.4234.48",
+  "scope": "Local fixture; real browser DOM/CSS; mocked GM and /me; no Wplace runtime",
+  "runs": [
+    {
+      "flavor": "working-dist",
+      "width": 1280,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": 797,
+        "y": 10,
+        "width": 408,
+        "height": 166
+      },
+      "mainClipped": false,
+      "templatesOpened": true,
+      "settingsOpened": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": false,
+      "runtimeReady": true
+    },
+    {
+      "flavor": "working-dist",
+      "width": 375,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": -67.796875,
+        "y": 10,
+        "width": 367.796875,
+        "height": 266.046875
+      },
+      "mainClipped": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": true,
+      "runtimeReady": true
+    },
+    {
+      "flavor": "working-dist",
+      "width": 320,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": -67.796875,
+        "y": 10,
+        "width": 312.796875,
+        "height": 266.046875
+      },
+      "mainClipped": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": true,
+      "runtimeReady": true
+    },
+    {
+      "flavor": "clean-local",
+      "width": 1280,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": 797,
+        "y": 10,
+        "width": 408,
+        "height": 166
+      },
+      "mainClipped": false,
+      "templatesOpened": true,
+      "settingsOpened": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": false,
+      "runtimeReady": true
+    },
+    {
+      "flavor": "clean-local",
+      "width": 375,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": -67.796875,
+        "y": 10,
+        "width": 367.796875,
+        "height": 266.046875
+      },
+      "mainClipped": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": true,
+      "runtimeReady": true
+    },
+    {
+      "flavor": "clean-local",
+      "width": 320,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": -67.796875,
+        "y": 10,
+        "width": 312.796875,
+        "height": 266.046875
+      },
+      "mainClipped": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": true,
+      "runtimeReady": true
+    },
+    {
+      "flavor": "clean-ci",
+      "width": 1280,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": 797,
+        "y": 10,
+        "width": 408,
+        "height": 166
+      },
+      "mainClipped": false,
+      "templatesOpened": true,
+      "settingsOpened": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": false,
+      "beforeCoordinateMode": {
+        "x": 280,
+        "y": 215,
+        "width": 600,
+        "height": 500
+      },
+      "afterCoordinateMode": {
+        "x": 8,
+        "y": 8,
+        "width": 360,
+        "height": 220
+      },
+      "persistedSettings": {
+        "bmUserSettings": "{\"flags\":[],\"hotkeys\":{\"paintArea\":\"AltLeft\",\"paintAllArea\":\"ControlLeft\"},\"theme\":\"glass\",\"windowFilter\":{\"xi\":\"vertical\",\"Ci\":{\"vertical\":{\"width\":360,\"height\":220,\"x\":8,\"y\":8}},\"width\":360,\"height\":220,\"isOpen\":true,\"x\":8,\"y\":8},\"windowSettings\":{}}"
+      },
+      "runtimeReady": true
+    },
+    {
+      "flavor": "clean-ci",
+      "width": 375,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": -67.796875,
+        "y": 10,
+        "width": 367.796875,
+        "height": 266.046875
+      },
+      "mainClipped": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": true,
+      "runtimeReady": true
+    },
+    {
+      "flavor": "clean-ci",
+      "width": 320,
+      "errors": [
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "mainRect": {
+        "x": -67.796875,
+        "y": 10,
+        "width": 312.796875,
+        "height": 266.046875
+      },
+      "mainClipped": true,
+      "filterInitiallyPresent": true,
+      "filterRect": {
+        "x": 60,
+        "y": 75,
+        "width": 360,
+        "height": 512
+      },
+      "filterClipped": true,
+      "runtimeReady": true
+    }
+  ]
+}

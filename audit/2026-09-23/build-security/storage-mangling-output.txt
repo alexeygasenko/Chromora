@@ -1,0 +1,327 @@
+{
+  "generatedAt": "2026-09-23T07:09:59.443Z",
+  "builds": [
+    {
+      "label": "working-dist",
+      "colorGetter": {
+        "property": "xi",
+        "text": "function(){const t=i(this,ct,dt).call(this);return\"horizontal\"==t?.xi?\"horizontal\":\"vertical\"}"
+      },
+      "geometryGetter": {
+        "property": "Ci",
+        "text": "function(t){var e;const s=i(this,ct,dt).call(this);return s?(s.Ci??(s.Ci={}),(e=s.Ci)[t]??(e[t]={}),s.Ci[t]):null}"
+      }
+    },
+    {
+      "label": "clean-local",
+      "colorGetter": {
+        "property": "xi",
+        "text": "function(){const t=i(this,ct,dt).call(this);return\"horizontal\"==t?.xi?\"horizontal\":\"vertical\"}"
+      },
+      "geometryGetter": {
+        "property": "Ci",
+        "text": "function(t){var e;const s=i(this,ct,dt).call(this);return s?(s.Ci??(s.Ci={}),(e=s.Ci)[t]??(e[t]={}),s.Ci[t]):null}"
+      }
+    },
+    {
+      "label": "clean-ci",
+      "colorGetter": {
+        "property": "xi",
+        "text": "function(){const t=i(this,ht,ut).call(this);return\"horizontal\"==t?.xi?\"horizontal\":\"vertical\"}"
+      },
+      "geometryGetter": {
+        "property": "Ci",
+        "text": "function(t){var e;const s=i(this,ht,ut).call(this);return s?(s.Ci??(s.Ci={}),(e=s.Ci)[t]??(e[t]={}),s.Ci[t]):null}"
+      }
+    },
+    {
+      "label": "git:c92cce4",
+      "colorGetter": {
+        "property": "xi",
+        "text": "function(){const t=i(this,ht,ut).call(this);return\"horizontal\"==t?.xi?\"horizontal\":\"vertical\"}"
+      },
+      "geometryGetter": {
+        "property": "Ci",
+        "text": "function(t){var e;const s=i(this,ht,ut).call(this);return s?(s.Ci??(s.Ci={}),(e=s.Ci)[t]??(e[t]={}),s.Ci[t]):null}"
+      }
+    },
+    {
+      "label": "git:7229c7a",
+      "colorGetter": {
+        "property": "xi",
+        "text": "function(){const t=i(this,ct,dt).call(this);return\"horizontal\"==t?.xi?\"horizontal\":\"vertical\"}"
+      },
+      "geometryGetter": {
+        "property": "Ci",
+        "text": "function(t){var e;const s=i(this,ct,dt).call(this);return s?(s.Ci??(s.Ci={}),(e=s.Ci)[t]??(e[t]={}),s.Ci[t]):null}"
+      }
+    },
+    {
+      "label": "git:99a85e7",
+      "colorGetter": {
+        "property": "xi",
+        "text": "function(){const t=i(this,ht,dt).call(this);return\"horizontal\"==t?.xi?\"horizontal\":\"vertical\"}"
+      },
+      "geometryGetter": {
+        "property": "Ci",
+        "text": "function(t){var e;const n=i(this,ht,dt).call(this);return n?(n.Ci??(n.Ci={}),(e=n.Ci)[t]??(e[t]={}),n.Ci[t]):null}"
+      }
+    },
+    {
+      "label": "git:4d02a73",
+      "colorGetter": {
+        "property": "xi",
+        "text": "function(){const t=i(this,ht,dt).call(this);return\"horizontal\"==t?.xi?\"horizontal\":\"vertical\"}"
+      },
+      "geometryGetter": {
+        "property": "Ci",
+        "text": "function(t){var e;const n=i(this,ht,dt).call(this);return n?(n.Ci??(n.Ci={}),(e=n.Ci)[t]??(e[t]={}),n.Ci[t]):null}"
+      }
+    },
+    {
+      "label": "git:8d3c9a1",
+      "colorGetter": {
+        "property": "xi",
+        "text": "function(){const t=i(this,rt,ct).call(this);return\"horizontal\"==t?.xi?\"horizontal\":\"vertical\"}"
+      },
+      "geometryGetter": {
+        "property": "Ci",
+        "text": "function(t){var e;const n=i(this,rt,ct).call(this);return n?(n.Ci??(n.Ci={}),(e=n.Ci)[t]??(e[t]={}),n.Ci[t]):null}"
+      }
+    }
+  ],
+  "transitions": [
+    {
+      "from": "working-dist",
+      "to": "clean-ci",
+      "persisted": {
+        "xi": "horizontal",
+        "Ci": {
+          "horizontal": {
+            "width": 740,
+            "height": 260,
+            "x": 44,
+            "y": 55
+          }
+        }
+      },
+      "oldRead": "horizontal",
+      "newRead": "horizontal",
+      "oldGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      },
+      "newGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      }
+    },
+    {
+      "from": "clean-local",
+      "to": "clean-ci",
+      "persisted": {
+        "xi": "horizontal",
+        "Ci": {
+          "horizontal": {
+            "width": 740,
+            "height": 260,
+            "x": 44,
+            "y": 55
+          }
+        }
+      },
+      "oldRead": "horizontal",
+      "newRead": "horizontal",
+      "oldGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      },
+      "newGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      }
+    },
+    {
+      "from": "clean-ci",
+      "to": "clean-ci",
+      "persisted": {
+        "xi": "horizontal",
+        "Ci": {
+          "horizontal": {
+            "width": 740,
+            "height": 260,
+            "x": 44,
+            "y": 55
+          }
+        }
+      },
+      "oldRead": "horizontal",
+      "newRead": "horizontal",
+      "oldGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      },
+      "newGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      }
+    },
+    {
+      "from": "git:c92cce4",
+      "to": "clean-ci",
+      "persisted": {
+        "xi": "horizontal",
+        "Ci": {
+          "horizontal": {
+            "width": 740,
+            "height": 260,
+            "x": 44,
+            "y": 55
+          }
+        }
+      },
+      "oldRead": "horizontal",
+      "newRead": "horizontal",
+      "oldGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      },
+      "newGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      }
+    },
+    {
+      "from": "git:7229c7a",
+      "to": "clean-ci",
+      "persisted": {
+        "xi": "horizontal",
+        "Ci": {
+          "horizontal": {
+            "width": 740,
+            "height": 260,
+            "x": 44,
+            "y": 55
+          }
+        }
+      },
+      "oldRead": "horizontal",
+      "newRead": "horizontal",
+      "oldGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      },
+      "newGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      }
+    },
+    {
+      "from": "git:99a85e7",
+      "to": "clean-ci",
+      "persisted": {
+        "xi": "horizontal",
+        "Ci": {
+          "horizontal": {
+            "width": 740,
+            "height": 260,
+            "x": 44,
+            "y": 55
+          }
+        }
+      },
+      "oldRead": "horizontal",
+      "newRead": "horizontal",
+      "oldGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      },
+      "newGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      }
+    },
+    {
+      "from": "git:4d02a73",
+      "to": "clean-ci",
+      "persisted": {
+        "xi": "horizontal",
+        "Ci": {
+          "horizontal": {
+            "width": 740,
+            "height": 260,
+            "x": 44,
+            "y": 55
+          }
+        }
+      },
+      "oldRead": "horizontal",
+      "newRead": "horizontal",
+      "oldGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      },
+      "newGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      }
+    },
+    {
+      "from": "git:8d3c9a1",
+      "to": "clean-ci",
+      "persisted": {
+        "xi": "horizontal",
+        "Ci": {
+          "horizontal": {
+            "width": 740,
+            "height": 260,
+            "x": 44,
+            "y": 55
+          }
+        }
+      },
+      "oldRead": "horizontal",
+      "newRead": "horizontal",
+      "oldGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      },
+      "newGeometry": {
+        "width": 740,
+        "height": 260,
+        "x": 44,
+        "y": 55
+      }
+    }
+  ]
+}

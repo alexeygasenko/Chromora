@@ -1,0 +1,207 @@
+[
+  {
+    "id": "sparse-template-origin",
+    "actual": [
+      11,
+      10,
+      0,
+      0
+    ],
+    "expectedImageOrigin": [
+      10,
+      10,
+      0,
+      0
+    ],
+    "migrationShiftPixels": [
+      1000,
+      0
+    ]
+  },
+  {
+    "id": "visibility-setters-invalidation",
+    "refreshCalls": 0,
+    "templatesShouldBeDrawn": false,
+    "hiddenColorIDs": [
+      1,
+      2,
+      3
+    ]
+  },
+  {
+    "id": "duplicate-hotkey",
+    "persisted": {
+      "paintArea": "AltLeft",
+      "paintAllArea": "AltLeft"
+    },
+    "hotkeyCodes": {
+      "matching": "AltLeft",
+      "template": "AltLeft"
+    },
+    "selectedMode": "matching"
+  },
+  {
+    "id": "detached-timer",
+    "timerConnected": false,
+    "intervalStillRegistered": true
+  },
+  {
+    "id": "offscreen-drag",
+    "viewport": [
+      1024,
+      768
+    ],
+    "transform": "translate3d(-170px, -315px, 0)"
+  },
+  {
+    "id": "hidden-filter-geometry-save",
+    "before": {
+      "width": 600,
+      "height": 500,
+      "x": 220,
+      "y": 140
+    },
+    "after": {
+      "width": 360,
+      "height": 220,
+      "x": 8,
+      "y": 8,
+      "colorLayout": "vertical",
+      "layoutSizes": {
+        "vertical": {
+          "x": 8,
+          "y": 8,
+          "width": 360,
+          "height": 220
+        }
+      }
+    },
+    "inlineStyle": {
+      "width": "360px",
+      "height": "220px",
+      "left": "0px",
+      "top": "0px",
+      "right": "",
+      "transform": "translate(8px, 8px)"
+    }
+  },
+  {
+    "id": "malformed-settings-flags",
+    "input": {
+      "flags": {}
+    },
+    "error": "this.userSettings?.flags?.indexOf is not a function"
+  },
+  {
+    "id": "fresh-cross-highlight-preset",
+    "visibleGridStates": [
+      "Disabled",
+      "Incorrect",
+      "Disabled",
+      "Incorrect",
+      "Template",
+      "Incorrect",
+      "Disabled",
+      "Incorrect",
+      "Disabled"
+    ],
+    "storedHighlightAfterCrossClick": null,
+    "rendererEffectivePattern": [
+      [
+        2,
+        0,
+        0
+      ]
+    ]
+  },
+  {
+    "id": "localized-percent-sort",
+    "locale": "en-US",
+    "values": [
+      {
+        "ratio": 0.1099,
+        "text": "10.99%",
+        "key": "10.99",
+        "parsedKey": 10.99
+      },
+      {
+        "ratio": 0.1001,
+        "text": "10.01%",
+        "key": "10.01",
+        "parsedKey": 10.01
+      }
+    ]
+  },
+  {
+    "id": "localized-percent-sort",
+    "locale": "ru-RU",
+    "values": [
+      {
+        "ratio": 0.1099,
+        "text": "10,99 %",
+        "key": "10,99 ",
+        "parsedKey": 10
+      },
+      {
+        "ratio": 0.1001,
+        "text": "10,01 %",
+        "key": "10,01 ",
+        "parsedKey": 10
+      }
+    ]
+  },
+  {
+    "id": "localized-percent-sort",
+    "locale": "de-DE",
+    "values": [
+      {
+        "ratio": 0.1099,
+        "text": "10,99 %",
+        "key": "10,99 ",
+        "parsedKey": 10
+      },
+      {
+        "ratio": 0.1001,
+        "text": "10,01 %",
+        "key": "10,01 ",
+        "parsedKey": 10
+      }
+    ]
+  },
+  {
+    "id": "localized-percent-sort",
+    "locale": "tr-TR",
+    "values": [
+      {
+        "ratio": 0.1099,
+        "text": "%10,99",
+        "key": "0",
+        "parsedKey": 0
+      },
+      {
+        "ratio": 0.1001,
+        "text": "%10,01",
+        "key": "0",
+        "parsedKey": 0
+      }
+    ]
+  },
+  {
+    "id": "localized-percent-sort",
+    "locale": "ar-EG",
+    "values": [
+      {
+        "ratio": 0.1099,
+        "text": "١٠٫٩٩٪؜",
+        "key": "0",
+        "parsedKey": 0
+      },
+      {
+        "ratio": 0.1001,
+        "text": "١٠٫٠١٪؜",
+        "key": "0",
+        "parsedKey": 0
+      }
+    ]
+  }
+]

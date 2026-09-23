@@ -1,0 +1,27 @@
+ M README.md
+ M dist/Chromora.user.js
+ M docs/README.md
+ M docs/assets/chromora-credits.png
+ M docs/assets/chromora-filter-fullscreen.png
+ M docs/assets/chromora-filter-horizontal.png
+ M docs/assets/chromora-filter-vertical.png
+ M docs/assets/chromora-main.png
+ M docs/assets/chromora-settings.png
+ M docs/assets/chromora-template-coordinates.png
+ M docs/assets/chromora-template-wizard.png
+ M docs/assets/chromora-templates.png
+ M src/WindowCredits.js
+ M src/settingsManager.js
+?? audit/
+?? docs/assets/chromora-filter-sorting.png
+?? docs/assets/chromora-header-prompt.md
+?? docs/assets/chromora-header.png
+?? docs/assets/chromora-highlight-incorrect.png
+?? docs/assets/chromora-highlight-missing.png
+?? docs/assets/chromora-main-minimized.png
+?? docs/assets/chromora-paint-selected.png
+?? docs/assets/chromora-paint-template.png
+?? docs/assets/chromora-settings-dark.png
+?? docs/assets/chromora-settings-glass.png
+?? docs/assets/chromora-settings-highlights.png
+?? docs/assets/chromora-template-delete.png

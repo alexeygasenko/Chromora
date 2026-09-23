@@ -1,0 +1,255 @@
+[
+  {
+    "test": "different-off-palette-colors-count-as-correct",
+    "expectedCorrect": 0,
+    "actualCorrect": 1,
+    "status": "BUG_REPRODUCED"
+  },
+  {
+    "test": "one-pixel-template-on-default-tile",
+    "canvases": [
+      [
+        3000,
+        3000
+      ]
+    ],
+    "readbacks": [
+      {
+        "width": 3000,
+        "height": 3000,
+        "bytes": 36000000
+      }
+    ],
+    "bitmapsCreated": 1,
+    "bitmapsClosed": 0,
+    "drawCalls": 2,
+    "readbackBytes": 36000000,
+    "mockElapsedMs": 9.06,
+    "note": "Canvas sizes/readback requests are observed; GPU memory and browser timing are not measured."
+  },
+  {
+    "test": "out-of-order-render-overwrites-fresh-board-state",
+    "stateAfterNew": 2,
+    "stateAfterOld": 1,
+    "expectedSelectablePixelsForNewBoard": 1,
+    "actualSelectablePixels": 0,
+    "status": "BUG_REPRODUCED"
+  },
+  {
+    "test": "area-selection-uses-covered-lower-template-color",
+    "visibleUpperColorID": 2,
+    "selectedColorID": 1,
+    "status": "BUG_REPRODUCED"
+  },
+  {
+    "test": "no-scheduler-yield-and-withheld-animation-frame",
+    "pendingUntilAnimationFrame": true,
+    "completedAfterAnimationFrame": true,
+    "status": "BEHAVIOR_REPRODUCED"
+  },
+  {
+    "test": "temporary-bitmaps-not-explicitly-closed",
+    "canvases": [
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        3
+      ]
+    ],
+    "readbacks": [
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "bytes": 36
+      }
+    ],
+    "bitmapsCreated": 20,
+    "bitmapsClosed": 0,
+    "drawCalls": 40,
+    "note": "Absence of deterministic disposal is measured. Actual GC/native memory reclamation is browser-dependent; this alone does not prove a permanent leak."
+  },
+  {
+    "test": "million-pixel-cpu-path-with-canvas-mocks",
+    "samplesMs": [
+      216.96,
+      219.41,
+      206.05,
+      213.62
+    ],
+    "templateBufferBytes": 36000000,
+    "stateBufferBytes": 1000000,
+    "tileReadbackBytesPerDraw": 36000000,
+    "unconditionalTemplateCloneBytesPerDraw": 36000000,
+    "note": "Mock drawImage/PNG encoder; real JS scan/copy and readback allocation/fill. Not a browser/FPS benchmark; scheduler waits disabled."
+  }
+]

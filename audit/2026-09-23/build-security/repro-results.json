@@ -1,0 +1,48 @@
+{
+  "createdAt": "2026-09-23T07:00:15.496Z",
+  "node": "v25.8.0",
+  "results": [
+    {
+      "case": "healthy tile control",
+      "observationWindowMs": 150,
+      "state": "resolved",
+      "drawCalls": 1,
+      "errors": []
+    },
+    {
+      "case": "non-tile image",
+      "observationWindowMs": 150,
+      "state": "pending",
+      "drawCalls": 0,
+      "errors": []
+    },
+    {
+      "case": "tile renderer rejection",
+      "observationWindowMs": 150,
+      "state": "pending",
+      "drawCalls": 1,
+      "errors": [
+        "Error: Simulated createImageBitmap decode failure"
+      ]
+    },
+    {
+      "case": "unrelated null message",
+      "errors": [
+        "TypeError: Cannot destructure property 'source' of 'event.data' as it is null.",
+        "TypeError: Cannot read properties of null (reading 'jsonData')"
+      ]
+    },
+    {
+      "case": "foreign-origin synthetic message",
+      "userIDChangedTo": 123456,
+      "scope": "Handler validation test; real opener/iframe reachability and site COOP were not tested."
+    },
+    {
+      "case": "commit title shell injection",
+      "status": 0,
+      "stdout": "git stub executed",
+      "stderr": "CI_INJECTION_PROOF",
+      "rendered": "git commit -m \"Bumped version; Fix documentation $(printf CI_INJECTION_PROOF >&2)\" -m \"Benign body\" || echo \"No changes to commit\""
+    }
+  ]
+}

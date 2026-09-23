@@ -1,0 +1,12 @@
+
+> chromora@1.3.0 build
+> node build/build.js
+
+[34mStarting build...[0m
+[34mBuilding Chromora userscript...[0m
+[34mStarting update-version...[0m
+[32mUpdated[0m userscript version to [35m1.3.0[0m
+Version updated in meta file [32msuccessfully[0m
+[32m[1m[4mBuilding complete![0m
+Build hash:
+- Chromora.user.js: 6b2aefca8e9f

@@ -1,0 +1,21 @@
+{
+  "localReferencesChecked": [
+    "./assets/favicon.png",
+    "./styles.css",
+    "./script.js",
+    "./assets/icons/window-close.png",
+    "./assets/icons/layout-horizontal.png",
+    "./assets/icons/layout-vertical.png",
+    "./assets/icons/enter-fullscreen.png",
+    "./assets/icons/exit-fullscreen.png",
+    "./assets/icons/color-visible.png",
+    "./assets/icons/highlight-pixels.png"
+  ],
+  "missingLocalFiles": [],
+  "duplicateIDs": [],
+  "missingAriaReferenceIDs": [],
+  "missingAnchorIDs": [],
+  "hasHTMLLanguage": true,
+  "imageTagsWithoutAlt": [],
+  "scope": "Static local path/reference checks only; no external URL checks, browser rendering, screen-reader or WCAG certification."
+}

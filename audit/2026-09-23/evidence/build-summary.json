@@ -1,0 +1,23 @@
+{
+  "actualHostedCIExecuted": false,
+  "node": "25.8.0",
+  "localSeconds": 1.5335393,
+  "githubActionsModeBuildExit": 0,
+  "cleanInstallExit": 0,
+  "githubActionsModeSeconds": 1.4286352,
+  "artifacts": [
+    {
+      "file": "dist/Chromora.local.user.js",
+      "bytes": 255989,
+      "sha256": "897EDBD6734E6D381472745063E9469C220DF8621BE061E1138EC45937FA9D1F"
+    },
+    {
+      "file": "dist/Chromora.user.js",
+      "bytes": 250781,
+      "sha256": "F42131D3DAAD1265A75621D47D740D44C8F6817DDD27B7754301DA8829A90B7B"
+    }
+  ],
+  "localBuildExit": 0,
+  "npm": "11.11.0",
+  "platform": "Windows"
+}

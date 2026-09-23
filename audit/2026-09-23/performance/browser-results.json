@@ -1,0 +1,83 @@
+{
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0",
+  "schedulerYield": "function",
+  "canvas": "real browser OffscreenCanvas",
+  "tests": [
+    {
+      "test": "single-opaque-pixel-is-not-transparent",
+      "x": 0,
+      "y": 0,
+      "expectedDetected": true,
+      "actualDetected": true
+    },
+    {
+      "test": "single-opaque-pixel-is-not-transparent",
+      "x": 5,
+      "y": 5,
+      "expectedDetected": true,
+      "actualDetected": true
+    },
+    {
+      "test": "single-opaque-pixel-is-not-transparent",
+      "x": 50,
+      "y": 50,
+      "expectedDetected": true,
+      "actualDetected": true
+    },
+    {
+      "test": "single-opaque-pixel-is-not-transparent",
+      "x": 100,
+      "y": 100,
+      "expectedDetected": true,
+      "actualDetected": false
+    },
+    {
+      "test": "single-opaque-pixel-is-not-transparent",
+      "x": 500,
+      "y": 500,
+      "expectedDetected": true,
+      "actualDetected": false
+    },
+    {
+      "test": "single-opaque-pixel-is-not-transparent",
+      "x": 999,
+      "y": 999,
+      "expectedDetected": true,
+      "actualDetected": false
+    },
+    {
+      "test": "complete-sparse-template-creation",
+      "opaquePixelsCounted": 1,
+      "expectedChunkCount": 1,
+      "actualChunkCount": 0
+    },
+    {
+      "test": "actual-browser-render-png",
+      "templateLogicalWidth": 1,
+      "templateLogicalHeight": 1,
+      "boardLogicalWidth": 1000,
+      "boardLogicalHeight": 1000,
+      "outputPngBytes": 182600,
+      "samplesMs": [
+        92.7,
+        29.1,
+        49,
+        29.8
+      ]
+    },
+    {
+      "test": "actual-browser-render-png",
+      "templateLogicalWidth": 1000,
+      "templateLogicalHeight": 1000,
+      "boardLogicalWidth": 1000,
+      "boardLogicalHeight": 1000,
+      "outputPngBytes": 182600,
+      "samplesMs": [
+        76.1,
+        54.1,
+        57,
+        60.6
+      ]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "scope": "Actual storage methods, mocked asynchronous GM storage and image processing; not a real userscript-manager cross-tab test",
+  "checks": [
+    {
+      "name": "Same-runtime creates are serialized without lost records",
+      "status": "passed",
+      "detail": {
+        "keys": [
+          "0 !",
+          "1 !"
+        ]
+      }
+    },
+    {
+      "name": "Two runtimes with shared Web Lock preserve both writes",
+      "status": "passed",
+      "detail": {
+        "persistentCount": 2,
+        "runtimeCounts": [
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "name": "Invalid persisted JSON is not overwritten on create",
+      "status": "passed"
+    },
+    {
+      "name": "Failed GM save does not append a runtime template",
+      "status": "passed"
+    },
+    {
+      "name": "Create then toggle then delete persist the intended state",
+      "status": "passed"
+    },
+    {
+      "name": "Conditional defect: concurrent writes lose a record when Web Locks are unavailable",
+      "status": "passed",
+      "detail": {
+        "expectedCount": 2,
+        "actualCount": 1,
+        "remainingNames": [
+          "two"
+        ],
+        "interpretation": "Reproduction of a conditional defect, not a passing product requirement"
+      }
+    }
+  ]
+}

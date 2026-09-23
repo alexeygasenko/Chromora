@@ -47,44 +47,77 @@ inject((paintAreaIcons) => {
   const consoleStyle = script?.getAttribute('bm-cStyle') || ''; // Gets the console style value that was passed in. Defaults to no styling if nothing was found
   const fetchedBlobQueue = new Map(); // Blobs being processed
   let tileRefreshRevision = 0;
+  let tileRequestSequence = 0;
+  let pixelRequestSequence = 0;
+  const tileProcessingTimeout = 15000;
+  let discoverMapForRefresh = async () => null;
+  let pendingMapRefreshRevision = null;
+
+  // Downloaded/module-preloaded chunks are not necessarily evaluated. Wplace
+  // initializes its locale before mounting the map; importing those chunks any
+  // earlier can permanently reject their entries in the browser module cache.
+  function isHostMapMounted() {
+    return !!document.querySelector('canvas.maplibregl-canvas');
+  }
+
+  /** Invalidates the actual raster source, with events as a compatibility fallback. */
+  async function refreshVisibleTiles(revision) {
+    if (!isHostMapMounted()) {
+      pendingMapRefreshRevision = revision;
+      return;
+    }
+    pendingMapRefreshRevision = null;
+    let map = null;
+    try {map = await discoverMapForRefresh();} catch {}
+    if (revision !== tileRefreshRevision) {return;}
+    const sourceID = 'pixel-art-layer';
+    if (typeof map?.['refreshTiles'] == 'function') {
+      try {map['refreshTiles'](sourceID); return;} catch {}
+    }
+    try {
+      const source = map?.['getSource']?.(sourceID);
+      const tiles = source?.['tiles'] ?? source?.['serialize']?.()?.['tiles'];
+      if (typeof source?.['setTiles'] == 'function' && Array.isArray(tiles) && tiles.length && tiles.every(tile => typeof tile == 'string')) {
+        source['setTiles'](tiles.slice());
+        return;
+      }
+    } catch {}
+    // Older or changed Wplace runtimes may expose neither supported method.
+    window.dispatchEvent(new Event('online'));
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    window.postMessage({source: 'blue-marble', action: 'refresh-unavailable', revision}, window.location.origin);
+  }
+
+  // Only Wplace PNG tile endpoints are eligible for asynchronous replacement.
+  function getObservedEndpoint(value) {
+    try {
+      const url = new URL(value, window.location.href);
+      if (url.protocol != 'https:' || !['wplace.live', 'backend.wplace.live'].includes(url.hostname) || url.port || url.username || url.password) {return null;}
+      if (/^\/(?:api\/)?(?:files\/s\d+\/)?tiles?\/(?:\d+\/)?\d+\/\d+\.png$/.test(url.pathname)) {return 'tile';}
+      const apiPath = url.hostname === 'backend.wplace.live'
+        ? url.pathname.match(/^\/(?:api\/)?(?:(me|robots)|(?:s\d+\/)?(pixel)\/\d+\/\d+)$/)
+        : url.pathname.match(/^\/api\/(?:(me|robots)|(?:s\d+\/)?(pixel)\/\d+\/\d+)$/);
+      if (apiPath) {return apiPath[1] ?? apiPath[2];}
+    } catch {}
+    return null;
+  }
 
   window.addEventListener('message', (event) => {
-    const { source, action, revision, endpoint, blobID, blobData, blink } = event.data;
+    if (event.source !== window || event.origin !== window.location.origin || !event.data || typeof event.data != 'object' || Array.isArray(event.data)) {return;}
+    const { source, action, revision, endpoint, blobID, blobData } = event.data;
+    if (source !== 'blue-marble') {return;}
 
     if ((source == 'blue-marble') && (action == 'refresh-tiles')) {
-      tileRefreshRevision = Math.max(tileRefreshRevision + 1, Number(revision) || 0);
-      window.dispatchEvent(new Event('online'));
-      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+      if (!Number.isSafeInteger(revision) || revision < 0) {return;}
+      tileRefreshRevision = Math.max(tileRefreshRevision + 1, revision);
+      void refreshVisibleTiles(tileRefreshRevision);
       return;
     }
     if ((source == 'blue-marble') && (action == 'refresh-progress')) {return;}
     if ((source == 'blue-marble') && ((action == 'template-teleport') || (action == 'template-teleport-result'))) {return;}
 
-    const elapsed = Date.now() - blink;
-
-    // Since this code does not run in the userscript, we can't use consoleLog().
-    console.groupCollapsed(`%c${name}%c: ${fetchedBlobQueue.size} Recieved IMAGE message about blob "${blobID}"`, consoleStyle, '');
-    console.log(`Blob fetch took %c${String(Math.floor(elapsed/60000)).padStart(2,'0')}:${String(Math.floor(elapsed/1000) % 60).padStart(2,'0')}.${String(elapsed % 1000).padStart(3,'0')}%c MM:SS.mmm`, consoleStyle, '');
-    console.log(fetchedBlobQueue);
-    console.groupEnd();
-
-    // The modified blob won't have an endpoint, so we ignore any message without one.
-    if ((source == 'blue-marble') && !!blobID && !!blobData && !endpoint) {
-
-      const callback = fetchedBlobQueue.get(blobID); // Retrieves the blob based on the UUID
-
-      // If the blobID is a valid function...
-      if (typeof callback === 'function') {
-
-        callback(blobData); // ...Retrieve the blob data from the blobID function
-      } else {
-        // ...else the blobID is unexpected. We don't know what it is, but we know for sure it is not a blob. This means we ignore it.
-
-        consoleWarn(`%c${name}%c: Attempted to retrieve a blob (%s) from queue, but the blobID was not a function! Skipping...`, consoleStyle, '', blobID);
-      }
-
-      fetchedBlobQueue.delete(blobID); // Delete the blob from the queue, because we don't need to process it again
-    }
+    if (action || endpoint || typeof blobID != 'string' || !(blobData instanceof Blob)) {return;}
+    fetchedBlobQueue.get(blobID)?.(event.data['fallback'] === true ? null : blobData);
   });
 
   /** Bridges a trusted drag gesture to Wplace's local paint draft without submitting it. */
@@ -426,14 +459,22 @@ inject((paintAreaIcons) => {
       return group;
     }
 
+    let runtimeDiscoveryPromise = null;
+    discoverMapForRefresh = discoverWplaceRuntime;
     async function discoverWplaceRuntime() {
       if (state.runtimeStore?.['map']) {
         installDraftPreviewObserver();
         return state.runtimeStore['map'];
       }
+      if (!isHostMapMounted()) {return null;}
+      if (runtimeDiscoveryPromise) {return runtimeDiscoveryPromise;}
+      runtimeDiscoveryPromise = scanWplaceRuntimeModules();
+      try {return await runtimeDiscoveryPromise;} finally {runtimeDiscoveryPromise = null;}
+    }
+
+    async function scanWplaceRuntimeModules() {
       const resourceURLs = performance.getEntriesByType('resource').map(entry => entry.name);
-      const preloadURLs = Array.from(document.querySelectorAll('link[rel="modulepreload"][href]'), link => link.href);
-      const moduleURLs = Array.from(new Set([...resourceURLs, ...preloadURLs].filter(url => {
+      const moduleURLs = Array.from(new Set(resourceURLs.filter(url => {
         try {
           const parsedURL = new URL(url, window.location.href);
           return (parsedURL.origin == window.location.origin)
@@ -931,6 +972,9 @@ inject((paintAreaIcons) => {
 
     async function syncPaintMode() {
       state.syncFrame = null;
+      if (pendingMapRefreshRevision !== null && isHostMapMounted()) {
+        void refreshVisibleTiles(pendingMapRefreshRevision);
+      }
       const paintModeVisible = !!document.querySelector('#color-1');
       if (paintModeVisible) {await discoverWplaceRuntime();}
       const buttonGroup = ensureToggleButtons();
@@ -979,10 +1023,15 @@ inject((paintAreaIcons) => {
   window.fetch = async function(...args) {
 
     const endpointName = ((args[0] instanceof Request) ? args[0]?.url : args[0])?.toString() || 'ignore';
+    const observedEndpoint = getObservedEndpoint(endpointName);
+    const requestSequence = observedEndpoint == 'tile' ? ++tileRequestSequence
+      : observedEndpoint == 'pixel' ? ++pixelRequestSequence : 0;
+    const revision = tileRefreshRevision;
+    const signal = args[1]?.signal ?? ((args[0] instanceof Request) ? args[0].signal : null);
     let fetchArgs = args;
     let requestRefreshRevision = 0;
 
-    if (tileRefreshRevision && endpointName.includes('/tiles/') && !endpointName.includes('openfreemap') && !endpointName.includes('maps')) {
+    if (tileRefreshRevision && observedEndpoint == 'tile') {
       try {
         const refreshedURL = new URL(endpointName, window.location.href);
         refreshedURL.searchParams.set('bm-revision', tileRefreshRevision.toString());
@@ -1024,11 +1073,15 @@ inject((paintAreaIcons) => {
       completeRefreshRequest();
       throw error;
     }
-    const cloned = response.clone(); // Makes a copy of the response
+    if (!observedEndpoint || !response.ok) {
+      completeRefreshRequest();
+      return response;
+    }
+    const cloned = response.clone(); // Leaves the original response available for every fallback.
 
     // Check Content-Type to only process JSON
     const contentType = cloned.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
+    if (observedEndpoint != 'tile' && contentType.includes('application/json')) {
 
 
       // Since this code does not run in the userscript, we can't use consoleLog().
@@ -1037,7 +1090,7 @@ inject((paintAreaIcons) => {
       // Sends a message about the endpoint it spied on
       cloned.json()
         .then(jsonData => {
-          const endpointText = endpointName?.split('?')[0].split('/').filter(s => s && isNaN(Number(s))).filter(s => s && !s.includes('.')).pop();
+          const endpointText = observedEndpoint;
 
           // Cache the latest /me payload so the userscript can hydrate its UI
           // even if the first response arrives before listeners are attached.
@@ -1052,66 +1105,59 @@ inject((paintAreaIcons) => {
           window.postMessage({
             source: 'blue-marble',
             endpoint: endpointName,
+            requestSequence,
             jsonData: jsonData
-          }, '*');
+          }, window.location.origin);
         })
         .catch(err => {
           console.error(`%c${name}%c: Failed to parse JSON: `, consoleStyle, '', err);
         });
-    } else if (contentType.includes('image/') && (!endpointName.includes('openfreemap') && !endpointName.includes('maps'))) {
-      // Fetch custom for all images but opensourcemap
-
-      const blink = Date.now(); // Current time
-
-      const blob = await cloned.blob(); // The original blob
-
-      // Since this code does not run in the userscript, we can't use consoleLog().
-      console.log(`%c${name}%c: ${fetchedBlobQueue.size} Sending IMAGE message about endpoint "${endpointName}"`, consoleStyle, '');
-
-      // Returns the manipulated blob
-      return new Promise((resolve) => {
-        const blobUUID = crypto.randomUUID(); // Generates a random UUID
-
-        // Store the blob while we wait for processing
-        fetchedBlobQueue.set(blobUUID, (blobProcessed) => {
-          // The response that triggers when the blob is finished processing
-
-          // Creates a new response
-          resolve(new Response(blobProcessed, {
-            headers: cloned.headers,
-            status: cloned.status,
-            statusText: cloned.statusText
-          }));
-
-          // Since this code does not run in the userscript, we can't use consoleLog().
-          console.log(`%c${name}%c: ${fetchedBlobQueue.size} Processed blob "${blobUUID}"`, consoleStyle, '');
-          completeRefreshRequest();
-        });
-
-        window.postMessage({
-          source: 'blue-marble',
-          endpoint: endpointName,
-          blobID: blobUUID,
-          blobData: blob,
-          blink: blink
-        });
-      }).catch(exception => {
+    } else if (observedEndpoint == 'tile' && contentType.includes('image/')) {
+      // Bound both time and queue size. A missing/failed userscript consumer must
+      // never prevent the host page from receiving its successful tile response.
+      if (fetchedBlobQueue.size >= 128) {
         completeRefreshRequest();
-        const elapsed = Date.now();
-        console.error(`%c${name}%c: Failed to Promise blob!`, consoleStyle, '');
-        console.groupCollapsed(`%c${name}%c: Details of failed blob Promise:`, consoleStyle, '');
-        console.log(`Endpoint: ${endpointName}\nThere are ${fetchedBlobQueue.size} blobs processing...\nBlink: ${blink.toLocaleString()}\nTime Since Blink: ${String(Math.floor(elapsed/60000)).padStart(2,'0')}:${String(Math.floor(elapsed/1000) % 60).padStart(2,'0')}.${String(elapsed % 1000).padStart(3,'0')} MM:SS.mmm`);
-        console.error(`Exception stack:`, exception);
-        console.groupEnd();
+        return response;
+      }
+      return new Promise((resolve, reject) => {
+        const blobID = crypto.randomUUID();
+        let settled = false;
+        let posted = false;
+        let timer;
+        const finish = (processedBlob, abortError) => {
+          if (settled) {return;}
+          settled = true;
+          clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
+          fetchedBlobQueue.delete(blobID);
+          completeRefreshRequest();
+          if ((!processedBlob || abortError) && posted) {
+            try {window.postMessage({source: 'blue-marble', action: 'cancel-tile', blobID}, window.location.origin);} catch {}
+          }
+          if (abortError) {reject(abortError); return;}
+          if (!(processedBlob instanceof Blob)) {resolve(response); return;}
+          try {
+            const headers = new Headers(response.headers);
+            headers.delete('content-length');
+            headers.delete('content-encoding');
+            headers.set('content-type', processedBlob.type || contentType);
+            resolve(new Response(processedBlob, {headers, status: response.status, statusText: response.statusText}));
+          } catch {resolve(response);}
+        };
+        const onAbort = () => finish(null, signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+        fetchedBlobQueue.set(blobID, processedBlob => finish(processedBlob));
+        timer = setTimeout(() => finish(), tileProcessingTimeout);
+        signal?.addEventListener('abort', onAbort, {once: true});
+        if (signal?.aborted) {onAbort(); return;}
+        cloned.blob().then(blob => {
+          if (settled) {return;}
+          posted = true;
+          window.postMessage({
+            source: 'blue-marble', endpoint: endpointName, blobID, blobData: blob,
+            requestSequence, revision
+          }, window.location.origin);
+        }).catch(() => finish());
       });
-
-      // cloned.blob().then(blob => {
-      //   window.postMessage({
-      //     source: 'blue-marble',
-      //     endpoint: endpointName,
-      //     blobData: blob
-      //   }, '*');
-      // });
     }
 
     completeRefreshRequest();
@@ -1126,35 +1172,9 @@ inject((paintAreaIcons) => {
 const cssOverlay = GM_getResourceText("CSS-BM-File");
 GM_addStyle(cssOverlay);
 
-function appendFontStylesheet(href) {
-  const stylesheetLink = document.createElement('link');
-  stylesheetLink.href = href;
-  stylesheetLink.rel = 'preload';
-  stylesheetLink.as = 'style';
-  stylesheetLink.onload = function () {
-    this.onload = null;
-    this.rel = 'stylesheet';
-  };
-  document.head?.appendChild(stylesheetLink);
-}
-
-// Injection point for the Roboto Mono font file (only if this is the Standalone version)
-const robotoMonoInjectionPoint = 'robotoMonoInjectionPoint';
-
-appendFontStylesheet('https://fonts.googleapis.com/css2?family=Michroma&family=Rajdhani:wght@400;500;600;700&display=swap');
-
-// If the Roboto Mono injection point contains '@font-face'...
-if (!!(robotoMonoInjectionPoint.indexOf('@font-face') + 1)) {
-  // A very hacky way of doing truthy/falsy logic
-  
-  console.log(`Loading Roboto Mono as a file...`);
-  GM_addStyle(robotoMonoInjectionPoint); // Add the Roboto Mono font-faces that were injected.
-} else {
-  // Else, no Roboto Mono was found. We need to use a stylesheet.
-  
-  // Imports the Roboto Mono font family as a stylesheet
-  appendFontStylesheet('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
-}
+// The build embeds every interface font, including Latin/Cyrillic Aero faces.
+const bundledFontStyles = 'chromoraFontInjectionPoint';
+if (bundledFontStyles.includes('@font-face')) {GM_addStyle(bundledFontStyles);}
 
 function readStoredJSON(key, fallback = {}) {
   try {
@@ -1183,9 +1203,11 @@ if (shouldInitializeRuntime) {
 void (async () => {
 let runtimeMarker = null;
 let activeWindowMain = null;
+let activeSettingsManager = null;
 let stopSpontaneousResponseListener = null;
 let stopBlackObserver = null;
 let stopPaintAreaSelectionBridge = null;
+let stopTemplateStorageSync = null;
 
 try {
 
@@ -1204,6 +1226,7 @@ activeWindowMain = windowMain;
 const templateManager = new TemplateManager(name, version); // Constructs a new TemplateManager object
 const apiManager = new ApiManager(templateManager); // Constructs a new ApiManager object
 const settingsManager = new SettingsManager(name, version, userSettings); // Constructs a new SettingsManager
+activeSettingsManager = settingsManager;
 
 windowMain.setSettingsManager(settingsManager); // Sets the settings manager
 windowMain.setApiManager(apiManager); // Sets the API manager
@@ -1213,7 +1236,6 @@ templateManager.setSettingsManager(settingsManager); // Sets the settings manage
 stopPaintAreaSelectionBridge = templateManager.startPaintAreaSelectionBridge();
 
 const storageTemplates = readStoredJSON('bmTemplates');
-console.log(storageTemplates);
 
 runtimeMarker = document.createElement('meta');
 runtimeMarker.id = runtimeMarkerID;
@@ -1227,6 +1249,7 @@ await initializeBlueMarble();
 runtimeMarker.dataset['runtimeState'] = 'ready';
 
 async function initializeBlueMarble() {
+  stopSpontaneousResponseListener = apiManager.spontaneousResponseListener(windowMain);
   let templateImportError = null;
   let templateImportWarning = null;
   try {
@@ -1238,8 +1261,7 @@ async function initializeBlueMarble() {
     templateImportError = error;
     console.error('Blue Marble: Could not import stored templates.', error);
   }
-
-  stopSpontaneousResponseListener = apiManager.spontaneousResponseListener(windowMain); // Reads spontaneous fetch responces
+  stopTemplateStorageSync = templateManager.startTemplateStorageSync();
 
   windowMain.buildWindow(); // Builds the main Blue Marble window
   windowMain.buildWindowFilter({'respectSavedVisibility': true}); // Restores the Color Filter window only if it was open before reload
@@ -1303,8 +1325,9 @@ function observeBlack() {
   stopBlackObserver?.();
   stopSpontaneousResponseListener?.();
   stopPaintAreaSelectionBridge?.();
-  activeWindowMain?.windowFilter?.dispose();
-  activeWindowMain?.windowTemplates?.dispose();
+  stopTemplateStorageSync?.();
+  activeWindowMain?.dispose();
+  activeSettingsManager?.dispose();
   document.getElementById(activeWindowMain?.windowID)?.remove();
   runtimeMarker?.remove();
   console.error('Blue Marble: Runtime initialization failed.', error);

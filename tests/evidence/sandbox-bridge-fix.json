@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-23",
+  "liveObservation": {
+    "browser": "Brave with Tampermonkey",
+    "seasonalPixelFetchLogged": true,
+    "apiMessageReceivedLogged": false,
+    "coordinateFieldsEmpty": true
+  },
+  "regressionReproduced": {
+    "sourceBeforeFix": "Timed out waiting for Pixel Y in a browser fixture with a distinct userscript window wrapper.",
+    "previousCiBuildHash": "311164f46931",
+    "previousCiResult": "Same coordinate timeout with the complete compiled userscript."
+  },
+  "fix": "Compare message.source to document.defaultView instead of the userscript window wrapper; retain origin and payload validation.",
+  "validation": {
+    "nodeTestsPassed": 56,
+    "nodeTestsFailed": 0,
+    "syntax": "passed",
+    "bundleContractChecks": "passed for both flavors",
+    "browserChecksPerFlavor": 66,
+    "rejectedSenders": ["same-origin iframe", "foreign origin", "null source"],
+    "environment": "Edge 153.0.4234.48; simulated Tampermonkey window wrapper, real DOM injection, isolated network"
+  },
+  "liveInstalledCopyVerification": {
+    "status": "passed",
+    "installation": "User replaced the script; agent reloaded the same Brave Wplace tab.",
+    "receivedMessages": ["me", "tile", "pixel"],
+    "templateFile": "converted_12.png selected by the user",
+    "coordinateFields": [1469, 661, 237, 581],
+    "pickerStatus": "Latest map pixel loaded. Confirm it or click another pixel.",
+    "userConfirmedWorking": true,
+    "pixelsSubmitted": false,
+    "templateCreated": false
+  },
+  "artifacts": {
+    "local": {
+      "bytes": 726485,
+      "sha256": "d71708263a88937fefb532b125ae129e337c6c175cff183bfe006536237cb9a8",
+      "buildHash": "25357519e095"
+    },
+    "ci": {
+      "bytes": 724743,
+      "sha256": "dcde54376edf62ec911d50da437aa486b3a4b0f549550230a37fabc9ef166133",
+      "buildHash": "418bf95c0568"
+    }
+  }
+}

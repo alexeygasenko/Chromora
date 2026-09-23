@@ -56,11 +56,17 @@
   left: 60px;
   width: auto;
   max-height: fit-content;
-  max-width: calc(100% - 135px);
+  max-width: calc(100% - 16px);
   backdrop-filter: blur(26px) saturate(1.25);
   font-family: var(--bm-font-body);
   letter-spacing: 0.04em;
   backface-visibility: hidden;
+}
+
+.bm-dragbar:focus-visible,
+.bm-resize-corner:focus-visible {
+  outline: 2px solid var(--bm-text-primary);
+  outline-offset: -2px;
 }
 
 .bm-window.bm-window-motion {
@@ -411,12 +417,8 @@
 .bm-button-circle .bm-button-icon-minimize {
   width: 62%;
   height: 62%;
-  translate: -0.5px -0.5px;
+  translate: none;
   transform: translateZ(0);
-}
-
-.bm-button-circle[data-button-status="collapsed"] .bm-button-icon-minimize {
-  translate: -0.5px -0.5px;
 }
 
 .bm-button-circle .bm-button-icon-templates {

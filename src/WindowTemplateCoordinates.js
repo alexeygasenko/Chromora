@@ -116,6 +116,11 @@ export default class WindowTemplateCoordinates extends Overlay {
 
     this.windowElement = document.getElementById(this.windowID);
     if (!this.windowElement) {return;}
+    this.addWindowCleanup(this.windowElement, () => {
+      this.#stopCoordinateUpdates();
+      this.#unbindEscapeKey();
+      document.body?.classList.remove('bm-template-coordinate-mode');
+    });
 
     document.body.classList.add('bm-template-coordinate-mode');
     this.handleDrag(`#${this.windowID}`, `#${this.windowID} .bm-dragbar`);
@@ -130,7 +135,7 @@ export default class WindowTemplateCoordinates extends Overlay {
     this.#stopCoordinateUpdates();
     this.#unbindEscapeKey();
     document.body?.classList.remove('bm-template-coordinate-mode');
-    this.windowElement?.remove();
+    super.dispose();
     this.windowElement = null;
   }
 

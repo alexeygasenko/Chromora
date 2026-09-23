@@ -53,6 +53,7 @@ export default class WindowCredts extends Overlay {
         .addHr().buildElement()
         .addDiv({'class': 'bm-container bm-scrollable'})
           .addHeader(2, {'textContent': 'Chromora'}).buildElement()
+          .addBr().buildElement()
           .addSpan({'innerHTML': 'Chromora is maintained by <a href="https://github.com/alexeygasenko" target="_blank" rel="noopener noreferrer">alexeygasenko</a> and is based on Blue Marble.'}).buildElement()
           .addBr().buildElement()
           .addSpan({'textContent': '"Blue Marble" userscript is made by SwingTheVine.'}).buildElement()

@@ -1,11 +1,7 @@
-import { sleep } from "./utils";
 import WindowSettings from "./WindowSettings";
+import {DEFAULT_HIGHLIGHT, INTERFACE_THEMES, normalizeHighlight, normalizeUserSettings} from './settingsSchema.js';
 
-const interfaceThemes = Object.freeze([
-  {id: 'glass', label: 'Glass', description: 'Transparent & blurred'},
-  {id: 'light', label: 'Light', description: 'Solid light surfaces'},
-  {id: 'dark', label: 'Dark', description: 'Solid dark surfaces'}
-]);
+const interfaceThemes = INTERFACE_THEMES;
 const interfaceThemeIDs = new Set(interfaceThemes.map(({id}) => id));
 
 /** SettingsManager class for handling user settings and making them persist between sessions.
@@ -38,8 +34,10 @@ export default class SettingsManager extends WindowSettings {
   constructor(name, version, userSettings) {
     super(name, version); // Executes WindowSettings constructor
     
-    this.userSettings = userSettings; // User settings as an Object
-    this.userSettings.flags ??= []; // Makes sure the key "flags" always exists
+    this.userSettings = normalizeUserSettings(userSettings);
+    this.renderingSettingsListeners = new Set();
+    this.hotkeyRecordingCleanups = new Set();
+    this.settingsDisposed = false;
     if (!this.userSettings.hotkeys || (typeof this.userSettings.hotkeys != 'object') || Array.isArray(this.userSettings.hotkeys)) {
       this.userSettings.hotkeys = {};
     }
@@ -48,24 +46,59 @@ export default class SettingsManager extends WindowSettings {
     delete this.userSettings.hotkeys['clearPaintArea'];
     this.userSettings['theme'] = this.#normalizeTheme(this.userSettings['theme']);
     this.#applyTheme(this.userSettings['theme']);
-    this.userSettingsOld = structuredClone(this.userSettings); // Creates a duplicate of the user settings to store the old version of user settings from 5+ seconds ago
+    // Compare against the actual persisted input so repaired settings are saved too.
+    this.userSettingsOld = structuredClone(userSettings ?? {});
     this.userSettingsSaveLocation = 'bmUserSettings'; // Storage save location
     this.userSettingsSavePromise = Promise.resolve(); // Keeps storage writes in the order they were requested
 
     this.updateFrequency = 5000; // Cooldown between saving to storage (throttle)
     this.lastUpdateTime = 0; // When this unix timestamp is within the last 5 seconds, we should save this.userSettings to storage
 
-    setInterval(this.updateUserStorage.bind(this), this.updateFrequency); // Runs every X seconds (see updateFrequency)
+    this.userStorageInterval = setInterval(() => {
+      void this.updateUserStorage().catch(error => this.#reportSettingsError(error));
+    }, this.updateFrequency);
     this.#broadcastPaintAreaHotkeys();
+  }
+
+  /** Release storage polling and any active keyboard recording when the runtime is disposed. */
+  dispose() {
+    this.settingsDisposed = true;
+    clearInterval(this.userStorageInterval);
+    for (const cleanup of this.hotkeyRecordingCleanups) {cleanup();}
+    this.hotkeyRecordingCleanups.clear();
+    this.renderingSettingsListeners.clear();
+    super.dispose();
+  }
+
+  onRenderingSettingsChanged(listener) {
+    if (typeof listener !== 'function') {return () => {};}
+    this.renderingSettingsListeners.add(listener);
+    return () => this.renderingSettingsListeners.delete(listener);
+  }
+
+  #renderingSettingsChanged() {
+    for (const listener of this.renderingSettingsListeners) {
+      try {listener();} catch (error) {console.error('Chromora: Could not refresh rendering settings.', error);}
+    }
+  }
+
+  #reportSettingsError(error) {
+    console.error('Chromora: Could not apply settings.', error);
+    const status = document.querySelector('#bm-settings-status');
+    if (status) {status.textContent = error instanceof Error ? error.message : String(error);}
+  }
+
+  #persistSettingsChange() {
+    void this.saveUserStorageNow().catch(error => this.#reportSettingsError(error));
   }
 
   /** Normalizes a persisted interface theme.
    * @param {string} theme
-   * @returns {'glass'|'light'|'dark'}
+   * @returns {'glass'|'light'|'dark'|'aero'}
    * @since 1.1.0
    */
   #normalizeTheme(theme) {
-    const normalizedTheme = String(theme ?? '').toLowerCase();
+    const normalizedTheme = typeof theme === 'string' ? theme.toLowerCase() : 'glass';
     return interfaceThemeIDs.has(normalizedTheme) ? normalizedTheme : 'glass';
   }
 
@@ -141,7 +174,7 @@ export default class SettingsManager extends WindowSettings {
         action: 'paint-area-hotkey-setting',
         mode: mode,
         code: code
-      }, '*');
+      }, window.location.origin);
     }
   }
 
@@ -156,9 +189,14 @@ export default class SettingsManager extends WindowSettings {
       ['paintArea', 'AltLeft'],
       ['paintAllArea', 'ControlLeft']
     ]);
-    const normalizedSettingKey = hotkeyDefaults.has(settingKey) ? settingKey : 'paintArea';
-    const fallbackCode = hotkeyDefaults.get(normalizedSettingKey);
-    this.userSettings.hotkeys[normalizedSettingKey] = this.#normalizeHotkeyCode(code, fallbackCode);
+    if (!hotkeyDefaults.has(settingKey) || typeof code !== 'string' || !/^[A-Za-z][A-Za-z0-9]{1,31}$/.test(code)) {
+      throw new TypeError('Choose a valid keyboard key.');
+    }
+    const otherSettingKey = settingKey === 'paintArea' ? 'paintAllArea' : 'paintArea';
+    if (this.userSettings.hotkeys[otherSettingKey] === code) {
+      throw new Error(`This key is already used for ${otherSettingKey === 'paintArea' ? 'Selected color area' : 'All template colors'}. Choose a different key.`);
+    }
+    this.userSettings.hotkeys[settingKey] = code;
     this.#broadcastPaintAreaHotkeys();
     await this.saveUserStorageNow();
   }
@@ -167,6 +205,7 @@ export default class SettingsManager extends WindowSettings {
    * @since 0.91.39
    */
   async updateUserStorage() {
+    if (this.settingsDisposed) {return;}
     await this.saveUserStorage();
   }
 
@@ -185,7 +224,6 @@ export default class SettingsManager extends WindowSettings {
         await GM.setValue(this.userSettingsSaveLocation, userSettingsCurrent); // Updates user storage
         this.userSettingsOld = userSettingsSnapshot; // Tracks exactly the snapshot that was written
         this.lastUpdateTime = Date.now(); // Updates the variable that contains the last time updated
-        console.log(userSettingsCurrent);
       }
     };
 
@@ -211,6 +249,8 @@ export default class SettingsManager extends WindowSettings {
    */
   toggleFlag(flagName, state = undefined) {
 
+    if (typeof flagName !== 'string' || !flagName) {return;}
+
     const flagIndex = this.userSettings?.flags?.indexOf(flagName) ?? -1; // Is the flag `true`?
 
     // If the flag is enabled, AND the user does not want to force the flag to be true...
@@ -220,6 +260,10 @@ export default class SettingsManager extends WindowSettings {
     } else if ((flagIndex == -1) && (state !== false)) {
       // Else if the flag is disabled, AND the user does not want to force the flag to be false...
       this.userSettings?.flags?.push(flagName); // Add the flag (makes it true)
+    }
+    if ((flagIndex !== -1) !== this.userSettings.flags.includes(flagName)) {
+      if (flagName === 'hl-noTrans') {this.#renderingSettingsChanged();}
+      this.#persistSettingsChange();
     }
   }
 
@@ -250,7 +294,7 @@ export default class SettingsManager extends WindowSettings {
           const selectedTheme = this.#normalizeTheme(button.dataset['theme']);
           syncButtons(group, selectedTheme);
           void this.setTheme(selectedTheme).catch(error => {
-            console.error('Chromora: Could not save the interface theme.', error);
+            this.#reportSettingsError(error);
           });
         };
 
@@ -313,6 +357,8 @@ export default class SettingsManager extends WindowSettings {
    * @see WindowSettings#buildHotkeys
    */
   buildHotkeys() {
+    for (const cleanup of this.hotkeyRecordingCleanups) {cleanup();}
+    this.hotkeyRecordingCleanups.clear();
     const configureHotkeyButton = (button, settingKey, label) => {
       let recording = false;
       const handleRecordingKeyDown = event => {
@@ -325,11 +371,14 @@ export default class SettingsManager extends WindowSettings {
           return;
         }
         if (!/^[A-Za-z][A-Za-z0-9]{1,31}$/.test(event.code)) {return;}
-        void this.setPaintAreaHotkey(settingKey, event.code).finally(() => {
-          stopRecording();
-          const formattedCode = this.#formatHotkeyCode(this.userSettings.hotkeys[settingKey]);
-          button.setAttribute('aria-label', `${label} hotkey: ${formattedCode}`);
-        });
+        const status = document.querySelector('#bm-settings-status');
+        if (status) {status.textContent = '';}
+        const save = this.setPaintAreaHotkey(settingKey, event.code);
+        // One keypress finishes capture, even while asynchronous storage is busy.
+        stopRecording();
+        const formattedCode = this.#formatHotkeyCode(this.userSettings.hotkeys[settingKey]);
+        button.setAttribute('aria-label', `${label} hotkey: ${formattedCode}`);
+        void save.catch(error => this.#reportSettingsError(error));
       };
       const stopRecording = () => {
         if (!recording) {return;}
@@ -353,6 +402,7 @@ export default class SettingsManager extends WindowSettings {
         window.addEventListener('keydown', handleRecordingKeyDown, true);
       };
       button.onblur = stopRecording;
+      this.hotkeyRecordingCleanups.add(stopRecording);
     };
 
     const matchingCode = this.userSettings.hotkeys['paintArea'];
@@ -396,7 +446,7 @@ export default class SettingsManager extends WindowSettings {
     const highlightPresetCross = '<svg viewBox="0 0 3 3"><path d="M0,0H3V3H0Z" fill="#fff"/><path d="M1,0H2V1H3V2H2V3H1V2H0V1H1Z" fill="brown"/><path d="M1,1H2V2H1Z" fill="#2f4f4f"/></svg>';
     
     // Obtains user settings for highlight from storage, or the default array if nothing was found
-    const storedHighlight = this.userSettings?.highlight ?? [[1, 0, 1], [2, 0, 0], [1, -1, 0], [1, 1, 0], [1, 0, -1]];
+    const storedHighlight = this.userSettings?.highlight ?? DEFAULT_HIGHLIGHT;
 
     // Constructs the category and adds it to the window
     this.window = this.addDiv({'class': 'bm-container'})
@@ -443,7 +493,9 @@ export default class SettingsManager extends WindowSettings {
               }
               this.window = this.addButton({
                 'data-status': buttonStateName,
-                'aria-label': `Sub-pixel ${buttonStateName.toLowerCase()}`
+                'data-x': buttonX,
+                'data-y': buttonY,
+                'aria-label': this.#highlightCellLabel(buttonStateName, buttonX, buttonY)
               }, (instance, button) => {
                 button.onclick = () => this.#updateHighlightSettings(button, [buttonX, buttonY])
               }).buildElement();
@@ -462,154 +514,52 @@ export default class SettingsManager extends WindowSettings {
    * @param {Array<number, number>} coords - The relative coordinates of the button
    * @since 0.91.46
    */
-  #updateHighlightSettings(button, coords) {
-
-    button.disabled = true; // Disabled the button until we are done
-
-    const status = button.dataset['status']; // Obtains the current status of the button
-
-    /** Obtains the old highlight storage, or sets it to default. @type {Array<number[]>} */
-    const userStorageOld = this.userSettings?.highlight ?? [[1, 0, 1], [2, 0, 0], [1, -1, 0], [1, 1, 0], [1, 0, -1]];
-
-    let userStorageChange = [2, 0, 0]; // The new change to the user storage
-
-    const userStorageNew = userStorageOld; // The old storage with the new change
-
-    // For each different type of status...
-    switch (status) {
-
-      // If the button was in the "Disabled" state
-      case 'Disabled':
-
-        // Change to "Incorrect"
-        button.dataset['status'] = 'Incorrect';
-        button.ariaLabel = 'Sub-pixel incorrect';
-        userStorageChange = [1, ...coords];
-        break;
-      
-      // If the button was in the "Incorrect" state
-      case 'Incorrect':
-
-        // Change to "Template"
-        button.dataset['status'] = 'Template';
-        button.ariaLabel = 'Sub-pixel template';
-        userStorageChange = [2, ...coords];
-        break;
-      
-      // If the button was in the "Template" state
-      case 'Template':
-
-        // Change to "Disabled"
-        button.dataset['status'] = 'Disabled';
-        button.ariaLabel = 'Sub-pixel disabled';
-        userStorageChange = [0, ...coords];
-        break;
-    }
-
-    // Finds the index of the pixel to change
-    const indexOfChange = userStorageOld.findIndex(([, x, y]) => ((x == userStorageChange[1]) && (y == userStorageChange[2])));
-
-    // If the new sub-pixel state is NOT disabled
-    if (userStorageChange[0] != 0) {
-
-      // If a sub-pixel was found...
-      if (indexOfChange != -1) {
-        userStorageNew[indexOfChange] = userStorageChange;
-      } else {
-        userStorageNew.push(userStorageChange);
-      }
-    } else if (indexOfChange != -1) {
-      // Else, it is disabled. We want to remove it if it exists.
-      userStorageNew.splice(indexOfChange, 1); // Removes 1 index from the array at the index of the pixel change
-    }
-
-    this.userSettings['highlight'] = userStorageNew;
-    // TODO: Add timer update here
-
-    button.disabled = false; // Reenables the button since we are done
+  #highlightCellLabel(state, x, y) {
+    const vertical = ['top', 'middle', 'bottom'][y + 1];
+    const horizontal = ['left', 'center', 'right'][x + 1];
+    const position = x === 0 && y === 0 ? 'center' : vertical + ' ' + horizontal;
+    return position + ' sub-pixel: ' + state.toLowerCase();
   }
 
-  /** Changes the highlight buttons to the clicked preset.
-   * @param {string} preset - The name of the preset
-   * @since 0.91.49
-   */
-  async #updateHighlightToPreset(preset) {
-
-    // Obtains all preset buttons as a NodeList
-    const presetButtons = document.querySelectorAll('.bm-highlight-preset-container button');
-
-    // For each preset...
-    for (const button of presetButtons) {
-      button.disabled = true; // Disables the button
+  #syncHighlightGrid() {
+    const windowElement = document.querySelector('#' + this.windowID);
+    const pattern = this.userSettings.highlight;
+    for (const button of windowElement?.querySelectorAll('.bm-highlight-grid button') ?? []) {
+      const x = Number(button.dataset['x']), y = Number(button.dataset['y']);
+      const state = pattern.find(([, cellX, cellY]) => cellX === x && cellY === y)?.[0] ?? 0;
+      const name = ['Disabled', 'Incorrect', 'Template'][state];
+      button.dataset['status'] = name;
+      button.setAttribute('aria-label', this.#highlightCellLabel(name, x, y));
     }
+  }
 
-    let presetArray = [0,0,0,0,2,0,0,0,0]; // The preset "None"
+  /** Store the model directly; the rendered grid is only a view of this pattern. */
+  async setHighlightPattern(pattern) {
+    this.userSettings.highlight = normalizeHighlight(pattern);
+    this.#syncHighlightGrid();
+    this.#renderingSettingsChanged();
+    await this.saveUserStorageNow();
+  }
 
-    // Selects the preset passed in
-    switch (preset) {
-      case 'Cross':
-        presetArray = [0,1,0,1,2,1,0,1,0]; // The preset "Cross"
-        break;
-      case 'X':
-        presetArray = [1,0,1,0,2,0,1,0,1]; // The preset "X"
-        break;
-      case 'Full': 
-        presetArray = [2,2,2,2,2,2,2,2,2]; // The preset "Full"
-        break;
-    }
+  #updateHighlightSettings(button, [x, y]) {
+    const states = ['Disabled', 'Incorrect', 'Template'];
+    const nextState = (Math.max(0, states.indexOf(button.dataset['status'])) + 1) % 3;
+    const pattern = this.userSettings.highlight.filter(([, cellX, cellY]) => cellX !== x || cellY !== y);
+    if (nextState) {pattern.push([nextState, x, y]);}
+    void this.setHighlightPattern(pattern).catch(error => this.#reportSettingsError(error));
+  }
 
-    // Obtains the buttons to click as a NodeList
-    const buttons = document.querySelector('.bm-highlight-grid')?.childNodes ?? [];
-
-    // For each button...
-    for (let buttonIndex = 0; buttonIndex < buttons.length; buttonIndex++) {
-
-      const button = buttons[buttonIndex]; // Gets the current button to check
-
-      // Gets the state of the button as a number
-      let buttonState = button.dataset['status'];
-      buttonState = (buttonState != 'Disabled') ? ((buttonState != 'Incorrect') ? 2 : 1) : 0;
-
-      // Finds the difference between the preset and the button
-      let buttonStateDelta = presetArray[buttonIndex] - buttonState;
-
-      // Since there is no difference, the button matches, so we skip it
-      if (buttonStateDelta == 0) {continue;}
-
-      // Makes the difference positive
-      buttonStateDelta += (buttonStateDelta < 0) ? 3 : 0;
-
-      /** At this point, these are the possible options:
-       * 1. The preset is zero and the button is two (-2) so we need to click once
-       * 2. The preset is one and the button is two (-1) so we need to click twice
-       * 3. The preset is one ahead of the button (1) so we need to click once
-       * 4. The preset is two ahead of the button (2) so we need to click twice
-       * Due to the addition of three in the line above, options 1 & 3 combine, and options 2 & 4 combine.
-       * Now the only options we have are:
-       * 1. If (1) then click once
-       * 2. If (2) then click twice
-       * Also due to the addition of three in the line above, our two options are POSITIVE numbers
-       */
-
-      button.click(); // Clicks once
-      
-      // Clicks a second time if needed
-      if (buttonStateDelta == 2) {
-
-        // For 0.2 seconds, or when the button is NOT disabled, wait for 10 milliseconds before attempting to continue
-        for (let timeWaited = 0; timeWaited < 200; timeWaited += 10) {
-          if (!button.disabled) {break;} // Breaks early once the button is enabled
-          await sleep(10);
-        }
-
-        button.click(); // Clicks again
-      }
-    }
-
-    // For each preset...
-    for (const button of presetButtons) {
-      button.disabled = false; // Re-enables the button
-    }
+  /** Apply a preset even when its visual grid already matches the selected value. */
+  #updateHighlightToPreset(preset) {
+    const presets = {
+      None: [0,0,0,0,2,0,0,0,0],
+      Cross: [0,1,0,1,2,1,0,1,0],
+      X: [1,0,1,0,2,0,1,0,1],
+      Full: [2,2,2,2,2,2,2,2,2]
+    };
+    const values = presets[preset] ?? presets.None;
+    const pattern = values.flatMap((state, index) => state ? [[state, index % 3 - 1, Math.floor(index / 3) - 1]] : []);
+    void this.setHighlightPattern(pattern).catch(error => this.#reportSettingsError(error));
   }
 
   /** Build the "template" category of settings window
@@ -619,7 +569,7 @@ export default class SettingsManager extends WindowSettings {
   buildTemplate() {
 
     this.window = this.addDiv({'class': 'bm-container'})
-      .addHeader(2, {'textContent': 'Pixel Highlight'}).buildElement()
+      .addHeader(2, {'textContent': 'Templates'}).buildElement()
       .addHr().buildElement()
       .addDiv({'class': 'bm-container', 'style': 'margin-left: 1.5ch;'})
         .addCheckbox({'textContent': 'Template creation should skip transparent tiles'}, (instance, label, checkbox) => {
@@ -627,7 +577,7 @@ export default class SettingsManager extends WindowSettings {
           checkbox.checked = !this.userSettings?.flags?.includes('hl-noSkip'); // Makes the checkbox match the last stored user setting
           checkbox.onchange = (event) => this.toggleFlag('hl-noSkip', !event.target.checked); // If the user wants to skip, then the checkbox is NOT checked
         }).buildElement()
-        .addCheckbox({'innerHTML': 'Experimental: Template creation should <em>aggressively</em> skip transparent tiles'}, (instance, label, checkbox) => {
+        .addCheckbox({'innerHTML': '<span>Experimental: Template creation should <em>aggressively</em> skip transparent tiles</span>'}, (instance, label, checkbox) => {
           label.classList.add('bm-settings-checkbox');
           checkbox.checked = this.userSettings?.flags?.includes('hl-agSkip'); // Makes the checkbox match the last stored user setting
           checkbox.onchange = (event) => this.toggleFlag('hl-agSkip', event.target.checked); // If the user wants to aggressively skip, then the checkbox is checked

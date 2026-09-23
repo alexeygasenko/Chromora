@@ -1,4 +1,4 @@
-/* Solid light and dark interface themes. The existing glass theme remains the default. */
+/* Shared legible surfaces for Light, Dark and Frutiger Aero. Glass remains the default. */
 
 :root[data-chromora-theme="light"] {
   --chromora-window-bg: #f4f7fb;
@@ -61,7 +61,7 @@
 }
 
 /* Opaque foundation shared by both solid themes. */
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window {
   --bm-text-primary: var(--chromora-text);
   --bm-text-secondary: var(--chromora-text-secondary);
   color: var(--chromora-text);
@@ -77,136 +77,136 @@
   color-scheme: dark;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window::before,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window::after,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color::before {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window::before,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window::after,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-filter-color::before {
   content: none;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-dragbar {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-dragbar {
   background: transparent;
   border: 0;
   box-shadow: none;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(h1, h2, h3),
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-dragbar :is(h1, .bm-dragbar-text) {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window :is(h1, h2, h3),
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-dragbar :is(h1, .bm-dragbar-text) {
   color: var(--chromora-heading);
   text-shadow: none;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window hr {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window hr {
   background: var(--chromora-divider);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button {
   color: var(--chromora-text);
   background: var(--chromora-control-bg);
   border-color: var(--chromora-border);
   box-shadow: var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button:hover,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button:focus-visible {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button:focus-visible {
   background: var(--chromora-control-hover-bg);
   border-color: var(--chromora-border-strong);
   box-shadow: var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button:focus-visible,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window input:focus-visible,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window select:focus-visible,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window textarea:focus-visible {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button:focus-visible,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window input:focus-visible,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window select:focus-visible,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window textarea:focus-visible {
   border-color: var(--chromora-focus);
   box-shadow: 0 0 0 3px var(--chromora-focus-ring);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-primary {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button.bm-button-primary {
   color: var(--chromora-primary-text);
   background: var(--chromora-primary-bg);
   border-color: var(--chromora-border-strong);
   box-shadow: var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-primary:hover,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-primary:focus-visible {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button.bm-button-primary:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button.bm-button-primary:focus-visible {
   background: var(--chromora-primary-hover-bg);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-secondary,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-button-circle {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button.bm-button-secondary,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-button-circle {
   background: var(--chromora-control-bg) !important;
   border-color: var(--chromora-border) !important;
   box-shadow: var(--chromora-panel-shadow) !important;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-secondary:hover,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window button.bm-button-secondary:focus-visible,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-button-circle:hover,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-button-circle:focus-visible {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button.bm-button-secondary:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window button.bm-button-secondary:focus-visible,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-button-circle:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-button-circle:focus-visible {
   background: var(--chromora-control-hover-bg) !important;
   border-color: var(--chromora-border-strong) !important;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-button-circle:focus-visible {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-button-circle:focus-visible {
   border-color: var(--chromora-focus) !important;
   box-shadow: 0 0 0 3px var(--chromora-focus-ring), var(--chromora-panel-shadow) !important;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(input[type="number"], select, textarea) {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window :is(input[type="number"], select, textarea) {
   color: var(--chromora-text);
   background: var(--chromora-panel-bg);
   border-color: var(--chromora-border);
   box-shadow: none;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(textarea, input)::placeholder {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window :is(textarea, input)::placeholder {
   color: var(--chromora-placeholder);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window a:not(:has(*)) {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window a:not(:has(*)) {
   color: var(--chromora-link);
   text-decoration-color: currentColor;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window .bm-container.bm-scrollable {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window .bm-container.bm-scrollable {
   scrollbar-color: var(--chromora-scrollbar) var(--chromora-scrollbar-track);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window .bm-container.bm-scrollable::-webkit-scrollbar-thumb {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window .bm-container.bm-scrollable::-webkit-scrollbar-thumb {
   background: var(--chromora-scrollbar);
   border-color: var(--chromora-scrollbar-track);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window .bm-container.bm-scrollable::-webkit-scrollbar-track {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window .bm-container.bm-scrollable::-webkit-scrollbar-track {
   background: var(--chromora-scrollbar-track);
 }
 
 /* Main window surfaces and labels. */
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-stat-card {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-main .bm-main-stat-card {
   color: var(--chromora-text);
   background: var(--chromora-panel-bg);
   border-color: var(--chromora-border);
   box-shadow: var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-stat-value {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-main .bm-main-stat-value {
   color: var(--chromora-heading);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-main .bm-main-stat-label {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-main .bm-main-stat-label {
   color: var(--chromora-text-secondary);
 }
 
 /* Settings window, including the theme picker itself. */
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-settings :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-settings :is(
   .bm-settings-drag-title,
   .bm-settings-hotkey-button
 ) {
   color: var(--chromora-heading);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-settings :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-settings :is(
   .bm-settings-subheading,
   .bm-settings-hotkey-row,
   .bm-settings-checkbox,
@@ -215,13 +215,13 @@
   color: var(--chromora-text-secondary);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-settings .bm-settings-theme-option[aria-checked="true"] {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-settings .bm-settings-theme-option[aria-checked="true"] {
   background: var(--chromora-control-selected-bg);
   border-color: var(--chromora-border-strong);
   box-shadow: 0 0 0 3px var(--chromora-focus-ring), var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) :is(
   #bm-window-settings .bm-settings-checkbox,
   #bm-window-filter .bm-filter-sort-checkbox
 ) input[type="checkbox"] {
@@ -230,7 +230,7 @@
   box-shadow: none;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) :is(
   #bm-window-settings .bm-settings-checkbox,
   #bm-window-filter .bm-filter-sort-checkbox
 ) input[type="checkbox"]:is(:hover, :focus-visible) {
@@ -239,7 +239,7 @@
   box-shadow: 0 0 0 3px var(--chromora-focus-ring);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) :is(
   #bm-window-settings .bm-settings-checkbox,
   #bm-window-filter .bm-filter-sort-checkbox
 ) input[type="checkbox"]:checked {
@@ -247,20 +247,20 @@
   border-color: var(--chromora-border-strong);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) :is(
   #bm-window-settings .bm-settings-checkbox,
   #bm-window-filter .bm-filter-sort-checkbox
 ) input[type="checkbox"]::before {
   border-color: var(--chromora-checkmark);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-settings .bm-highlight-grid > button[data-status="Disabled"] {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-settings .bm-highlight-grid > button[data-status="Disabled"] {
   background: var(--chromora-panel-bg);
   border-color: var(--chromora-border);
 }
 
 /* Filter window chrome. Palette-colored fullscreen cards remain untouched. */
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter :is(
   .bm-filter-windowed-summary,
   .bm-filter-windowed-summary-value,
   .bm-filter-drag-title,
@@ -271,7 +271,7 @@
   color: var(--chromora-heading);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter :is(
   .bm-filter-windowed-summary-label,
   .bm-filter-stat-label,
   .bm-filter-sort-heading,
@@ -282,33 +282,33 @@
   color: var(--chromora-text-secondary);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter :is(
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter :is(
   .bm-filter-stat-card,
   .bm-filter-sort-panel
 ),
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-filter-color {
   background: var(--chromora-panel-bg);
   border-color: var(--chromora-border);
   box-shadow: var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color:hover,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color:focus-within {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-filter-color:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-filter-color:focus-within {
   border-color: var(--chromora-border-strong);
   box-shadow: var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color[data-highlight="incorrect"] {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-filter-color[data-highlight="incorrect"] {
   border-color: rgba(255, 82, 82, 0.72);
   box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.18), var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color[data-highlight="missing"] {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-filter-color[data-highlight="missing"] {
   border-color: rgba(84, 211, 239, 0.76);
   box-shadow: 0 0 0 3px rgba(84, 211, 239, 0.2), var(--chromora-panel-shadow);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter .bm-filter-sort-dropdown-menu {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter .bm-filter-sort-dropdown-menu {
   background: var(--chromora-panel-bg);
   border-color: var(--chromora-border);
   box-shadow: var(--chromora-shadow);
@@ -316,45 +316,42 @@
   -webkit-backdrop-filter: none;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter .bm-filter-sort-dropdown-option:hover,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter .bm-filter-sort-dropdown-option:focus-visible {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter .bm-filter-sort-dropdown-option:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter .bm-filter-sort-dropdown-option:focus-visible {
   background: var(--chromora-control-hover-bg) !important;
   border-color: var(--chromora-border) !important;
   box-shadow: none !important;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter .bm-filter-sort-dropdown-option.is-selected {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter .bm-filter-sort-dropdown-option.is-selected {
   color: var(--chromora-text);
   background: var(--chromora-control-selected-bg) !important;
   border-color: var(--chromora-border-strong) !important;
   box-shadow: none !important;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-resize-corner {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-resize-corner {
   color: var(--chromora-text-secondary) !important;
-  background: var(--chromora-control-bg);
-  border-color: var(--chromora-border);
-  box-shadow: none;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter:not(.bm-windowed) .bm-filter-color:is([data-id="-1"], [data-id="0"]),
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color:is([data-id="-1"], [data-id="0"]) .bm-filter-container-rgb {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter:not(.bm-windowed) .bm-filter-color:is([data-id="-1"], [data-id="0"]),
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-filter-color:is([data-id="-1"], [data-id="0"]) .bm-filter-container-rgb {
   background-color: var(--chromora-checker-bg) !important;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter.bm-windowed .bm-filter-color:is([data-id="-1"], [data-id="0"]) :is(h2, .bm-filter-color-pxl-cnt) {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter.bm-windowed .bm-filter-color:is([data-id="-1"], [data-id="0"]) :is(h2, .bm-filter-color-pxl-cnt) {
   color: var(--chromora-text) !important;
 }
 
 /* Template wizard cards. */
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-wizard-tlist > .bm-container {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-wizard-tlist > .bm-container {
   color: var(--chromora-text);
   background: var(--chromora-panel-bg);
   border: 1px solid var(--chromora-border);
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-wizard-tlist > .bm-container:hover,
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-wizard-tlist > .bm-container:focus-within {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-wizard-tlist > .bm-container:hover,
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-wizard-tlist > .bm-container:focus-within {
   background: var(--chromora-panel-soft-bg);
 }
 
@@ -449,12 +446,12 @@
 }
 
 /* Keep keyboard focus visible after all solid-theme component overrides. */
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) .bm-window :is(button, input, select, textarea):focus-visible {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) .bm-window :is(button, input, select, textarea):focus-visible {
   border-color: var(--chromora-focus) !important;
   box-shadow: 0 0 0 3px var(--chromora-focus-ring), var(--chromora-panel-shadow) !important;
 }
 
-:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"]) #bm-window-filter :is(.bm-filter-sort-dropdown-trigger, .bm-filter-sort-dropdown-option):focus-visible {
+:root:is([data-chromora-theme="light"], [data-chromora-theme="dark"], [data-chromora-theme="aero"]) #bm-window-filter :is(.bm-filter-sort-dropdown-trigger, .bm-filter-sort-dropdown-option):focus-visible {
   border-color: var(--chromora-focus) !important;
   box-shadow: 0 0 0 3px var(--chromora-focus-ring), var(--chromora-panel-shadow) !important;
 }

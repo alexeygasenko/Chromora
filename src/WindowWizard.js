@@ -38,6 +38,7 @@ export default class WindowWizard extends Overlay {
     this.schemaVersionBleedingEdge = schemaVersionBleedingEdge; // Latest schema version
 
     this.templateManager = templateManager;
+    this.migrationPending = false;
   }
 
   /** Spawns a Template Wizard window.
@@ -49,7 +50,7 @@ export default class WindowWizard extends Overlay {
 
     // If a template wizard window already exists, close it
     if (document.querySelector(`#${this.windowID}`)) {
-      void this.handleWindowClose(document.querySelector(`#${this.windowID}`));
+      if (!this.migrationPending) {void this.handleWindowClose(document.querySelector(`#${this.windowID}`));}
       return;
     }
 
@@ -73,7 +74,9 @@ export default class WindowWizard extends Overlay {
         }).buildElement()
         .addDiv().buildElement() // Contains the minimized h1 element
         .addButton({'class': 'bm-button-circle', 'innerHTML': closeIcon, 'aria-label': 'Close window "Template Wizard"'}, (instance, button) => {
-          button.onclick = () => this.handleWindowClose(document.querySelector(`#${this.windowID}`));
+          button.onclick = () => {
+            if (!this.migrationPending) {void this.handleWindowClose(document.querySelector(`#${this.windowID}`));}
+          };
         }).buildElement()
       .buildElement()
       .addDiv({'class': 'bm-window-content'})
@@ -105,7 +108,7 @@ export default class WindowWizard extends Overlay {
   #displaySchemaHealth() {
 
     // SemVer -> string[]
-    const schemaVersionArray = this.schemaVersion.split(/[-\.\+]/);
+    const schemaVersionArray = String(this.schemaVersion ?? '').split(/[-\.\+]/);
     const schemaVersionBleedingEdgeArray = this.schemaVersionBleedingEdge.split(/[-\.\+]/);
 
     // Calculates the health that is displayed as a banner
@@ -121,7 +124,7 @@ export default class WindowWizard extends Overlay {
         schemaHealthBanner = `Template storage health: <b class="bm-status-warning">Poor!</b><br>You can still use your template, but some features may not work. Update ${escapeHTML(this.name)}'s template storage. (Reason: MINOR version mismatch)`;
         this.schemaHealth = 'Poor';
       }
-    } else if (schemaVersionArray[0] < schemaVersionBleedingEdgeArray[0]) {
+    } else if (/^\d+$/.test(schemaVersionArray[0]) && Number(schemaVersionArray[0]) < Number(schemaVersionBleedingEdgeArray[0])) {
       // ...ELSE IF the MAJOR version is out-of-date
       
       schemaHealthBanner = `Template storage health: <b class="bm-status-error">Bad!</b><br>Some features are broken. Download all templates and update ${escapeHTML(this.name)}'s template storage before continuing. (Reason: MAJOR version mismatch)`;
@@ -148,11 +151,15 @@ export default class WindowWizard extends Overlay {
     if (this.schemaHealth != 'Dead') {
       buttonOptions.addDiv({'class': 'bm-container bm-flex-center bm-center-vertically', 'style': 'gap: 1.5ch;'})
         buttonOptions.addButton({'textContent': 'Download all templates'}, (instance, button) => {
-          button.onclick = () => {
+          button.onclick = async () => {
             button.disabled = true;
-            this.templateManager.downloadAllTemplatesFromStorage().then(() => {
+            try {
+              await this.templateManager.downloadAllTemplatesFromStorage();
+            } catch (error) {
+              this.#showActionError(`Could not download templates: ${error?.message || String(error)}`);
+            } finally {
               button.disabled = false;
-            })
+            }
           };
         }).buildElement();
       // Leave the container open for the next button to be added
@@ -160,18 +167,58 @@ export default class WindowWizard extends Overlay {
     // If the schema health is Poor or Bad, then show update option
     if ((this.schemaHealth == 'Poor') || (this.schemaHealth == 'Bad')) {
       buttonOptions.addButton({'textContent': `Update template storage to ${this.schemaVersionBleedingEdge}`}, (instance, button) => {
-        button.onclick = () => {
-
-          button.disabled = true; // Disables the button
-
-          // Converts the template schema from 1.x.x to 2.x.x
-          this.#convertSchema_1_x_x_To_2_x_x(true);
-        };
+        button.onclick = () => this.#runMigration();
       }).buildElement();
     }
 
     // Add the button options DOM tree to the actual DOM tree
-    buttonOptions.buildElement().buildOverlay(document.querySelector('#bm-wizard-status').parentNode);
+    if (buttonOptions.overlay) {
+      buttonOptions.buildElement().buildOverlay(document.querySelector('#bm-wizard-status').parentNode);
+    }
+  }
+
+  #showActionError(message) {
+    const content = document.querySelector(`#${this.windowID} .bm-window-content`);
+    if (!content) {return;}
+    let status = content.querySelector('[data-wizard-error]');
+    if (!status) {
+      status = document.createElement('p');
+      status.dataset.wizardError = 'true';
+      status.className = 'bm-container bm-status-error';
+      status.setAttribute('role', 'alert');
+      content.appendChild(status);
+    }
+    status.textContent = message;
+  }
+
+  /** Owns the async action so every failure leaves an actionable terminal state. */
+  async #runMigration() {
+    if (this.migrationPending) {return;}
+    this.migrationPending = true;
+    const closeButton = document.querySelector(`#${this.windowID} .bm-dragbar button:last-child`);
+    if (closeButton) {closeButton.disabled = true;}
+    try {
+      await this.#convertSchema_1_x_x_To_2_x_x(true);
+    } catch (error) {
+      const content = document.querySelector(`#${this.windowID} .bm-window-content`);
+      if (!content) {return;}
+      content.replaceChildren();
+      this.#showActionError(`Could not update template storage: ${error?.message || String(error)}`);
+      const actions = new Overlay(this.name, this.version);
+      actions.addDiv({'class': 'bm-container bm-flex-center'});
+      if (this.templateManager.templateStatisticsState != 'error') {
+        actions.addButton({'textContent': 'Retry update'}, (_, button) => {
+          button.onclick = () => this.#runMigration();
+        }).buildElement();
+      }
+      actions.addButton({'textContent': 'Close'}, (_, button) => {
+        button.onclick = () => void this.handleWindowClose(document.getElementById(this.windowID));
+      }).buildElement().buildElement().buildOverlay(content);
+      content.querySelector('button')?.focus();
+    } finally {
+      this.migrationPending = false;
+      if (closeButton) {closeButton.disabled = false;}
+    }
   }
 
   /** Displays loaded templates to the user.
@@ -179,7 +226,7 @@ export default class WindowWizard extends Overlay {
    */
   #displayTemplateList() {
 
-    const templates = this.currentJSON?.templates; // Templates in user storage
+    const templates = this.currentJSON?.templates ?? {}; // Templates in user storage
 
     // If there is at least one template loaded...
     if (Object.keys(templates).length > 0) {
@@ -205,7 +252,7 @@ export default class WindowWizard extends Overlay {
           const sortID = Number(templateKeyArray?.[0]); // Sort ID of the template
           const authorID = encodedToNumber(templateKeyArray?.[1] || '0', this.templateManager.encodingBase); // User ID of the person who exported the template
           const displayName = templateValue.name || `Template ${sortID || ''}`; // Display name of the template
-          const coords = templateValue?.coords?.split(',').map(Number); // "1,2,3,4" -> [1, 2, 3, 4]
+          const coords = templateValue?.coords?.split(',').map(Number) ?? []; // "1,2,3,4" -> [1, 2, 3, 4]
           const totalPixelCount = templateValue.pixels?.total ?? undefined;
           const templateImage = undefined; // TODO: Add template image
 
@@ -242,6 +289,17 @@ export default class WindowWizard extends Overlay {
    */
   async #convertSchema_1_x_x_To_2_x_x(shouldWindowWizardOpen) {
 
+    const lockManager = globalThis.navigator?.locks;
+    if (typeof lockManager?.request !== 'function') {
+      throw new Error('Updating template storage requires browser Web Locks to prevent data loss between tabs.');
+    }
+    const resumeStorageSync = this.templateManager.templateStorageSyncActive === true;
+    if (resumeStorageSync) {this.templateManager.stopTemplateStorageSync?.();}
+    try {
+      // Let a previously queued reconciliation release its staged resources before
+      // retaining the legacy runtime objects that migration rollback may restore.
+      await this.templateManager.templateMutationQueue;
+
     // Creates loading screen
     if (shouldWindowWizardOpen) {
       
@@ -268,7 +326,7 @@ export default class WindowWizard extends Overlay {
     GM_deleteValue('bmCoords');
 
     // Obtains the templates from JSON storage
-    const templates = this.currentJSON?.templates;
+    const templates = this.currentJSON?.templates ?? {};
     const originalTemplateStorage = this.currentTemplateStorage;
     const previousTemplatesJSON = this.templateManager.templatesJSON;
     const previousTemplatesArray = [...this.templateManager.templatesArray];
@@ -295,13 +353,11 @@ export default class WindowWizard extends Overlay {
               chunked: template.tiles
             });
 
-            _template.calculateCoordsFromChunked(); // Updates `Template.coords`
-
-            // Converts the template to a Blob
-            const blob = await this.templateManager.convertTemplateToBlob(_template);
+            // Coordinates and PNG must share the same absolute bounding-box origin.
+            const {blob, coords} = await this.templateManager.convertTemplateToImage(_template);
 
             // Uses the information from the dummy Template class instance to make the actual Template
-            const migratedTemplate = await this.templateManager.createTemplate(blob, _template.displayName, _template.coords, {
+            const migratedTemplate = await this.templateManager.createTemplate(blob, _template.displayName, coords, {
               allowSchemaReplacement: mayReplaceOldSchema,
               expectedSchemaReplacementStorage: mayReplaceOldSchema ? this.currentJSON : undefined,
               enabled: template.enabled !== false
@@ -324,12 +380,7 @@ export default class WindowWizard extends Overlay {
           }
           await GM.setValue('bmTemplates', JSON.stringify(upgradedStore));
         };
-        const lockManager = globalThis.navigator?.locks;
-        if (lockManager?.request) {
-          await lockManager.request('chromora-template-storage', persistEmptyUpgrade);
-        } else {
-          await persistEmptyUpgrade();
-        }
+        await lockManager.request('chromora-template-storage', persistEmptyUpgrade);
         lastMigrationStorage = JSON.stringify(upgradedStore);
         this.templateManager.templatesJSON = upgradedStore;
         this.templateManager.templatesArray = [];
@@ -365,10 +416,15 @@ export default class WindowWizard extends Overlay {
         await GM.setValue('bmTemplates', originalTemplateStorage);
         return true;
       };
-      const lockManager = globalThis.navigator?.locks;
-      const storageRolledBack = lockManager?.request
-        ? await lockManager.request('chromora-template-storage', rollbackIfUnchanged)
-        : await rollbackIfUnchanged();
+      let storageRolledBack;
+      try {
+        storageRolledBack = await lockManager.request('chromora-template-storage', rollbackIfUnchanged);
+      } catch (rollbackError) {
+        this.templateManager.templatesJSON = null;
+        this.templateManager.templatesArray = [];
+        this.templateManager.templateStatisticsState = 'error';
+        throw new Error('Could not restore template storage after migration failed. Reload before continuing.', {cause: rollbackError});
+      }
 
       if (storageRolledBack) {
         this.templateManager.templatesJSON = previousTemplatesJSON;
@@ -389,6 +445,9 @@ export default class WindowWizard extends Overlay {
       console.log(`Restarting Template Wizard...`);
       await this.handleWindowClose(document.querySelector(`#${this.windowID}`));
       new WindowWizard(this.name, this.version, this.schemaVersionBleedingEdge, this.templateManager).buildWindow();
+    }
+    } finally {
+      if (resumeStorageSync) {this.templateManager.startTemplateStorageSync?.();}
     }
   }
 }

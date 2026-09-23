@@ -40,7 +40,7 @@
 
 #bm-window-settings .bm-settings-theme-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.42rem;
   margin: 0.58rem 0.2rem 0.78rem;
 }
@@ -136,6 +136,38 @@
   background: #111827;
   border-color: #34445d;
 }
+
+#bm-window-settings .bm-settings-theme-preview[data-theme-preview="aero"] {
+  color: #126b91;
+  border-color: #46aace;
+  background:
+    radial-gradient(ellipse at 22% 0%, #fff 0%, #ffffffbb 15%, transparent 50%),
+    linear-gradient(170deg, transparent 62%, #b9e887 63%, #68b932 100%),
+    linear-gradient(#9fe7ff 0%, #49b9ec 48%, #1791c5 50%, #bbf4ff 100%);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 3px #12629455;
+}
+
+#bm-window-settings .bm-settings-theme-preview[data-theme-preview="aero"]::before {
+  border-radius: 50%;
+  background: linear-gradient(#ffffffbd, #ffffff22 48%, #0a83be33 50%, #bdefff77);
+}
+
+#bm-window-settings .bm-settings-theme-option[data-theme="aero"] .bm-settings-theme-label {
+  font-family: 'Exo 2', 'Trebuchet MS', sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#bm-window-settings .bm-settings-status {
+  margin: 0;
+  color: var(--bm-text-primary);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+#bm-window-settings .bm-settings-status:empty {display: none;}
+#bm-window-settings .bm-settings-status:not(:empty) {padding: 0.6rem; border-left: 3px solid #e8982d;}
 
 #bm-window-settings .bm-settings-theme-label {
   overflow: hidden;

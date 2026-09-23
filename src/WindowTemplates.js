@@ -100,6 +100,15 @@ export default class WindowTemplates extends Overlay {
     .buildElement().buildOverlay(this.windowParent);
 
     this.windowElement = document.getElementById(this.windowID);
+    const ownedWindow = this.windowElement;
+    this.addWindowCleanup(ownedWindow, () => {
+      if (this.windowElement != ownedWindow) {return;}
+      this.#stopProgressRefresh();
+      this.fileSelectionToken++;
+      this.lifecycleGeneration++;
+      this.renderGeneration++;
+      this.windowElement = null;
+    });
     this.handleDrag(`#${this.windowID}`, `#${this.windowID} .bm-dragbar`);
     this.#renderTemplateList();
     if (this.pendingTemplateActions.size || this.confirmingTemplate) {
@@ -127,7 +136,7 @@ export default class WindowTemplates extends Overlay {
     this.fileSelectionToken++;
     this.lifecycleGeneration++;
     this.renderGeneration++;
-    this.windowElement?.remove();
+    super.dispose();
     this.windowElement = null;
   }
 

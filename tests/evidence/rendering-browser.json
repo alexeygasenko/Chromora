@@ -1,0 +1,33 @@
+{
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0",
+  "checks": [
+    "four sparse source positions survive PNG creation",
+    "sparse legacy reconstruction/recreation preserves every world pixel",
+    "overlapping colored output is pixel-identical to independent reference",
+    "native-scale readbacks are exactly 4 B and 4 MB"
+  ],
+  "benchmarks": [
+    {
+      "side": 1,
+      "readbackBytes": 4,
+      "samplesMs": [
+        48.3,
+        42.1,
+        27.7,
+        32
+      ],
+      "pngBytes": 182600
+    },
+    {
+      "side": 1000,
+      "readbackBytes": 4000000,
+      "samplesMs": [
+        107.1,
+        53.6,
+        58.4,
+        50.1
+      ],
+      "pngBytes": 182600
+    }
+  ]
+}

@@ -53,6 +53,7 @@ export default class WindowSettings extends Overlay {
       .buildElement()
       .addDiv({'class': 'bm-window-content'})
         .addHr({'class': 'bm-window-divider-top'}).buildElement()
+        .addP({'id': 'bm-settings-status', 'role': 'status', 'aria-live': 'polite', 'class': 'bm-settings-status'}).buildElement()
         .addDiv({'class': 'bm-container bm-scrollable'}, (instance, div) => {
           // Each category in the settings window
           this.buildAppearance();
@@ -73,7 +74,8 @@ export default class WindowSettings extends Overlay {
    */
   #getWindowState() {
     if (!this.userSettings) {return null;}
-    this.userSettings[this.windowStateKey] ??= {};
+    const state = this.userSettings[this.windowStateKey];
+    if (!state || typeof state !== 'object' || Array.isArray(state)) {this.userSettings[this.windowStateKey] = {};}
     return this.userSettings[this.windowStateKey];
   }
 
@@ -127,7 +129,7 @@ export default class WindowSettings extends Overlay {
       if ((clampedPosition.x != x) || (clampedPosition.y != y)) {
         windowState.x = clampedPosition.x;
         windowState.y = clampedPosition.y;
-        void this.saveUserStorageNow?.();
+        this.#persistWindowPosition();
       }
     });
   }
@@ -141,6 +143,7 @@ export default class WindowSettings extends Overlay {
     if (!windowState || !windowElement?.isConnected) {return;}
 
     const rect = windowElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) {return;}
     const clampedPosition = this.#clampWindowPosition(windowElement, rect.left, rect.top);
     windowElement.style.left = '0px';
     windowElement.style.top = '0px';
@@ -150,7 +153,15 @@ export default class WindowSettings extends Overlay {
     windowState.x = clampedPosition.x;
     windowState.y = clampedPosition.y;
 
-    void this.saveUserStorageNow?.();
+    this.#persistWindowPosition();
+  }
+
+  #persistWindowPosition() {
+    void Promise.resolve(this.saveUserStorageNow?.()).catch(error => {
+      console.error('Chromora: Could not save window position.', error);
+      const status = document.getElementById('bm-settings-status');
+      if (status) {status.textContent = error instanceof Error ? error.message : String(error);}
+    });
   }
 
   /** Enables position persistence for the settings window.

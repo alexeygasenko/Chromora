@@ -1,225 +1,102 @@
-name: Bump, Build, Release
+name: Validate and publish userscript
 
 on:
+  pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Publish runs never overlap; superseded source SHAs are checked before pushing.
+concurrency:
+  group: chromora-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run lint-check
+      - run: npm test
+      - run: npm audit --audit-level=moderate
+      - run: npm run build
+      - run: npm run test:bundle
+      - run: npm run docs -- generated-api-docs
+      - name: Record artifact provenance
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > build-source-sha.txt
+          sha256sum dist/Chromora.user.js dist/Chromora.user.css.map.json src/BlueMarble.meta.js src/main.css > build-checksums.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: userscript-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            dist/Chromora.user.js
+            dist/Chromora.user.css.map.json
+            src/BlueMarble.meta.js
+            src/main.css
+            generated-api-docs/
+            build-source-sha.txt
+            build-checksums.txt
 
-  # Updates the Auto branch to match Main
-  update-auto:
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-
-    runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Update Auto To Main
-        run: |
-          git fetch origin
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git checkout auto || git checkout -b auto
-          git reset --hard origin/main
-          git push --force origin auto
-
-  # Builds the code
-  # This is bundling, obfuscating, version bumping, etc.
-  build:
-    permissions:
-      contents: write
-    
-    runs-on: ubuntu-latest
-
-    needs: [update-auto] # Needs the update-auto job to finish first
-
-    outputs:
-      TITLE: ${{ steps.get-commit-message.outputs.TITLE }}
-      BODY: ${{ steps.get-commit-message.outputs.BODY }}
-      CURRENT_VERSION: ${{ steps.get_version.outputs.current_version }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Install Rust for tokei
-        uses: actions-rs/toolchain@v1
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
         with:
-          toolchain: stable
-          profile: minimal
-
-      - name: Install tokei
-        run: cargo install tokei --locked
-
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
-      - name: Update userscript version
-        run: node build/update-version.js
-
-      - name: Build userscript
-        run: npm run build
-
-      - name: Get current version
-        id: get_version
-        run: |
-          current_version=$(jq -r '.version' package.json)
-          echo "Current version: $current_version"
-          echo "current_version=$current_version" >> $GITHUB_OUTPUT
-
-      - name: Get latest release tag (no "v" prefix)
-        id: get_latest_tag
-        run: |
-          latest_tag=$(gh release list --limit 1 --exclude-drafts --exclude-pre-releases=false | head -n 1 | awk '{print $1}')
-          latest_tag_no_v=${latest_tag#v}
-          echo "latest_tag_no_v=$latest_tag_no_v" >> $GITHUB_OUTPUT
+          name: userscript-${{ github.sha }}
+      - name: Publish the validated source snapshot
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update static version numbers
+          SOURCE_SHA: ${{ github.sha }}
         run: |
-          current_version="${{ steps.get_version.outputs.current_version }}"
-          latest_tag="${{ steps.get_latest_tag.outputs.latest_tag_no_v }}"
-          if [ -f "docs/README.md" ]; then
-            echo "README.md exists. Modifying..."
-            sed -i \
-              -e 's|\(Latest_Version-\)[^-\ ]*\(-lightblue\)|\1'"$current_version"'\2|' \
-              docs/README.md
-          else
-            echo "README.md was not found. Skipping..."
+          set -euo pipefail
+          test "$(cat build-source-sha.txt)" = "$SOURCE_SHA"
+          sha256sum --check build-checksums.txt
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$SOURCE_SHA" ]; then
+            echo 'A newer source commit exists; skip publishing this snapshot.'
+            exit 0
           fi
-      
-      - name: Update compression badge
-        run: |
-          dist_size=$(wc -c < dist/Chromora.user.js)
-
-          src_size=$(find src dist/assets -type f -exec cat {} + | wc -c)
-          percentage=$(awk "BEGIN {printf \"%.2f\", 100 - ($dist_size * 100) / $src_size}")
-          echo "Compression: $percentage"
-          badge_url="https://img.shields.io/badge/Compression-${percentage}%25-blue"
-          sed -i -E 's#https://img.shields.io/badge/Compression-[^"]*#'"$badge_url"'#' docs/README.md
-      
-      - name: Update tokei Shields
-        run: |
-          # Run tokei
-          tokei src docs build --output json > tokei.json
-          code_total=$(jq '[.[] | .code] | add' tokei.json)
-          comm_total=$(jq '[.[] | .comments] | add' tokei.json)
-          badge_code="https://img.shields.io/badge/Lines_Of_Code-${code_total}-blue?style=flat"
-          badge_comm="https://img.shields.io/badge/Lines_Of_Comments-${comm_total}-blue?style=flat"
-          echo "Code Badge: $badge_code"
-          echo "Comm Badge: $badge_comm"
-          sed -i -E 's#https://img.shields.io/badge/Lines_Of_Code-[^"]*#'"$badge_code"'#' docs/README.md
-          sed -i -E 's#https://img.shields.io/badge/Lines_Of_Comments-[^"]*#'"$badge_comm"'#' docs/README.md
-
-      - name: Get the previous commit message
-        id: get-commit-message
-        run: |
-          COMMIT_MSG="$(git log -1 --pretty=%B)"
-          TITLE="$(echo "$COMMIT_MSG" | head -n1)"
-          BODY="$(echo "$COMMIT_MSG" | tail -n +2)"
-
-          {
-            echo "TITLE<<EOF"
-            echo "$TITLE"
-            echo "EOF"
-            echo "BODY<<EOF"
-            echo "$BODY"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-
-        # This should happen on 'auto' branch
-      - name: Commit and push built script
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git checkout auto || git checkout -b auto
-          git add -A dist
-          git add src/BlueMarble.meta.js
-          git add package.json
-          git add docs/README.md
-          git commit -m "Bumped version; ${{ steps.get-commit-message.outputs.TITLE }}" -m "${{ steps.get-commit-message.outputs.BODY }}" || echo "No changes to commit"
-          git push --set-upstream origin auto
-
-  # Merges the generated userscript back to main
-  merge-auto:
-
-    permissions:
-      contents: write
-    
-    runs-on: ubuntu-latest
-
-    needs: [update-auto, build] # Needs the update-auto and build jobs to finish first
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: auto # Checks out the auto branch
-          fetch-depth: 0
-
-      - name: Merge Auto -> Main
-        run: |
-          git fetch origin
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout origin/main -B main
-          git merge --squash origin/auto
-          git commit -m "v${{ needs.build.outputs.CURRENT_VERSION }}; ${{ needs.build.outputs.TITLE }}" -m "${{ needs.build.outputs.BODY }}" || echo "No changes to commit"
-          git push origin main
-
-  update-wiki:
-    
-    permissions:
-      contents: write
-
-    runs-on: ubuntu-latest
-
-    needs: [update-auto, build, merge-auto] # Needs the generated userscript to be merged first
-
-    steps:
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-        
-      - name: Force update wiki branch
-        run: |
-          git fetch origin
-          git branch -f wiki origin/main
-          git push origin wiki --force
-
-      - name: Checkout wiki branch
-        run: git checkout wiki
-
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm install minami taffydb
-        
-      - name: Generate JSDoc from jsdoc.json
-        run: |
-          npx jsdoc -c jsdoc.json
-      
-      - name: Commit and push to wiki branch
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add dist/Chromora.user.js dist/Chromora.user.css.map.json src/BlueMarble.meta.js src/main.css
+          if ! git diff --cached --quiet; then
+            # Commit text is data in a file. Never interpolate it into shell code.
+            printf 'Build userscript from %s\n\n' "$SOURCE_SHA" > "$RUNNER_TEMP/chromora-commit.txt"
+            git log -1 --format=%B "$SOURCE_SHA" >> "$RUNNER_TEMP/chromora-commit.txt"
+            git commit --file "$RUNNER_TEMP/chromora-commit.txt"
+            # Publish both refs together after preparing the documentation snapshot.
+          fi
+          published_sha=$(git rev-parse HEAD)
+          # Keep API docs on the dedicated branch without resetting shared staging branches.
+          wiki_sha=$(git ls-remote origin refs/heads/wiki | cut -f1)
+          cp -R generated-api-docs/. docs/
           git add docs
-          git commit -m "Update wiki via JSDoc" || echo "No changes to commit"
-          git push origin wiki
+          if ! git diff --cached --quiet; then
+            git commit -m "Generate API docs for $SOURCE_SHA"
+          fi
+          # Leases protect changes arriving after the freshness check. Atomic push
+          # ensures main and wiki either both reference this build or neither moves.
+          git push --atomic \
+            --force-with-lease="refs/heads/main:$SOURCE_SHA" \
+            --force-with-lease="refs/heads/wiki:$wiki_sha" \
+            origin "$published_sha:refs/heads/main" HEAD:refs/heads/wiki

@@ -1,0 +1,358 @@
+{
+  "source": "Screenshots of the connected user browser on https://wplace.live/",
+  "theme": "glass",
+  "method": "CUA tab.screenshot; native crops; no generated UI",
+  "captures": [
+    {
+      "file": "chromora-settings-glass.png",
+      "feature": "Glass appearance and settings",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:39:02.358Z",
+      "clip": {
+        "x": 846,
+        "y": 201,
+        "width": 976,
+        "height": 952
+      },
+      "dimensions": {
+        "width": 976,
+        "height": 952
+      },
+      "mediaType": "image/png",
+      "sha256": "b7695fccdd9f824adaa644c5370a5429acbc02f5f8116600b39f2620181dcfa3",
+      "decodedPixelSha256": "e857fb36b429868f367da1f1c3e892bee6a726bc295cb580c7fad7e628debae7"
+    },
+    {
+      "file": "chromora-hotkeys.png",
+      "feature": "Real selected-color and template-color hotkey controls",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:39:02.432Z",
+      "clip": {
+        "x": 866,
+        "y": 518,
+        "width": 936,
+        "height": 128
+      },
+      "dimensions": {
+        "width": 936,
+        "height": 128
+      },
+      "mediaType": "image/png",
+      "sha256": "c8ba2d89c4824a22b84be67784b6a93c8d2b2cafee4f3e98486c37c96c1df242",
+      "decodedPixelSha256": "eb698dc59f56868e9846361defa93f6b3423aa406f5e0ce54966f89deb49997c"
+    },
+    {
+      "file": "chromora-settings-highlights.png",
+      "feature": "Highlight presets and custom 3×3 pattern",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:39:02.498Z",
+      "clip": {
+        "x": 866,
+        "y": 650,
+        "width": 936,
+        "height": 400
+      },
+      "dimensions": {
+        "width": 936,
+        "height": 400
+      },
+      "mediaType": "image/png",
+      "sha256": "1d68e54df23e23ae6dd58a4bff0860cb8db0ab42f171b5dc6c6a0e3ce251c835",
+      "decodedPixelSha256": "a8bc48c295ad0754c5e1c1693667515eda310b00ad57c55c254496fc72415d7f"
+    },
+    {
+      "file": "chromora-main.png",
+      "feature": "Expanded Chromora panel",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:39:24.751Z",
+      "clip": {
+        "x": 2057,
+        "y": 0,
+        "width": 448,
+        "height": 204
+      },
+      "dimensions": {
+        "width": 448,
+        "height": 204
+      },
+      "mediaType": "image/png",
+      "sha256": "dbeda01da733a2ce722e7637825af6ea49a477434c53bb13b33d76f14cf87c1d",
+      "decodedPixelSha256": "75a1e74243616aa9079cc44a937efc70c3faac3803cb4a646f6db7d994415137"
+    },
+    {
+      "file": "chromora-filter-horizontal.png",
+      "feature": "Horizontal color filter",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:39:24.825Z",
+      "clip": {
+        "x": 118,
+        "y": 0,
+        "width": 1924,
+        "height": 208
+      },
+      "dimensions": {
+        "width": 1924,
+        "height": 208
+      },
+      "mediaType": "image/png",
+      "sha256": "dcb524cf2e440faad332ab238e2a329b4af75d60c72834f7a3afa0f767f48a45",
+      "decodedPixelSha256": "f824183f4a4dbe4b000dcba0e0fcace0b3a66ab5cac7806d1cb444e3c5bfdf49"
+    },
+    {
+      "file": "chromora-main-minimized.png",
+      "feature": "Collapsed Chromora panel",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:39:40.631Z",
+      "clip": {
+        "x": 2057,
+        "y": 0,
+        "width": 448,
+        "height": 82
+      },
+      "dimensions": {
+        "width": 448,
+        "height": 82
+      },
+      "mediaType": "image/png",
+      "sha256": "99d826fb3277aa54cc478aeea2b13cc64fb66731c0a21aa3db4dd0b0836a4cc9",
+      "decodedPixelSha256": "0f43e259c83607ff5ea2e350fc1a8afcd584236b301ddb79d7f4167d0212c3c7"
+    },
+    {
+      "file": "chromora-filter-vertical.png",
+      "feature": "Vertical color filter",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:39:53.740Z",
+      "clip": {
+        "x": 40,
+        "y": 55,
+        "width": 400,
+        "height": 552
+      },
+      "dimensions": {
+        "width": 400,
+        "height": 552
+      },
+      "mediaType": "image/png",
+      "sha256": "d831bf0c01cac1dfeea384d9f8050f69197b2f570a0a66fd2ba6ba050fbacd39",
+      "decodedPixelSha256": "7afe770d9dc67718f41b96e4a538a698c416c119e1bf260f432206dbc9bb8297"
+    },
+    {
+      "file": "chromora-filter-fullscreen.png",
+      "feature": "Expanded color filter with per-color progress and remaining pixels",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:40:10.794Z",
+      "clip": {
+        "x": 40,
+        "y": 55,
+        "width": 840,
+        "height": 982
+      },
+      "dimensions": {
+        "width": 840,
+        "height": 982
+      },
+      "mediaType": "image/png",
+      "sha256": "868a134c5b4a2c6c266340b1bfd90d7151d4b6d22b32c11ae66c098c11a45b42",
+      "decodedPixelSha256": "235efc227e77739ab964895ed5b1c47efc4574af829ada03d47f2aeb3efa11b1"
+    },
+    {
+      "file": "chromora-filter-sorting.png",
+      "feature": "Real filter totals and sorting controls",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:40:10.882Z",
+      "clip": {
+        "x": 60,
+        "y": 175,
+        "width": 800,
+        "height": 210
+      },
+      "dimensions": {
+        "width": 800,
+        "height": 210
+      },
+      "mediaType": "image/png",
+      "sha256": "20fd17da63312135d6cb51732975197074d2c172a8f867b38a91446f782e8502",
+      "decodedPixelSha256": "de0ecaf128d7877f16ee2c6c32e587a7f8a7f66f0421edfe0d7660740c0c2ca6"
+    },
+    {
+      "file": "chromora-templates.png",
+      "feature": "Template library with actual imported artwork",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:40:34.527Z",
+      "clip": {
+        "x": 1004,
+        "y": 451,
+        "width": 552,
+        "height": 319
+      },
+      "dimensions": {
+        "width": 552,
+        "height": 319
+      },
+      "mediaType": "image/png",
+      "sha256": "11102658b986c82e9a677d5caeae05c3f05a1a8bc0713aa99bdce48a541dc477",
+      "decodedPixelSha256": "363738663ef859c57f03691e2d7a153f9cb5697045be0749bb5f99152a942677"
+    },
+    {
+      "file": "chromora-template-progress.png",
+      "feature": "Actual template completion progress",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:40:34.575Z",
+      "clip": {
+        "x": 1030,
+        "y": 582,
+        "width": 498,
+        "height": 161
+      },
+      "dimensions": {
+        "width": 498,
+        "height": 161
+      },
+      "mediaType": "image/png",
+      "sha256": "923fbd896d4361725dc2c51657c045b96d24824041d1c1d8705e294037d78824",
+      "decodedPixelSha256": "c830accad95ed90653587d39fea42cb006d61d56c53a1ca65db84e46dc10a84b"
+    },
+    {
+      "file": "chromora-template-delete.png",
+      "feature": "Template deletion confirmation before cancelling",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:40:42.153Z",
+      "clip": {
+        "x": 1004,
+        "y": 451,
+        "width": 552,
+        "height": 319
+      },
+      "dimensions": {
+        "width": 552,
+        "height": 319
+      },
+      "mediaType": "image/png",
+      "sha256": "f7f4e32f3cad95550815d9392ed9642b259fa6491972ffb346748825551face6",
+      "decodedPixelSha256": "9f97b810cb1a11a0154c9de1434b35f9c8560166a3f6f61058133aea0b243666"
+    },
+    {
+      "file": "chromora-workspace.png",
+      "feature": "Real Wplace workspace with Chromora and active template",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:42:02.490Z",
+      "clip": null,
+      "dimensions": {
+        "width": 2560,
+        "height": 1221
+      },
+      "mediaType": "image/png",
+      "sha256": "473433040f1ecac962d9842438d0bb065e8aa81eae7afc9dbf255ef60e07ec9c",
+      "decodedPixelSha256": "1cd88196b5f940a3e4a28b3abc3d34961321f2801e047461ca28ec44f555cff0"
+    },
+    {
+      "file": "chromora-highlight-incorrect.png",
+      "feature": "Visible concentric marker around one temporarily incorrect Light Indigo pixel",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:57:43.564Z",
+      "clip": {
+        "x": 760,
+        "y": 0,
+        "width": 1280,
+        "height": 950
+      },
+      "dimensions": {
+        "width": 1280,
+        "height": 950
+      },
+      "mediaType": "image/png",
+      "sha256": "88f93300f6be9f4b4f72d416138f555cc5ac91a7e3e320cee3fff544b6192741",
+      "decodedPixelSha256": "b4586bfb9415aadebe7f1a35dad6317e0ae92bfeee7f8c8943f5886ab3e4c950"
+    },
+    {
+      "file": "chromora-highlight-missing.png",
+      "feature": "Visible cyan contours enclosing unpainted Light Slate Blue areas on the real template",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T10:00:45.668Z",
+      "clip": {
+        "x": 900,
+        "y": 0,
+        "width": 1280,
+        "height": 950
+      },
+      "dimensions": {
+        "width": 1280,
+        "height": 950
+      },
+      "mediaType": "image/png",
+      "sha256": "531e0d8a3eb40313a5e2bdab061e5e69bb77bcb9217d161e769052da6cf9c4cd",
+      "decodedPixelSha256": "07cf45ab28c8cd2707444aae5d0c01b5a728e97e41548b45f59b7feac19d0a33"
+    },
+    {
+      "file": "chromora-paint-selected.png",
+      "feature": "Close-up of the side controls, with the current-color area selection button active",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T10:05:57.495Z",
+      "clip": {
+        "x": 2440,
+        "y": 517,
+        "width": 120,
+        "height": 190
+      },
+      "dimensions": {
+        "width": 120,
+        "height": 190
+      },
+      "mediaType": "image/png",
+      "sha256": "78197e7b0f004407b4386644e2f89727e0cb401bb44c77ebe8bd281eea2f05c9",
+      "decodedPixelSha256": "677b278d15b382893bd4c6b0fa68b3c6e6b6c72a3bb2b3cad3f6ea299adcf4ce"
+    },
+    {
+      "file": "chromora-paint-template.png",
+      "feature": "Close-up of the side controls, with the all-template-colors area selection button active",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T10:06:27.101Z",
+      "clip": {
+        "x": 2440,
+        "y": 517,
+        "width": 120,
+        "height": 190
+      },
+      "dimensions": {
+        "width": 120,
+        "height": 190
+      },
+      "mediaType": "image/png",
+      "sha256": "e8f01415483f5424177d3067e5002e2e6a18222d238dc561d43e938e8b11e3ca",
+      "decodedPixelSha256": "af497ca458a8800e6fd32cfb278e6e13086bf8930aeb2f0d63395b5001e5191f"
+    },
+    {
+      "file": "chromora-overlay-toggle.png",
+      "feature": "Overlay temporarily hidden with Enable control visible",
+      "source": "https://wplace.live/",
+      "theme": "glass",
+      "capturedAt": "2026-09-23T09:45:57.728Z",
+      "clip": null,
+      "dimensions": {
+        "width": 2560,
+        "height": 1221
+      },
+      "mediaType": "image/png",
+      "sha256": "b2c60c9549437a90f741320d443ada5eea39da00695c01dd7aa7aa7479f32353",
+      "decodedPixelSha256": "0330378b484c0e764b61ed458b26065eb19d5f4b4091b570acc7c8238e9bf71e"
+    }
+  ],
+  "encoding": "CUA returned JPEG data. Files were losslessly re-encoded as PNG with identical decoded RGB pixels and original dimensions; no visual edits."
+}

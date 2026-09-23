@@ -115,52 +115,33 @@ export default function mangleSelectors({
   const fileInputJS = fs.readFileSync(pathJS, 'utf8'); // The JS file
   const fileInputCSS = fs.readFileSync(pathCSS, 'utf8'); // The CSS file
 
-  /** How many keys-value pairs there are in the in the imported map, along with an "index shift" if a map was imported.
-   * @example
-   * // Assume the imported map has 10 keys.
-   * // The first key of the new map has an index of 0.
-   * // If we add 10 + 0, we get an index collision.
-   * // Therefore, we add 10 + 2 + 0.
-   * // However, if no map is imported, the map will start it's index at 2. We don't want that.
-   * // Therefore, if we abuse the fact that `true` is `1`, and `false` is `0`, we can add `2 * !!importMap.length` which will only shift the index by 2 if a map was imported.
-   * @example
-   * const importMap = {};
-   * console.log(importMapLength); // 0
-   * @example
-   * const importMap = {'foo': 'bar'};
-   * console.log(importMapLength); // 3
-   * @example
-   * const importMap = {'foo': 'bar', 'bar': 'foo'};
-   * console.log(importMapLength); // 4
-   */
-  const importMapLength = Object.keys(importMap).length + (2 * !!Object.keys(importMap).length); 
-  
-  // One of each of all matching selectors
-  // File -> RegEx -> Array (Duplicates) -> Set (Unique) -> Array (Unique)
-  let matchedSelectors = [...new Set([...fileInputJS.matchAll(new RegExp(`\\b${escapeRegex(inputPrefix)}[a-zA-Z0-9_-]+`, 'g'))].map(match => match[0]))];
-
-  // Sort keys in selector from longest to shortest
-  // This will avoid partial matches, which could cause bugs
-  // E.g. `foo-foobar` will match before `foo-foo` matches
-  matchedSelectors.sort((a, b) => b.length - a.length);
-
-  // Converts the string[] to an Object (key-value)
-  matchedSelectors = { 
-    ...importMap, 
-    ...Object.fromEntries(
-      matchedSelectors
-        .filter(key => !(key in importMap))
-        .map(key => [key, outputPrefix + numberToEncoded(importMapLength + matchedSelectors.indexOf(key), encoding)]
-      )
-    )
-  };
-  
-  // Compile the RegEx from the selector map
-  const regex = new RegExp(Object.keys(matchedSelectors).map(selector => escapeRegex(selector)).join('|'), 'g');
-
-  // Replaces the CSS selectors in both files with encoded versions
-  fs.writeFileSync(pathJS, fileInputJS.replace(regex, match => matchedSelectors[match]), 'utf8');
-  fs.writeFileSync(pathCSS, fileInputCSS.replace(regex, match => matchedSelectors[match]), 'utf8');
+  // Discover names from actual class/id selectors, never arbitrary JS strings
+  // such as sessionStorage keys, URL parameters or page bridge attributes.
+  const selectorNames = [...new Set([...fileInputCSS.matchAll(
+    new RegExp(`[.#](${escapeRegex(inputPrefix)}[a-zA-Z0-9_-]+)`, 'g')
+  )].map(match => match[1]))].sort((a, b) => b.length - a.length || a.localeCompare(b));
+  const matchedSelectors = {};
+  const usedNames = new Set();
+  for (const key of selectorNames) {
+    const existing = importMap[key];
+    if (typeof existing == 'string' && existing.startsWith(outputPrefix) && !usedNames.has(existing)) {
+      matchedSelectors[key] = existing;
+      usedNames.add(existing);
+    }
+  }
+  let index = 0;
+  for (const key of selectorNames) {
+    if (Object.hasOwn(matchedSelectors, key)) {continue;}
+    let replacement;
+    do {replacement = outputPrefix + numberToEncoded(index++, encoding);} while (usedNames.has(replacement) || selectorNames.includes(replacement));
+    matchedSelectors[key] = replacement;
+    usedNames.add(replacement);
+  }
+  if (selectorNames.length) {
+    const regex = new RegExp(`(?<![a-zA-Z0-9_-])(?:${selectorNames.map(escapeRegex).join('|')})(?![a-zA-Z0-9_-])`, 'g');
+    fs.writeFileSync(pathJS, fileInputJS.replace(regex, match => matchedSelectors[match]), 'utf8');
+    fs.writeFileSync(pathCSS, fileInputCSS.replace(regex, match => matchedSelectors[match]), 'utf8');
+  }
 
   if (!!returnMap) {return matchedSelectors;} // Return the map Object optionally
 }

@@ -5,7 +5,7 @@
  */
 
 import TemplateManager from "./templateManager.js";
-import { consoleError, localizeNumber, numberToEncoded, serverTPtoDisplayTP } from "./utils.js";
+import { consoleError, localizeNumber, serverTPtoDisplayTP } from "./utils.js";
 
 export default class ApiManager {
 
@@ -18,9 +18,11 @@ export default class ApiManager {
     this.disableAll = false; // Should the entire userscript be disabled?
     this.chargeRefillTimerID = ''; // Contains the Charge refill timer element ID attribute so we can update the timer.
     this.coordsTilePixel = []; // Contains the last detected tile/pixel coordinate pair requested
+    this.lastCoordinateRequestSequence = 0;
     this.templateCoordsTilePixel = []; // Contains the last "enabled" template coords
     this.coordinateChangeListeners = new Set(); // Subscribers waiting for a valid map coordinate selection
     this.spontaneousMessageHandler = null;
+    this.pendingTiles = new Map();
   }
 
   /** Subscribes to valid tile/pixel coordinate changes.
@@ -63,19 +65,27 @@ export default class ApiManager {
     // Triggers whenever a message is sent
     const messageHandler = async (event) => {
 
-      const data = event.data; // The data of the message
-      const dataJSON = data['jsonData']; // The JSON response, if any
-
-      // Kills itself if the message was not intended for Blue Marble
-      if (!(data && data['source'] === 'blue-marble')) {return;}
-
-      // Kills itself if the message has no endpoint (intended for Blue Marble, but not this function)
-      if (!data['endpoint']) {return;}
-
-      // Trims endpoint to the second to last non-number, non-null directoy.
-      // E.g. "wplace.live/api/pixel/0/0?payload" -> "pixel"
-      // E.g. "wplace.live/api/files/s0/tiles/0/0/0.png" -> "tiles"
-      const endpointText = data['endpoint']?.split('?')[0].split('/').filter(s => s && isNaN(Number(s))).filter(s => s && !s.includes('.')).pop();
+      const data = event.data;
+      // Tampermonkey wraps the lexical window; message.source is the document's
+      // actual Window. Keep the same-page check without rejecting that wrapper.
+      if (event.source !== (document.defaultView || window) || event.origin !== window.location.origin || !data || typeof data != 'object' || Array.isArray(data) || data['source'] !== 'blue-marble') {return;}
+      if (data['action'] === 'cancel-tile' && typeof data['blobID'] == 'string') {
+        this.pendingTiles.get(data['blobID'])?.abort();
+        this.pendingTiles.delete(data['blobID']);
+        return;
+      }
+      if (data['action'] || typeof data['endpoint'] != 'string') {return;}
+      let endpointURL;
+      try {endpointURL = new URL(data['endpoint'], window.location.href);} catch {return;}
+      if (endpointURL.protocol != 'https:' || !['wplace.live', 'backend.wplace.live'].includes(endpointURL.hostname) || endpointURL.port || endpointURL.username || endpointURL.password) {return;}
+      const tileMatch = endpointURL.pathname.match(/^\/(?:api\/)?(?:files\/s\d+\/)?tiles?\/(?:\d+\/)?(\d+)\/(\d+)\.png$/);
+      const apiMatch = endpointURL.pathname.match(endpointURL.hostname === 'backend.wplace.live'
+        ? /^\/(?:api\/)?(?:(me|robots)|(?:s\d+\/)?(pixel)\/\d+\/\d+)$/
+        : /^\/api\/(?:(me|robots)|(?:s\d+\/)?(pixel)\/\d+\/\d+)$/);
+      const endpointText = tileMatch ? 'tile' : (apiMatch?.[1] ?? apiMatch?.[2]);
+      if (!endpointText) {return;}
+      const dataJSON = data['jsonData'];
+      if (!tileMatch && (!dataJSON || typeof dataJSON != 'object' || Array.isArray(dataJSON))) {return;}
 
       console.log(`%cBlue Marble%c: Recieved message about "%s"`, 'color: cornflowerblue;', '', endpointText);
 
@@ -88,17 +98,17 @@ export default class ApiManager {
           break;
 
         case 'pixel': // Request to retrieve pixel data
-          const coordsTile = data['endpoint'].split('?')[0].split('/')
-            .filter(s => s && !isNaN(Number(s)))
-            .slice(-2)
-            .map(Number); // Retrieves the tile coords as [x, y]
-          const payloadExtractor = new URLSearchParams(data['endpoint'].split('?')[1] ?? ''); // Declares a new payload deconstructor and passes in the fetch request payload
+          // Keep the most recent selection when earlier HTTP responses arrive late.
+          if (data.requestSequence != null && (!Number.isSafeInteger(data.requestSequence)
+            || data.requestSequence <= this.lastCoordinateRequestSequence)) {return;}
+          const coordsTile = endpointURL.pathname.split('/').slice(-2).map(Number);
+          const payloadExtractor = endpointURL.searchParams;
           const coordsPixel = [payloadExtractor.get('x'), payloadExtractor.get('y')]
             .map(value => (value === null || value.trim() === '') ? NaN : Number(value)); // Retrieves the deconstructed pixel coords from the payload
           const coordsCombined = [...coordsTile, ...coordsPixel];
           const tileSize = Number(this.templateManager?.tileSize) || 1000;
           const coordsAreValid = (coordsCombined.length == 4)
-            && coordsCombined.every(coord => Number.isInteger(coord) && (coord >= 0))
+            && coordsCombined.every(coord => Number.isSafeInteger(coord) && (coord >= 0))
             && (coordsPixel[0] < tileSize)
             && (coordsPixel[1] < tileSize);
           
@@ -109,6 +119,7 @@ export default class ApiManager {
           }
           
           this.coordsTilePixel = coordsCombined; // Combines the two arrays such that [x, y, x, y]
+          if (data.requestSequence != null) {this.lastCoordinateRequestSequence = data.requestSequence;}
           this.#emitCoordinatesChanged(this.coordsTilePixel);
           
           const displayTP = serverTPtoDisplayTP(coordsTile, coordsPixel); // Retrieves the coordinates that Wplace displays for this region
@@ -169,29 +180,41 @@ export default class ApiManager {
           }
           break;
         
-        case 'tile':
-        case 'tiles':
-
-          let tileCoordsTile = data['endpoint'].split('/');
-          tileCoordsTile = [parseInt(tileCoordsTile[tileCoordsTile.length - 2]), parseInt(tileCoordsTile[tileCoordsTile.length - 1].replace('.png', ''))];
-          
+        case 'tile': {
+          const tileCoordsTile = tileMatch.slice(1).map(Number);
           const blobUUID = data['blobID'];
           const blobData = data['blobData'];
-          
-          const timer = Date.now();
-          const templateBlob = await this.templateManager.drawTemplateOnTile(blobData, tileCoordsTile);
-          console.log(`Finished loading the tile in ${(Date.now() - timer) / 1000} seconds!`);
-
-          window.postMessage({
-            source: 'blue-marble',
-            blobID: blobUUID,
-            blobData: templateBlob,
-            blink: data['blink']
-          });
+          const requestSequence = data['requestSequence'];
+          const revision = data['revision'];
+          if (typeof blobUUID != 'string' || blobUUID.length > 128 || !blobUUID || !(blobData instanceof Blob)
+            || !tileCoordsTile.every(value => Number.isSafeInteger(value) && value >= 0)
+            || !Number.isSafeInteger(requestSequence) || requestSequence < 1
+            || !Number.isSafeInteger(revision) || revision < 0 || this.pendingTiles.has(blobUUID)) {return;}
+          const controller = new AbortController();
+          let templateBlob = blobData;
+          const shouldProcess = this.pendingTiles.size < 128;
+          let fallback = !shouldProcess;
+          if (shouldProcess) {this.pendingTiles.set(blobUUID, controller);}
+          try {
+            if (shouldProcess) {
+              const rendered = await this.templateManager.drawTemplateOnTile(blobData, tileCoordsTile, {requestSequence, revision, signal: controller.signal});
+              if (rendered instanceof Blob) {templateBlob = rendered;} else {fallback = true;}
+            }
+          } catch (error) {
+            fallback = true;
+            if (!controller.signal.aborted) {consoleError('Could not render a tile; using the original image.', error);}
+          } finally {
+            this.pendingTiles.delete(blobUUID);
+            if (!controller.signal.aborted) {
+              window.postMessage({source: 'blue-marble', blobID: blobUUID, blobData: templateBlob, requestSequence, revision, fallback}, window.location.origin);
+            }
+          }
           break;
+        }
 
         case 'robots': // Request to retrieve what script types are allowed
-          this.disableAll = dataJSON['userscript']?.toString().toLowerCase() == 'false'; // Disables Blue Marble if site owner wants userscripts disabled
+          if (typeof dataJSON['userscript'] != 'boolean' && typeof dataJSON['userscript'] != 'string') {return;}
+          this.disableAll = String(dataJSON['userscript']).toLowerCase() == 'false';
           break;
       }
     };
@@ -205,9 +228,10 @@ export default class ApiManager {
    * @since 0.99.0
    */
   stopSpontaneousResponseListener() {
-    if (!this.spontaneousMessageHandler) {return;}
-    window.removeEventListener('message', this.spontaneousMessageHandler);
+    if (this.spontaneousMessageHandler) {window.removeEventListener('message', this.spontaneousMessageHandler);}
     this.spontaneousMessageHandler = null;
+    for (const controller of this.pendingTiles.values()) {controller.abort();}
+    this.pendingTiles.clear();
   }
 
   /** Applies user data from the /me endpoint to the current overlay.
@@ -216,22 +240,20 @@ export default class ApiManager {
    * @since 0.92.1
    */
   applyUserDataToOverlay(overlay, dataJSON) {
+    if (!dataJSON || typeof dataJSON != 'object' || Array.isArray(dataJSON)) {return false;}
 
     // If the game can not retrieve the userdata...
-    if (dataJSON['status'] && dataJSON['status']?.toString()[0] != '2') {
+    if (dataJSON['status'] != null && typeof dataJSON['status'] != 'string' && typeof dataJSON['status'] != 'number') {return false;}
+    if (dataJSON['status'] && String(dataJSON['status'])[0] != '2') {
       overlay.handleDisplayError(`You are not logged in or Wplace is offline!\nCould not fetch userdata.`);
-      return;
+      return false;
     }
+
+    if (!Number.isSafeInteger(dataJSON['id']) || dataJSON['id'] < 0
+      || !['level', 'pixelsPainted', 'droplets'].every(key => Number.isFinite(dataJSON[key]) && dataJSON[key] >= 0)) {return false;}
 
     const nextLevelPixels = Math.ceil(Math.pow(Math.floor(dataJSON['level']) * Math.pow(30, 0.65), (1 / 0.65)) - dataJSON['pixelsPainted']);
-
-    console.log(dataJSON['id']);
-    if (!!dataJSON['id'] || dataJSON['id'] === 0) {
-      console.log(numberToEncoded(
-        dataJSON['id'],
-        '!#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~'
-      ));
-    }
+    if (!Number.isFinite(nextLevelPixels)) {return false;}
     this.templateManager.userID = dataJSON['id'];
 
     // Obtains the refill timer for charges
@@ -244,12 +266,16 @@ export default class ApiManager {
         const chargeData = dataJSON['charges'];
 
         // Date that the user's charges will be refilled
-        chargeRefillTimer.dataset['endDate'] = Date.now() + ((chargeData['max'] - chargeData['count']) * chargeData['cooldownMs']);
+        if (chargeData && ['max', 'count', 'cooldownMs'].every(key => Number.isFinite(chargeData[key]) && chargeData[key] >= 0)) {
+          const endDate = Date.now() + (Math.max(0, chargeData['max'] - chargeData['count']) * chargeData['cooldownMs']);
+          if (Number.isFinite(endDate)) {chargeRefillTimer.dataset['endDate'] = endDate;}
+        }
       }
     }
 
     overlay.updateInnerHTML('bm-user-droplets', `<b>${localizeNumber(dataJSON['droplets'])}</b>`);
     overlay.updateInnerHTML('bm-user-nextlevel', `<b>${localizeNumber(nextLevelPixels)}</b> px`);
+    return true;
   }
 
   /** Requests the current /me payload directly so the overlay has initial user data
@@ -259,10 +285,13 @@ export default class ApiManager {
    */
   async requestCurrentUserData(overlay) {
     try {
-      const response = await fetch(`${window.location.origin}/api/me`, {
+      // The public Wplace API lives on the backend origin; the frontend /api/me
+      // path returns 404. Keep credentials scoped to this fixed trusted origin.
+      const response = await fetch('https://backend.wplace.live/me', {
         credentials: 'include'
       });
 
+      if (response.status === 401) {return;} // Wplace supports signed-out visitors.
       if (!response.ok) {
         overlay.handleDisplayError(`Could not fetch userdata.\nHTTP ${response.status}`);
         return;
@@ -286,8 +315,7 @@ export default class ApiManager {
       if (!cached) {return false;}
 
       const dataJSON = JSON.parse(cached);
-      this.applyUserDataToOverlay(overlay, dataJSON);
-      return true;
+      return this.applyUserDataToOverlay(overlay, dataJSON);
     } catch (error) {
       consoleError('Failed to apply cached user data:', error);
       return false;

@@ -1,0 +1,39 @@
+{
+  "date": "2026-09-23",
+  "observedSymptom": "Wplace shows a selected pixel but Chromora reports: Click the desired top-left pixel on the map first.",
+  "rootCause": "Both endpoint classifiers rejected Wplace's current /s{season}/pixel/{tileX}/{tileY} route.",
+  "changes": [
+    "Accept numeric seasonal pixel routes on the existing allowed origins.",
+    "Number requests on dispatch and reject older coordinate responses after a newer selection was accepted."
+  ],
+  "localValidation": {
+    "nodeTests": 56,
+    "passed": 56,
+    "failed": 0,
+    "syntaxCheck": "passed",
+    "bundleChecksPerFlavor": 63,
+    "bundleFlavorsPassed": ["local", "GITHUB_ACTIONS=true"],
+    "coordinateBrowserCoverage": [
+      "Real fetch hook, postMessage bridge, ApiManager and coordinates window",
+      "Automatic coordinate fields and Use last map click",
+      "Reopened picker retains the last click",
+      "Numeric seasons and zero/boundary coordinates",
+      "Reversed response order preserves the newer selection",
+      "Original response is preserved for the host application"
+    ]
+  },
+  "installedCopyUpdatedByAgent": false,
+  "liveValidationPending": "User must update Tampermonkey and reload Wplace; browser tool blocked extension page access.",
+  "artifacts": {
+    "local": {
+      "bytes": 726389,
+      "sha256": "76cd4cbd7e1fa8744b680b27d68363a38f2b91262c3083873418f2f3c7f91d15",
+      "buildHash": "8c5a5bd3cbdb"
+    },
+    "ci": {
+      "bytes": 724647,
+      "sha256": "629d27ca4050307b0ab79ebaec453e42f7bcab2f91f44a2ea01dcd6e02b2cb77",
+      "buildHash": "311164f46931"
+    }
+  }
+}

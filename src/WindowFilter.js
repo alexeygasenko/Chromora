@@ -114,7 +114,7 @@ export default class WindowFilter extends Overlay {
     this.#cleanupCustomSortDropdowns();
     this.unsubscribeTemplateChanges?.();
     this.unsubscribeTemplateChanges = null;
-    this.windowElement?.remove();
+    super.dispose();
     this.windowElement = null;
   }
 
@@ -361,7 +361,7 @@ export default class WindowFilter extends Overlay {
     this.window = this.addDiv({
       'id': this.windowID,
       'class': 'bm-window bm-windowed',
-      'style': `width: 360px; height: min(70vh, 32rem); min-width: ${this.windowMinWidth}px; min-height: ${this.windowMinHeight}px; max-width: min(${this.windowMaxWidth}px, calc(100vw - 16px)); max-height: min(${this.windowMaxHeight}px, calc(100vh - 16px));`
+      'style': `width: 360px; height: min(70vh, 32rem); min-width: min(${this.windowMinWidth}px, calc(100vw - 16px)); min-height: min(${this.windowMinHeight}px, calc(100vh - 16px)); max-width: min(${this.windowMaxWidth}px, calc(100vw - 16px)); max-height: min(${this.windowMaxHeight}px, calc(100vh - 16px));`
     }, (instance, div) => {
       div.dataset['filterOwner'] = this.ownerID;
       this.windowElement = div;
@@ -434,7 +434,7 @@ export default class WindowFilter extends Overlay {
         'class': 'bm-resize-corner',
         'title': 'Resize Color Filter window',
         'aria-label': 'Resize Color Filter window',
-        'role': 'presentation',
+        'role': 'button',
         'textContent': '◢'
       }).buildElement()
     .buildElement().buildOverlay(this.windowParent);
@@ -595,6 +595,7 @@ export default class WindowFilter extends Overlay {
     if (!layoutSize || !windowElement?.isConnected) {return;}
 
     const rect = windowElement.getBoundingClientRect();
+    if (!rect.width || !rect.height || document.body.classList.contains('bm-template-coordinate-mode')) {return;}
     layoutSize.width = this.#clampWindowDimension(rect.width, this.windowMinWidth, this.#getWindowLayoutMaxWidth(layout));
     layoutSize.height = layout == 'horizontal'
       ? this.#getWindowLayoutMaxHeight(layout)
@@ -939,6 +940,16 @@ export default class WindowFilter extends Overlay {
    */
   #startAutoRefresh() {
     this.#stopAutoRefresh();
+    const windowElement = this.#getOwnedWindowElement();
+    if (windowElement) {
+      this.addWindowCleanup(windowElement, () => {
+        if (this.windowElement != windowElement) {return;}
+        this.#stopAutoRefresh();
+        this.#cleanupWindowPersistence();
+        this.#cleanupCustomSortDropdowns();
+        this.windowElement = null;
+      });
+    }
     this.colorRefreshInterval = setInterval(() => {
       if (!this.#getOwnedWindowElement()) {
         this.#stopAutoRefresh();
@@ -988,8 +999,9 @@ export default class WindowFilter extends Overlay {
    * @since 0.92.0
    */
   #clampWindowDimension(size, minimum, maximum) {
-    const resolvedMaximum = Math.max(minimum, maximum);
-    return Math.min(Math.max(Math.round(Number(size) || minimum), minimum), resolvedMaximum);
+    const resolvedMaximum = Math.max(1, maximum);
+    const resolvedMinimum = Math.min(minimum, resolvedMaximum);
+    return Math.min(Math.max(Math.round(Number(size) || resolvedMinimum), resolvedMinimum), resolvedMaximum);
   }
 
   /** Returns a viewport-safe position for the window.
@@ -1069,6 +1081,9 @@ export default class WindowFilter extends Overlay {
 
     const layout = this.#getActiveWindowedColorLayout(windowElement);
     const rect = windowElement.getBoundingClientRect();
+    // Coordinate picking temporarily hides this mounted window with display:none.
+    // A ResizeObserver notification for that state must never replace its geometry.
+    if (!rect.width || !rect.height || document.body.classList.contains('bm-template-coordinate-mode')) {return;}
     const width = this.#clampWindowDimension(rect.width, this.windowMinWidth, this.#getWindowLayoutMaxWidth(layout));
     const height = layout == 'horizontal'
       ? this.#getWindowLayoutMaxHeight(layout)
@@ -1272,7 +1287,7 @@ export default class WindowFilter extends Overlay {
           'data-highlight': incorrectHighlightMode,
           'data-correct': !Number.isNaN(parseInt(colorCorrect)) ? colorCorrect : '0',
           'data-total': colorTotal,
-          'data-percent': (colorPercent.slice(-1) == '%') ? colorPercent.slice(0, -1) : '0',
+          'data-percent': Number(colorTotal) > 0 ? Number(colorCorrect) / Number(colorTotal) || 0 : 0,
           'data-incorrect': colorIncorrect || 0
         }, (instance, div) => this.#initializeColorBlockToggle(div, color))
           .addDiv({'class': 'bm-filter-container-rgb', 'style': `background-color: rgb(${color.rgb?.map(channel => Number(channel) || 0).join(',')});${color.premium ? styleBackgroundStar : ''}`})
@@ -1329,7 +1344,7 @@ export default class WindowFilter extends Overlay {
           'data-highlight': incorrectHighlightMode,
           'data-correct': !Number.isNaN(parseInt(colorCorrect)) ? colorCorrect : '0',
           'data-total': colorTotal,
-          'data-percent': (colorPercent.slice(-1) == '%') ? colorPercent.slice(0, -1) : '0',
+          'data-percent': Number(colorTotal) > 0 ? Number(colorCorrect) / Number(colorTotal) || 0 : 0,
           'data-incorrect': colorIncorrect || 0
         }, (instance, div) => this.#initializeColorBlockToggle(div, color))
           .addDiv({'class': 'bm-filter-premium-star', 'aria-hidden': 'true'}).buildElement()
@@ -1510,7 +1525,7 @@ export default class WindowFilter extends Overlay {
     button.ariaLabel = ariaLabel;
 
     const colorElement = button.closest('.bm-filter-color');
-    colorElement?.setAttribute('aria-label', ariaLabel);
+    colorElement?.setAttribute('aria-label', color.name || 'Color');
     colorElement?.setAttribute('data-state', button.dataset['state']);
 
   }
@@ -1678,8 +1693,8 @@ export default class WindowFilter extends Overlay {
     if (!colorElement || !color.id) {return;}
 
     colorElement.classList.add('bm-filter-color-toggle');
-    colorElement.tabIndex = 0;
-    colorElement.setAttribute('role', 'button');
+    colorElement.setAttribute('role', 'group');
+    colorElement.setAttribute('aria-label', color.name || 'Color');
 
     colorElement.onclick = event => {
       if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea')) {return;}
@@ -1688,13 +1703,7 @@ export default class WindowFilter extends Overlay {
       this.#toggleColorVisibility(button, color);
     };
 
-    colorElement.onkeydown = event => {
-      if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea')) {return;}
-      if ((event.key != 'Enter') && (event.key != ' ')) {return;}
-
-      event.preventDefault();
-      colorElement.click();
-    };
+    // The native visibility and highlight buttons provide separate keyboard targets.
   }
 
   /** The information about a specific color on the palette.
@@ -1812,7 +1821,7 @@ export default class WindowFilter extends Overlay {
       // Update the dataset
       color.dataset['correct'] = !Number.isNaN(parseInt(colorCorrect)) ? colorCorrect : '0';
       color.dataset['total'] = colorTotal;
-      color.dataset['percent'] = (colorPercent.slice(-1) == '%') ? colorPercent.slice(0, -1) : '0';
+      color.dataset['percent'] = Number(colorTotal) > 0 ? Number(colorCorrect) / Number(colorTotal) || 0 : 0;
       color.dataset['incorrect'] = colorIncorrect || 0;
 
       // Updates the pixel count if it exists

@@ -1,46 +1,23 @@
-# Blue Marble Enhanced
+<img src="./assets/chromora-header.png" alt="Chromora's white-haired, aqua-accented anime mascot holding a glass globe against bright sky, green hills, and water" width="1200">
 
-![Blue Marble 0.96.0 Color Filter horizontal mode](./assets/blue-marble-1.png)
+# Make your next pixel easier to find
 
-Color Filter now has a horizontal layout for faster scanning across large color sets.
+Chromora brings template overlays, color progress, pixel highlights, and paint drafting to [Wplace](https://wplace.live/).
 
-![Blue Marble 0.96.0 Color Filter vertical mode](./assets/blue-marble-2.png)
+Start with the [three-step installation guide](../README.md#installation), then use the [illustrated feature guide](./FEATURES.md) to find your way around Chromora **1.4.0**.
 
-The vertical windowed layout keeps the full list compact, clear, and easy to browse.
+| I want to… | Open |
+| --- | --- |
+| Add an image and choose where it goes | [Templates and coordinates](./FEATURES.md#keep-your-artwork-together) |
+| Find missing or incorrect pixels | [Color Filter and highlights](./FEATURES.md#find-your-next-pixels) |
+| Prepare an area for painting | [Drafting modes and shortcuts](./FEATURES.md#prepare-a-paint-draft) |
+| Pick a theme or arrange my windows | [Appearance and window controls](./FEATURES.md#make-it-your-space) |
+| Recover older template storage | [Template Wizard](./FEATURES.md#recover-older-templates) |
 
-![Blue Marble 0.96.0 Color Filter expanded mode](./assets/blue-marble-3.png)
+For project information, visit the [website](https://alexeygasenko.github.io/Chromora/), [releases](https://github.com/alexeygasenko/Chromora/releases), or [issue tracker](https://github.com/alexeygasenko/Chromora/issues). Contributor resources include [contributing](./CONTRIBUTING.md), [security](./SECURITY.md), and [credits](./CREDITS.md).
 
-The expanded view turns Color Filter into a full overview with larger cards and richer stats.
+## Updating the screenshots
 
-Blue Marble Enhanced is a practical fork of [SwingTheVine/Wplace-BlueMarble](https://github.com/SwingTheVine/Wplace-BlueMarble) for [wplace.live](https://wplace.live/).
+The [capture manifest](./assets/examples-manifest.json) records the source and capture details for the interface examples. Capture new examples from a real Wplace browser with **Glass** selected, using the actual controls and map state. Keep the captured content intact; cropping and lossless format conversion are fine. Do not recreate Wplace's interface or invent progress values.
 
-It keeps the original Blue Marble workflow and adds a cleaner UI, better window behavior, and a more capable Color Filter.
-
-## Highlights
-
-- Refined liquid-glass window design across the main window, Color Filter, and Settings.
-- Improved Color Filter with fullscreen and windowed layouts.
-- Resizable and movable windowed Color Filter with saved size, position, and layout.
-- Remembered shown and hidden colors.
-- Custom sort controls and refreshed Color Filter stats.
-- Improved Settings window styling and controls.
-
-## Installation
-
-Install the latest userscript release:
-
-[Download latest release](https://github.com/alexeygasenko/Chromora/releases/latest)
-
-Use `Chromora.user.js` with a userscript manager such as Tampermonkey, then refresh [wplace.live](https://wplace.live/).
-
-## Upstream
-
-Original project:
-
-[SwingTheVine/Wplace-BlueMarble](https://github.com/SwingTheVine/Wplace-BlueMarble)
-
-This fork keeps the original license and credits.
-
-## License
-
-Blue Marble is licensed under the Mozilla Public License 2.0. See [LICENSE.txt](../LICENSE.txt).
+Chromora is based on [Blue Marble by SwingTheVine](https://github.com/SwingTheVine/Wplace-BlueMarble), with the upstream license notices and credits preserved. It is maintained independently and is not an official Blue Marble or Wplace project. See [LICENSE.txt](../LICENSE.txt) for the Mozilla Public License 2.0.

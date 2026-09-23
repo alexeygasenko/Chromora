@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="water" cx=".32" cy=".2" r=".8"><stop stop-color="#f5ffff"/><stop offset=".19" stop-color="#84e4f3"/><stop offset=".57" stop-color="#2ba1ca"/><stop offset="1" stop-color="#267ba7"/></radialGradient>
+    <linearGradient id="land" x2=".8" y2="1"><stop stop-color="#c9f397"/><stop offset="1" stop-color="#6aab49"/></linearGradient>
+    <linearGradient id="shine" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="29" fill="url(#water)" stroke="#267d9f"/>
+  <path d="m13 19 7-4 8 2 1 6-5 4 3 6-3 5-6-5-1-7-6-2Zm29 13 8-5 8 5-1 9-8 9-4-5 1-6-7-2Z" fill="url(#land)"/>
+  <g fill="none" stroke="#eaffff" opacity=".6"><ellipse cx="32" cy="32" rx="12" ry="28"/><ellipse cx="32" cy="32" rx="23" ry="28"/><ellipse cx="32" cy="32" rx="28" ry="11"/><path d="M5 24h54M5 40h54"/></g>
+  <ellipse cx="27" cy="17" rx="20" ry="10" fill="url(#shine)"/>
+  <circle cx="32" cy="32" r="27.5" fill="none" stroke="#d3fcff" opacity=".5"/>
+</svg>

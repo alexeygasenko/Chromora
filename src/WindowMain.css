@@ -1,13 +1,22 @@
 /* @since 0.92.2 */
 
 #bm-window-main {
-  width: min(25.5rem, calc(100vw - 0.65rem));
-  max-width: min(25.5rem, calc(100vw - 0.65rem)) !important;
+  top: 10px;
+  left: auto;
+  right: 75px;
+  width: min(25.5rem, calc(100vw - 16px));
+  max-width: min(25.5rem, calc(100vw - 16px)) !important;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
 }
 
 #bm-window-main .bm-window-content {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 #bm-window-main .bm-main-drag-brand {
@@ -106,8 +115,7 @@
 
 @media (max-width: 720px) {
   #bm-window-main {
-    width: min(100vw - 0.45rem, 25.5rem);
-    max-width: min(100vw - 0.45rem, 25.5rem) !important;
+    right: 8px;
   }
 
   #bm-window-main .bm-main-stats {

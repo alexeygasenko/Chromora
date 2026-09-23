@@ -1,0 +1,28 @@
+{
+  "date": "2026-09-23",
+  "browserObserved": "Brave with Tampermonkey",
+  "observedErrors": [
+    "Chromora: Could not fetch userdata. HTTP 404",
+    "The message catalog was used before initializeLocale() completed"
+  ],
+  "localValidation": {
+    "nodeTests": 55,
+    "passed": 55,
+    "failed": 0,
+    "bundleChecksPerFlavor": 51
+  },
+  "installedCopyUpdated": false,
+  "reason": "Browser tool policy blocked the extension page; user must update the installed script.",
+  "artifacts": {
+    "local": {
+      "bytes": 726029,
+      "sha256": "19fc8d2dc6aad63ac1732830b6ae7fd0217570d112cb81e815e942acf18aa8d3",
+      "buildHash": "d2681eb81dab"
+    },
+    "ci": {
+      "bytes": 724287,
+      "sha256": "22f2a01a2dc8cab092ea8140957b14cada6f5fb7fe4f8a75da004c74dad8b41b",
+      "buildHash": "40d8d71ab029"
+    }
+  }
+}

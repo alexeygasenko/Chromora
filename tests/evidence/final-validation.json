@@ -1,0 +1,72 @@
+{
+  "date": "2026-09-23",
+  "branch": "codex/full-audit-2026-09-23",
+  "baseCommit": "ab0c7dc",
+  "scope": "Uncommitted working snapshot. Clean npm ci and isolated browser fixtures; no live Wplace or remote GitHub execution.",
+  "environment": {
+    "node": "25.8.0",
+    "npm": "11.11.0",
+    "browser": "Edge 153.0.4234.48",
+    "playwright": "1.63.0"
+  },
+  "totals": {
+    "nodeTests": 51,
+    "nodePassed": 51,
+    "nodeFailed": 0,
+    "settingsBrowserChecks": 75,
+    "uiBrowserChecks": 54,
+    "bundleChecksPerFlavor": 48
+  },
+  "artifacts": {
+    "local": {
+      "file": "dist/Chromora.user.js",
+      "bytes": 725768,
+      "buildHash": "3eb534664588",
+      "sha256": "650c516a288730559fb385165f2360521eea4314a5572a07b6fa41823b3e83aa"
+    },
+    "ci": {
+      "bytes": 724026,
+      "buildHash": "6b3f9c3aa25f",
+      "sha256": "59f457f0c671902de7768243bcb93c9184aef029aeb57783915aa878bcc46be7"
+    }
+  },
+  "checks": [
+    {
+      "chunk_id": "9b2df5",
+      "wall_time_seconds": 5.812789,
+      "exit_code": 0,
+      "original_token_count": 1402,
+      "output": "\n> chromora@1.3.0 test\n> node --test tests/*.mjs\n\n✔ the production minifier preserves stored settings and page/worker property contracts (47.2019ms)\n✔ CSS mapping only changes whole class/id names and keeps protocol/storage/variables intact (57.2392ms)\n✔ literal hostile commit messages remain data through the actual publication commands (283.9337ms)\n✔ CI validates PRs with read-only credentials and publishes only matching source artifacts (0.5378ms)\n✔ atomic publication updates both refs and rejects a main change after the freshness check (2971.3362ms)\n✔ only approved tile URLs enter the replacement queue (24.4749ms)\n✔ tiles resolve with rendered bytes and preserve sequence/revision across the bridge (8.946ms)\n✔ renderer failure and invalid output return the exact original response (2.6985ms)\n✔ missing consumer and stalled renderer time out, cancel work and release queues (10.1718ms)\n✔ abort rejects promptly and cancels renderer even after original fetch completed (16.1066ms)\n✔ network failure completes refresh progress without queueing a blob (1.0276ms)\n✔ null, foreign and malformed messages cannot mutate identity or coordinates (12.8977ms)\n✔ foreign blob replies cannot settle a pending tile; listener disposal aborts pending work (17.1239ms)\n✔ consumer is installed before asynchronous template import (0.1482ms)\n✔ refresh invalidates visible pixel rasters through the captured map API (1.4317ms)\n✔ refresh supports raster-source setTiles fallback without changing URL templates (1.3044ms)\n✔ only the newest refresh runs after deferred map discovery (1.2528ms)\n✔ missing map reports the compatibility fallback instead of claiming raster invalidation (1.8081ms)\n{\n  \"userAgent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0\",\n  \"checks\": [\n    \"four sparse source positions survive PNG creation\",\n    \"sparse legacy reconstruction/recreation preserves every world pixel\",\n    \"overlapping colored output is pixel-identical to independent reference\",\n    \"native-scale readbacks are exactly 4 B and 4 MB\"\n  ],\n  \"benchmarks\": [\n    {\n      \"side\": 1,\n      \"readbackBytes\": 4,\n      \"samplesMs\": [\n        70.7,\n        59.7,\n        35.4,\n        35.3\n      ],\n      \"pngBytes\": 182600\n    },\n    {\n      \"side\": 1000,\n      \"readbackBytes\": 4000000,\n      \"samplesMs\": [\n        134.9,\n        73.1,\n        78.8,\n        77.9\n      ],\n      \"pngBytes\": 182600\n    }\n  ]\n}\n✔ real Canvas sparse round-trip, native readback, compositing, and throughput (2066.8675ms)\n✔ exact transparency retains sparse pixel (0,0) alpha=255 (37.8346ms)\n✔ exact transparency retains sparse pixel (100,100) alpha=255 (2.366ms)\n✔ exact transparency retains sparse pixel (500,500) alpha=255 (3.4272ms)\n✔ exact transparency retains sparse pixel (999,999) alpha=1 (3.5231ms)\n✔ transparency ignores hidden RGB with zero alpha and respects source rectangle (1.7036ms)\n✔ sparse origin takes independent world minima, including intra-tile offsets (2.1251ms)\n✔ one-pixel readback is 4 bytes, shared buffer is not copied and temporary bitmap closes (2.863ms)\n✔ different off-palette RGBA do not match, identical RGBA do (1.4483ms)\n✔ late decode and late response cannot replace newer pixel state (2.0966ms)\n✔ selection resolves draw order before color/state filtering, with stable sort ties (1.8209ms)\n✔ disabled templates and unsupported top colors do not select hidden lower pixels (1.7303ms)\n✔ task yielding completes without scheduler or animation frames (4.7715ms)\n✔ filter/toggle changes coalesce refresh and invalidate in-flight state (1.4275ms)\n✔ filtered render copies only modified buffers and closes its temporary bitmaps (1.3609ms)\n✔ two-render bound holds and a queued cancellation completes without decoding (1.666ms)\n✔ retired template bitmap remains alive until its active render releases it (1.0839ms)\n✔ no Web Locks fails safely before image creation or storage mutation (1.4744ms)\n✔ unused filters avoid copies and incomplete Erased metadata cannot mutate stored pixels (1.4129ms)\n✔ refresh progress rejects foreign sources, origins, and nonnumeric revisions (2.026ms)\n✔ teleport requires same-window origin and a boolean success result (1.4153ms)\n✔ area selection rejects foreign/malformed messages before starting work (3.0592ms)\n✔ two managers synchronize concurrent creates, toggles, and deletes without overwriting storage (213.4556ms)\n✔ delayed old event payload cannot resurrect a template deleted by a newer local mutation (124.2682ms)\n✔ storage changes during decoding discard staged bitmaps and commit only a fresh snapshot (4.7511ms)\n✔ focus/visibility fallback catches changes when value listener APIs are unavailable (235.2822ms)\n✔ malformed external storage leaves current runtime and persistent bytes intact (6.1166ms)\nSettings/Aero browser regression: 75 checks passed\n✔ tests\\settings-browser.mjs (3770.0631ms)\n✔ malformed persisted records recover without losing valid settings (1.918ms)\n✔ legacy release geometry migrates only verified mangled fields (0.2695ms)\n✔ highlight normalization preserves intentional empty patterns and isolates defaults (0.6866ms)\n✔ legacy duplicate shortcuts become two usable distinct actions (0.2754ms)\nUI regressions passed: 54 checks in 153.0.4234.48 (real DOM/CSS, five locales, 320/375/1280px).\n✔ tests\\ui-regressions.mjs (5440.5864ms)\nℹ tests 51\nℹ suites 0\nℹ pass 51\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 5516.7253\n"
+    },
+    {
+      "chunk_id": "cff456",
+      "wall_time_seconds": 5.4693818,
+      "exit_code": 0,
+      "original_token_count": 31,
+      "output": "\n> chromora@1.3.0 lint-check\n> node build/check-syntax.mjs\n\n\n> chromora@1.3.0 docs\n> node build/generate-docs.mjs api-docs\n\n"
+    },
+    {
+      "chunk_id": "18e006",
+      "wall_time_seconds": 3.238643,
+      "exit_code": 0,
+      "original_token_count": 181,
+      "output": "{\n  \"auditReportVersion\": 2,\n  \"vulnerabilities\": {},\n  \"metadata\": {\n    \"vulnerabilities\": {\n      \"info\": 0,\n      \"low\": 0,\n      \"moderate\": 0,\n      \"high\": 0,\n      \"critical\": 0,\n      \"total\": 0\n    },\n    \"dependencies\": {\n      \"prod\": 1,\n      \"dev\": 72,\n      \"optional\": 26,\n      \"peer\": 0,\n      \"peerOptional\": 0,\n      \"total\": 72\n    }\n  }\n}\n{\n  \"auditReportVersion\": 2,\n  \"vulnerabilities\": {},\n  \"metadata\": {\n    \"vulnerabilities\": {\n      \"info\": 0,\n      \"low\": 0,\n      \"moderate\": 0,\n      \"high\": 0,\n      \"critical\": 0,\n      \"total\": 0\n    },\n    \"dependencies\": {\n      \"prod\": 1,\n      \"dev\": 72,\n      \"optional\": 26,\n      \"peer\": 0,\n      \"peerOptional\": 0,\n      \"total\": 72\n    }\n  }\n}\n"
+    }
+  ],
+  "builds": [
+    {
+      "chunk_id": "7ed755",
+      "wall_time_seconds": 10.001292,
+      "original_token_count": 151,
+      "output": "\n> chromora@1.3.0 build\n> node build/build.js\n\n\u001b[34mStarting build...\u001b[0m\n\u001b[34mBuilding Chromora userscript...\u001b[0m\n\u001b[34mStarting update-version...\u001b[0m\n\u001b[32mUpdated\u001b[0m userscript version to \u001b[35m1.3.0\u001b[0m\nVersion updated in meta file \u001b[32msuccessfully\u001b[0m\n\u001b[32m\u001b[1m\u001b[4mBuilding complete!\u001b[0m\nBuild hash:\n- Chromora.user.js: 3eb534664588\n\n> chromora@1.3.0 test:bundle\n> node build/check-bundle.mjs && node build/smoke-bundle.mjs\n\nBundle contracts, syntax, embedded fonts and licenses verified: dist/Chromora.user.js\nDistributed userscript smoke: 48 checks passed (dist/Chromora.user.js, 153.0.4234.48)\n",
+      "exit_code": 0
+    },
+    {
+      "chunk_id": "efee4d",
+      "wall_time_seconds": 10.0105469,
+      "original_token_count": 151,
+      "output": "\n> chromora@1.3.0 build\n> node build/build.js\n\n\u001b[34mStarting build...\u001b[0m\n\u001b[34mBuilding Chromora userscript...\u001b[0m\n\u001b[34mStarting update-version...\u001b[0m\n\u001b[32mUpdated\u001b[0m userscript version to \u001b[35m1.3.0\u001b[0m\nVersion updated in meta file \u001b[32msuccessfully\u001b[0m\n\u001b[32m\u001b[1m\u001b[4mBuilding complete!\u001b[0m\nBuild hash:\n- Chromora.user.js: 6b3f9c3aa25f\n\n> chromora@1.3.0 test:bundle\n> node build/check-bundle.mjs && node build/smoke-bundle.mjs\n\nBundle contracts, syntax, embedded fonts and licenses verified: dist/Chromora.user.js\nDistributed userscript smoke: 48 checks passed (dist/Chromora.user.js, 153.0.4234.48)\n",
+      "exit_code": 0
+    }
+  ]
+}

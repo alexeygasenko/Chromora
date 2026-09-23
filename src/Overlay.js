@@ -88,6 +88,60 @@ export default class Overlay {
     this.overlay = null; // The overlay root DOM HTMLElement
     this.currentParent = null; // The current parent HTMLElement in the overlay
     this.parentStack = []; // Tracks the parent elements BEFORE the currentParent so we can nest elements
+    this.windowResources = new Map();
+    this.timerResources = new Map();
+  }
+
+  /** Releases windows, timers and global listeners owned by this builder. */
+  dispose() {
+    for (const [element] of this.windowResources) {
+      this.releaseWindowResources(element);
+      element.remove();
+    }
+    for (const timerID of this.timerResources.keys()) {clearInterval(timerID);}
+    this.timerResources.clear();
+  }
+
+  /** Registers cleanup against the owning window, including direct DOM removal. */
+  addWindowCleanup(element, cleanup) {
+    let resources = this.windowResources.get(element);
+    if (!resources) {
+      resources = {cleanups: new Set(), returnFocus: document.activeElement};
+      this.windowResources.set(element, resources);
+      if (typeof MutationObserver == 'function' && element.parentNode) {
+        const observer = new MutationObserver(() => {
+          if (!element.isConnected) {this.releaseWindowResources(element);}
+        });
+        observer.observe(element.parentNode, {childList: true});
+        resources.cleanups.add(() => observer.disconnect());
+      }
+    }
+    resources.cleanups.add(cleanup);
+  }
+
+  releaseWindowResources(element) {
+    const resources = this.windowResources.get(element);
+    if (!resources) {return;}
+    this.windowResources.delete(element);
+    for (const cleanup of resources.cleanups) {cleanup();}
+    for (const [timerID, {element: timer}] of this.timerResources) {
+      if (element.contains(timer)) {
+        clearInterval(timerID);
+        this.timerResources.delete(timerID);
+      }
+    }
+    if ((!document.activeElement || document.activeElement == document.body || element.contains(document.activeElement)) && resources.returnFocus?.isConnected) {
+      resources.returnFocus.focus?.({preventScroll: true});
+    }
+  }
+
+  /** Keeps the whole window within the viewport where its dimensions permit. */
+  clampWindowPosition(element, x, y, rect = element.getBoundingClientRect()) {
+    const margin = 8;
+    return {
+      x: Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - rect.width - margin)),
+      y: Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - rect.height - margin))
+    };
   }
 
   /** Populates the apiManager variable with the apiManager class.
@@ -202,6 +256,9 @@ export default class Overlay {
   buildOverlay(parent) {
     const overlay = this.overlay;
     parent?.appendChild(overlay);
+    for (const resource of this.timerResources.values()) {
+      if (overlay?.contains(resource.element)) {resource.mounted = true;}
+    }
 
     if (overlay?.classList.contains('bm-window')) {
       this.handleWindowOpen(overlay);
@@ -1192,10 +1249,18 @@ export default class Overlay {
     timer.dataset['endDate'] = endDate; // Adds the end date to the timer
 
     // Creates the logic that keeps updating the timer
-    setInterval(() => {
+    const resource = {element: timer, mounted: false};
+    const intervalID = setInterval(() => {
 
       // Kills the timer logic if the timer element does not exist in the main DOM tree
-      if (!timer.isConnected) {/*clearInterval(timer);*/ return;}
+      if (!timer.isConnected) {
+        if (resource.mounted) {
+          clearInterval(intervalID);
+          this.timerResources.delete(intervalID);
+        }
+        return;
+      }
+      resource.mounted = true;
 
       // Returns time remaining in seconds, or 0 seconds if timer has reached end time.
       // "Total" indicates it is the total time for that unit. E.g. 62 minutes is "62" minutes.
@@ -1219,6 +1284,7 @@ export default class Overlay {
         String(timeRemainingOnlySec).padStart(2, '0')
       ;
     }, updateInterval);
+    this.timerResources.set(intervalID, resource);
 
     callback(this, timer); // Runs any script passed in through the callback
     return this;
@@ -1257,6 +1323,14 @@ export default class Overlay {
    */
   handleWindowOpen(windowElement) {
     if (!windowElement) {return;}
+
+    this.addWindowCleanup(windowElement, () => {});
+    if (!windowElement.hasAttribute('role')) {windowElement.setAttribute('role', 'dialog');}
+    if (!windowElement.hasAttribute('aria-label') && !windowElement.hasAttribute('aria-labelledby')) {
+      windowElement.setAttribute('aria-label', windowElement.querySelector('h1')?.textContent || this.name);
+    }
+    windowElement.tabIndex = -1;
+    windowElement.focus({preventScroll: true});
 
     const content = windowElement.querySelector('.bm-window-content');
     const dragbar = windowElement.querySelector('.bm-dragbar');
@@ -1312,6 +1386,7 @@ export default class Overlay {
     ];
 
     await waitForMotion(animations);
+    this.releaseWindowResources(windowElement);
     windowElement.remove();
     releaseMotion(animations);
   }
@@ -1599,6 +1674,60 @@ export default class Overlay {
     let targetX = 0;
     let targetY = 0;
     let animationFrame = null;
+    let previousUserSelect = '';
+    let dragDimensions = null;
+
+    const constrainTarget = () => {
+      const position = this.clampWindowPosition(moveMe, targetX, targetY, dragDimensions);
+      targetX = position.x;
+      targetY = position.y;
+    };
+    const clampToViewport = () => {
+      if (!moveMe.isConnected) {return;}
+      const rect = moveMe.getBoundingClientRect();
+      if (!rect.width || !rect.height) {return;}
+      const position = this.clampWindowPosition(moveMe, rect.left, rect.top, rect);
+      if (position.x == rect.left && position.y == rect.top) {return;}
+      moveMe.style.left = '0px';
+      moveMe.style.top = '0px';
+      moveMe.style.right = '';
+      moveMe.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+    };
+    clampToViewport();
+    window.addEventListener('resize', clampToViewport);
+    // Theme/font loading and dynamic content can change an auto-sized window
+    // without changing the viewport. Recheck its bounds after those layout updates.
+    const sizeObserver = typeof ResizeObserver == 'function' ? new ResizeObserver(() => {
+      if (pointerID != null) {return;}
+      clampToViewport();
+    }) : null;
+    sizeObserver?.observe(moveMe);
+    this.addWindowCleanup(moveMe, () => {
+      window.removeEventListener('resize', clampToViewport);
+      sizeObserver?.disconnect();
+      if (animationFrame != null) {cancelAnimationFrame(animationFrame);}
+      if (pointerID != null) {document.body.style.userSelect = previousUserSelect;}
+    });
+
+    iMoveThings.tabIndex = 0;
+    iMoveThings.setAttribute('aria-label', 'Move window with arrow keys; Home resets its position');
+    iMoveThings.addEventListener('keydown', event => {
+      if (event.target != iMoveThings) {return;}
+      const directions = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]};
+      const direction = directions[event.key];
+      if (!direction && event.key != 'Home') {return;}
+      event.preventDefault();
+      const rect = moveMe.getBoundingClientRect();
+      const step = event.shiftKey ? 50 : 10;
+      const position = this.clampWindowPosition(moveMe,
+        direction ? rect.left + direction[0] * step : 8,
+        direction ? rect.top + direction[1] * step : 8, rect);
+      moveMe.style.left = '0px';
+      moveMe.style.top = '0px';
+      moveMe.style.right = '';
+      moveMe.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+      onEnd({element: moveMe, ...position});
+    });
 
     const updatePosition = () => {
       animationFrame = null;
@@ -1622,6 +1751,8 @@ export default class Overlay {
         cancelAnimationFrame(animationFrame);
         animationFrame = null;
       }
+      dragDimensions = moveMe.getBoundingClientRect();
+      constrainTarget();
       currentX = targetX;
       currentY = targetY;
       moveMe.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
@@ -1631,7 +1762,7 @@ export default class Overlay {
       if (iMoveThings.hasPointerCapture?.(completedPointerID)) {
         iMoveThings.releasePointerCapture(completedPointerID);
       }
-      document.body.style.userSelect = '';
+      document.body.style.userSelect = previousUserSelect;
       iMoveThings.classList.remove('bm-dragging');
       moveMe.classList.remove('bm-window-interacting');
 
@@ -1643,6 +1774,7 @@ export default class Overlay {
       if (event.target.closest('button, a, input, select, textarea, [role="button"]')) {return;}
 
       const rect = moveMe.getBoundingClientRect();
+      dragDimensions = rect;
       pointerID = event.pointerId;
       offsetX = event.clientX - rect.left;
       offsetY = event.clientY - rect.top;
@@ -1655,6 +1787,7 @@ export default class Overlay {
       moveMe.style.top = '0px';
       moveMe.style.right = '';
       moveMe.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+      previousUserSelect = document.body.style.userSelect;
       document.body.style.userSelect = 'none';
       iMoveThings.classList.add('bm-dragging');
       moveMe.classList.add('bm-window-interacting');
@@ -1666,6 +1799,7 @@ export default class Overlay {
       if (event.pointerId != pointerID) {return;}
       targetX = event.clientX - offsetX;
       targetY = event.clientY - offsetY;
+      constrainTarget();
       schedulePositionUpdate();
     });
 
@@ -1728,7 +1862,28 @@ export default class Overlay {
       return Number.isFinite(minimumHeight) ? minimumHeight : 160;
     };
 
-    const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+    const clamp = (value, minimum, maximum) => Math.min(Math.max(value, Math.min(minimum, maximum)), maximum);
+
+    iResizeThings.tabIndex = 0;
+    iResizeThings.setAttribute('role', 'button');
+    iResizeThings.setAttribute('aria-label', 'Resize window with arrow keys');
+    iResizeThings.addEventListener('keydown', event => {
+      const directions = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]};
+      const direction = directions[event.key];
+      if (!direction || resizeMe.classList.contains('bm-window-collapsed')) {return;}
+      event.preventDefault();
+      const rect = resizeMe.getBoundingClientRect();
+      const step = event.shiftKey ? 50 : 10;
+      const width = clamp(rect.width + direction[0] * step, getMinimumWidth(), getMaximumWidth());
+      const height = clamp(rect.height + direction[1] * step, getMinimumHeight(), getMaximumHeight());
+      resizeMe.style.width = `${width}px`;
+      resizeMe.style.height = `${height}px`;
+      onEnd({element: resizeMe, width, height});
+    });
+    this.addWindowCleanup(resizeMe, () => {
+      if (animationFrame != null) {cancelAnimationFrame(animationFrame);}
+      if (pointerID != null) {document.body.style.userSelect = '';}
+    });
 
     const updateSize = () => {
       animationFrame = null;

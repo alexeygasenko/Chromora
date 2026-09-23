@@ -134,20 +134,9 @@ let resultTerser = await terser.minify(resultEsbuildJS.text, {
     keep_classnames: false, // Should class names be preserved?
     keep_fnames: false, // Should function names be preserved?
     reserved: [], // List of keywords to preserve
-    properties: {
-      // regex: /.*/, // Yes, I am aware I should be using a RegEx. Yes, like you, I am also suprised the userscript still functions
-      keep_quoted: true, // Should names in quotes be preserved?
-      reserved: [
-        'willReadFrequently',
-        'automatedClicks', 'map', 'charges', 'data', 'refresh', 'muted',
-        '_listeners', 'click', 'getSource', 'maxzoom', '_options',
-        'getCanvas', 'getCanvasContainer', 'unproject', 'project', 'refreshTiles',
-        'originalEvent', 'isTrusted', 'lngLat', 'point', 'lat', 'lng',
-        'type', 'target', 'id', 'postMessage',
-        'code', 'repeat', 'hidden', 'visibilityState',
-        'hotkeys', 'paintArea'
-      ] // Preserve external Wplace, MapLibre, and service-worker contracts.
-    },
+    // Public message, storage and Wplace runtime property names are contracts.
+    // Rename variables only; broad property mangling silently changed persisted keys.
+    properties: false,
   },
   format: {
     comments: 'some' // Save legal comments
@@ -185,7 +174,7 @@ const mapCSS = mangleSelectors({
   pathJS: outputPath,
   pathCSS: bundledCSSPath,
   importMap: importedMapCSS,
-  returnMap: isGitHub
+  returnMap: true
 });
 
 // If a map was returned, write it to the file
@@ -215,13 +204,27 @@ if (!bundledJS.includes(cssInjectionPoint)) {
 // Injects the CSS into the userscript.
 let chromoraJS = bundledJS.replace(cssInjectionPoint, `\`${bundledCSS}\``);
 
-// Obtains the Roboto Mono font to inject
-const robotoMonoLatin = fs.readFileSync('build/assets/RobotoMonoLatin.woff2');
-const robotoMonoLatinBase64 = robotoMonoLatin.toString('base64');
-const fontfaces = `@font-face{font-family:'Roboto Mono';font-style:normal;font-weight:400;src:url(data:font/woff2;base64,${robotoMonoLatinBase64})format('woff2');}`;
-
-// Injects Roboto Mono into the JavaScript file
-chromoraJS = chromoraJS.replace(/robotoMonoInjectionPoint[^'"]*/g, fontfaces);
+// Embed all fonts and their redistribution notices; runtime never needs a CDN.
+const robotoMonoLatinBase64 = fs.readFileSync('build/assets/RobotoMonoLatin.woff2').toString('base64');
+let fontfaces = `@font-face{font-family:'Roboto Mono';font-style:normal;font-weight:400;font-display:swap;src:url(data:font/woff2;base64,${robotoMonoLatinBase64})format('woff2');}`;
+const fontDirectories = ['build/assets/aero', 'build/assets/interface'];
+for (const directory of fontDirectories) {
+  const fonts = JSON.parse(fs.readFileSync(`${directory}/manifest.json`, 'utf8'));
+  for (const font of fonts) {
+    const bytes = fs.readFileSync(`${directory}/${font.file}`);
+    if (bytes.readUInt32BE(0) !== 0x774f4632 || bytes.length !== font.bytes) {throw new Error(`Invalid bundled font: ${font.file}`);}
+    fontfaces += `@font-face{font-family:'${font.family}';font-style:${font.style};font-weight:${font.weight};font-display:swap;src:url(data:font/woff2;base64,${bytes.toString('base64')})format('woff2');unicode-range:${font.unicodeRange};}`;
+  }
+}
+if (!chromoraJS.includes('chromoraFontInjectionPoint')) {throw new Error('Missing font injection point');}
+// JSON string encoding handles CSS quotes and any future font metadata safely.
+chromoraJS = chromoraJS.replace(/(['"])chromoraFontInjectionPoint\1/g, () => JSON.stringify(fontfaces));
+for (const directory of ['build/assets', ...fontDirectories]) {
+  for (const file of fs.readdirSync(directory).filter(file => /OFL.*\.txt$|.*-OFL\.txt$/i.test(file))) {
+    const license = fs.readFileSync(`${directory}/${file}`, 'utf8').replace(/\*\//g, '* /').replace(/[\t ]+$/gm, '');
+    chromoraJS += `\n/*! Bundled font license: ${file}\n${license}\n*/\n`;
+  }
+}
 
 // Updates the update/download URLs
 chromoraJS = chromoraJS.replace(/\/\/\s+\@updateURL\s+https.*\r?\n?/g, `// @updateURL       ${updateURL}\n`);

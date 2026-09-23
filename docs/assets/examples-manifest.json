@@ -244,19 +244,25 @@
       "decodedPixelSha256": "9f97b810cb1a11a0154c9de1434b35f9c8560166a3f6f61058133aea0b243666"
     },
     {
-      "file": "chromora-workspace.png",
+      "file": "chromora-workspace-glass.png",
       "feature": "Real Wplace workspace with Chromora and active template",
       "source": "https://wplace.live/",
       "theme": "glass",
       "capturedAt": "2026-09-23T09:42:02.490Z",
-      "clip": null,
+      "clip": {
+        "x": 0,
+        "y": 0,
+        "width": 2560,
+        "height": 1088
+      },
       "dimensions": {
         "width": 2560,
-        "height": 1221
+        "height": 1088
       },
       "mediaType": "image/png",
-      "sha256": "473433040f1ecac962d9842438d0bb065e8aa81eae7afc9dbf255ef60e07ec9c",
-      "decodedPixelSha256": "1cd88196b5f940a3e4a28b3abc3d34961321f2801e047461ca28ec44f555cff0"
+      "sha256": "4d3dd93e487699af403886b7d070f71d0603e6aa9cf565b7e58b51eb16310c59",
+      "decodedPixelSha256": "714622b83d7da1a17ab6b76d1777233aa1ceefbf413a147a2c54384cf3a7838f",
+      "cropNote": "Bottom cropped to omit unrelated map writing; original decoded RGB pixels preserved without visual edits."
     },
     {
       "file": "chromora-highlight-incorrect.png",

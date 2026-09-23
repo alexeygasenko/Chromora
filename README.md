@@ -29,7 +29,7 @@ This guide covers **Chromora 1.4.0**.
 
 The screenshots below were captured on Wplace in a real browser, using the **Glass** theme.
 
-<img src="./docs/assets/chromora-workspace.png" alt="A real Wplace workspace with Chromora's Glass interface over the map" width="1100">
+<img src="./docs/assets/chromora-workspace-glass.png" alt="A real Wplace workspace with Chromora's Glass interface over the map" width="1100">
 
 ### A home for every template
 

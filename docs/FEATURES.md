@@ -153,7 +153,7 @@ In **Settings → Hotkeys**, click a shortcut and press the key you want to use.
 
 Move windows by their title bars, minimize them when you need more map space, and use Color Filter's resize grip and layout controls to fit the task. The saved theme and supported window positions return after a reload.
 
-<img src="./assets/chromora-workspace.png" alt="Chromora's Glass workspace over the live Wplace map" width="1100">
+<img src="./assets/chromora-workspace-glass.png" alt="Chromora's Glass workspace over the live Wplace map" width="1100">
 
 <img src="./assets/chromora-settings-glass.png" alt="Chromora Settings on Wplace with the Glass theme selected" width="800">
 

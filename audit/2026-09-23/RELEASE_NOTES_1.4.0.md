@@ -25,4 +25,4 @@ Chromora 1.4.0 brings Frutiger Aero, a refreshed project home, and a broad round
 
 Area selection prepares a Wplace draft. Review it, then press **Paint** yourself.
 
-[Website](https://alexeygasenko.github.io/Chromora/) · [Illustrated guide](https://github.com/alexeygasenko/Chromora/blob/v1.4.0/docs/FEATURES.md)
+[Website](https://alexeygasenko.github.io/Chromora/) · [Illustrated guide](https://github.com/alexeygasenko/Chromora/blob/main/docs/FEATURES.md)

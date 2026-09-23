@@ -10,7 +10,7 @@ Every screenshot in this guide was captured on Wplace in a real browser, with th
 
 The main window keeps your droplets, next-level progress, and charge-refill timer together. The title-bar shortcuts open **Templates** and **Settings**; **Filter** opens your color checklist.
 
-<img src="./assets/chromora-main.png" alt="Glass main window on Wplace, showing account progress, a charge timer, and template, settings, and filter controls" width="500">
+<img src="./assets/chromora-main-glass.png" alt="Glass main window on Wplace, showing account progress, a charge timer, and template, settings, and filter controls" width="500">
 
 <details>
 <summary>Keep just the title bar</summary>
@@ -34,7 +34,7 @@ Click **Disable** to hide template overlays together. The button changes to **En
 
 Open **Templates** from the main title bar. **Add template** lets you choose an image without replacing the artwork already in your library.
 
-<img src="./assets/chromora-templates.png" alt="The Glass template library on Wplace with artwork preview, coordinates, progress, and controls" width="560">
+<img src="./assets/chromora-templates-glass.png" alt="The Glass template library on Wplace with artwork preview, coordinates, progress, and controls" width="560">
 
 **Go to** centers the map on an image. Turn **Show on map** off to pause one template: it stays saved, but no longer contributes to the overlays, area drafts, or Color Filter totals.
 
@@ -70,17 +70,17 @@ Open **Filter** from the main window. The eye button shows or hides a color in t
 
 The **horizontal** layout gives you a shallow row of colors and counts, leaving most of the map in view.
 
-<img src="./assets/chromora-filter-horizontal.png" alt="Glass Color Filter in its horizontal layout on Wplace" width="1100">
+<img src="./assets/chromora-filter-horizontal-glass.png" alt="Glass Color Filter in its horizontal layout on Wplace" width="1100">
 
 The **vertical** layout works as a compact checklist beside the artwork.
 
-<img src="./assets/chromora-filter-vertical.png" alt="Glass Color Filter in its vertical layout on Wplace" width="400">
+<img src="./assets/chromora-filter-vertical-glass.png" alt="Glass Color Filter in its vertical layout on Wplace" width="400">
 
 Switch layouts with the title-bar layout button. Drag the bottom-right grip to resize the window; the two compact layouts remember their own positions and sizes.
 
 Expand the window for **fullscreen** statistics: loaded tiles, correct pixels, remaining pixels, and a rough finish estimate. The estimate assumes one remaining pixel every 30 seconds; it is a reference, not a promise about your painting speed.
 
-<img src="./assets/chromora-filter-fullscreen.png" alt="Expanded Glass Color Filter with live template statistics and per-color progress" width="840">
+<img src="./assets/chromora-filter-fullscreen-glass.png" alt="Expanded Glass Color Filter with live template statistics and per-color progress" width="840">
 
 <details>
 <summary>Put the most useful colors first</summary>

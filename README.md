@@ -35,7 +35,7 @@ The screenshots below were captured on Wplace in a real browser, using the **Gla
 
 Open **Templates** to add an image without replacing your existing work. Each card gives you a preview, coordinates, progress, and a **Go to** shortcut. Turn **Show on map** off to pause a template while keeping it in your library.
 
-<img src="./docs/assets/chromora-templates.png" alt="A template card on Wplace in the Glass theme, showing its preview, coordinates, progress, and controls" width="560">
+<img src="./docs/assets/chromora-templates-glass.png" alt="A template card on Wplace in the Glass theme, showing its preview, coordinates, progress, and controls" width="560">
 
 Choose your image's **top-left pixel** on the map. The coordinate picker fills **Tile X / Y** and **Pixel X / Y** for you; **Use last map click** recalls your latest selection. You can also type the numbers or paste all four coordinates into one field. Check the position, then press **Create**.
 
@@ -43,7 +43,7 @@ Choose your image's **top-left pixel** on the map. The coordinate picker fills *
 
 **Color Filter** shows what is done and what remains. Hide colors with the eye buttons, use **None / All** for the whole list, and switch between a slim horizontal strip, a vertical list, or a roomy fullscreen view.
 
-<img src="./docs/assets/chromora-filter-horizontal.png" alt="Glass Color Filter on Wplace, arranged horizontally with a progress count for each color" width="1100">
+<img src="./docs/assets/chromora-filter-horizontal-glass.png" alt="Glass Color Filter on Wplace, arranged horizontally with a progress count for each color" width="1100">
 
 Use a color's highlight button to cycle through **wrong pixels → empty areas → off**. Missing areas get clear outlines, so the next patch of work is easy to find.
 

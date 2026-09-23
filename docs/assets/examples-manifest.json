@@ -64,7 +64,7 @@
       "decodedPixelSha256": "a8bc48c295ad0754c5e1c1693667515eda310b00ad57c55c254496fc72415d7f"
     },
     {
-      "file": "chromora-main.png",
+      "file": "chromora-main-glass.png",
       "feature": "Expanded Chromora panel",
       "source": "https://wplace.live/",
       "theme": "glass",
@@ -84,7 +84,7 @@
       "decodedPixelSha256": "75a1e74243616aa9079cc44a937efc70c3faac3803cb4a646f6db7d994415137"
     },
     {
-      "file": "chromora-filter-horizontal.png",
+      "file": "chromora-filter-horizontal-glass.png",
       "feature": "Horizontal color filter",
       "source": "https://wplace.live/",
       "theme": "glass",
@@ -124,7 +124,7 @@
       "decodedPixelSha256": "0f43e259c83607ff5ea2e350fc1a8afcd584236b301ddb79d7f4167d0212c3c7"
     },
     {
-      "file": "chromora-filter-vertical.png",
+      "file": "chromora-filter-vertical-glass.png",
       "feature": "Vertical color filter",
       "source": "https://wplace.live/",
       "theme": "glass",
@@ -144,7 +144,7 @@
       "decodedPixelSha256": "7afe770d9dc67718f41b96e4a538a698c416c119e1bf260f432206dbc9bb8297"
     },
     {
-      "file": "chromora-filter-fullscreen.png",
+      "file": "chromora-filter-fullscreen-glass.png",
       "feature": "Expanded color filter with per-color progress and remaining pixels",
       "source": "https://wplace.live/",
       "theme": "glass",
@@ -184,7 +184,7 @@
       "decodedPixelSha256": "de0ecaf128d7877f16ee2c6c32e587a7f8a7f66f0421edfe0d7660740c0c2ca6"
     },
     {
-      "file": "chromora-templates.png",
+      "file": "chromora-templates-glass.png",
       "feature": "Template library with actual imported artwork",
       "source": "https://wplace.live/",
       "theme": "glass",

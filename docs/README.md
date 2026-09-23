@@ -4,7 +4,7 @@
 
 Chromora brings template overlays, color progress, pixel highlights, and paint drafting to [Wplace](https://wplace.live/).
 
-Start with the [three-step installation guide](../README.md#installation), then use the [illustrated feature guide](./FEATURES.md) to find your way around Chromora **1.4.0**.
+Start with the [three-step installation guide](../README.md#installation), then use the [illustrated feature guide](./FEATURES.md) to find your way around Chromora **1.4.1**.
 
 | I want to… | Open |
 | --- | --- |

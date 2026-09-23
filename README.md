@@ -16,7 +16,7 @@ Bring your artwork to [Wplace](https://wplace.live/), see what still needs paint
 
 Working from this repository? The ready-to-install file is [`dist/Chromora.user.js`](./dist/Chromora.user.js). Open its raw contents or copy them into your userscript manager, save, and refresh Wplace.
 
-This guide covers **Chromora 1.4.0**.
+This guide covers **Chromora 1.4.1**.
 
 ## Features
 

@@ -2114,7 +2114,8 @@ export default class TemplateManager {
 
         // -----     COLOR FILTER      -----
         // If this pixel on the template is a color the user wants to hide on the canvas...
-        if (this.shouldFilterColor.get(bestTemplateColorID)) {
+        const isTemplateColorFiltered = this.shouldFilterColor.get(bestTemplateColorID);
+        if (isTemplateColorFiltered) {
           ensureMutable();
 
           // Sets template pixel to match tile background (which removes the template pixel from the user's view)
@@ -2130,7 +2131,7 @@ export default class TemplateManager {
           const blackTrans = 0x20000000; // Black translucent color for Erased pixels
 
           // If Erased color should be filtered
-          if (this.shouldFilterColor.get(bestTemplateColorID)) {
+          if (isTemplateColorFiltered) {
             template32[(templateRow * templateWidth) + templateColumn] = 0x00000000; // Center (black, 0% opacity)
           } else {
             // Don't filter Erased color
@@ -2177,8 +2178,8 @@ export default class TemplateManager {
           && (templatePixelAlpha > tolerance)
           && (!colorsMatch);
 
-        // If highlighting is enabled, AND the template pixel does not match the tile pixel
-        if (!highlightDisabled && (shouldHighlightSelectedColorMismatch || shouldHighlightSelectedColorMissing || shouldHighlightGeneralMismatch)) {
+        // Hidden template colors must not create markers, including when the selected color matches the board.
+        if (!highlightDisabled && !isTemplateColorFiltered && (shouldHighlightSelectedColorMismatch || shouldHighlightSelectedColorMissing || shouldHighlightGeneralMismatch)) {
 
           // If the tile pixel is NOT transparent, OR the user wants to highlight transparent pixels
           if ((hasHighlightColorFilter && (shouldHighlightSelectedColorMissing || (tilePixelAlpha > tolerance))) || (!hasHighlightColorFilter && (shouldTransparentTilePixelsBeHighlighted || (tilePixelAlpha > tolerance)))) {

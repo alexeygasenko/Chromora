@@ -11,7 +11,8 @@ assert.ok(source.includes('Build Hash:'));
 assert.ok(!source.includes('chromoraFontInjectionPoint'));
 assert.ok(!source.includes('GM_getResourceText("CSS-BM-File")'));
 assert.ok(!source.includes('fonts.googleapis.com'));
-for (const field of ['colorLayout', 'layoutSizes', 'requestSequence', 'blobID', 'automatedClicks', 'bm-last-me', 'bm-revision']) {
+for (const field of ['windowMain', 'windowTemplates', 'windowSettings', 'windowFilter', 'collapsed', 'isOpen',
+  'sortPrimary', 'sortSecondary', 'showUnused', 'colorLayout', 'layoutSizes', 'requestSequence', 'blobID', 'automatedClicks', 'bm-last-me', 'bm-revision']) {
   assert.ok(source.includes(field), `Bundle lost the public contract ${field}`);
 }
 for (const directory of ['build/assets/aero', 'build/assets/interface']) {

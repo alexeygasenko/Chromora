@@ -2,7 +2,7 @@
 
 [Install Chromora](../README.md#installation) · [Project home](../README.md) · [Website](https://alexeygasenko.github.io/Chromora/)
 
-Add your artwork, find an unfinished patch, and prepare your next draft. This guide walks through the controls in **Chromora 1.4.0**.
+Add your artwork, find an unfinished patch, and prepare your next draft. This guide walks through the controls in **Chromora 1.4.1**.
 
 Every screenshot in this guide was captured on Wplace in a real browser, with the **Glass** theme selected.
 
@@ -87,6 +87,8 @@ Expand the window for **fullscreen** statistics: loaded tiles, correct pixels, r
 
 Sort by name, color ID, premium status, completion percentage, or pixel counts. Choose ascending or descending order, optionally include unused colors, then press **Sort Colors**. Sorting by **incorrect pixels → descending** brings the biggest unfinished colors to the top.
 
+Your applied sorting and **Show unused colors** preference return after a reload.
+
 <img src="./assets/chromora-filter-sorting.png" alt="The sorting choices in Chromora's Glass Color Filter on Wplace" width="800">
 
 </details>
@@ -151,7 +153,7 @@ In **Settings → Hotkeys**, click a shortcut and press the key you want to use.
 
 ## Make it your space
 
-Move windows by their title bars, minimize them when you need more map space, and use Color Filter's resize grip and layout controls to fit the task. The saved theme and supported window positions return after a reload.
+Move windows by their title bars, minimize them when you need more map space, and use Color Filter's resize grip and layout controls to fit the task. The main window, Templates, Settings, and Color Filter remember their positions and whether they were minimized. Templates, Settings, and Color Filter reopen after a reload only if you left them open. Your theme and the filter's separate layout sizes are saved too.
 
 <img src="./assets/chromora-workspace-glass.png" alt="Chromora's Glass workspace over the live Wplace map" width="1100">
 

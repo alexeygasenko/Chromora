@@ -26,7 +26,11 @@ test('the production minifier preserves stored settings and page/worker property
   const match = buildSource.match(/let resultTerser = await terser\.minify\(resultEsbuildJS\.text, (\{[\s\S]*?)\n\}\);/);
   assert.ok(match, 'Locate the actual release minifier configuration');
   const configuration = vm.runInNewContext(`(${match[1]}\n})`, {isGitHub: true});
-  const settings = {windowFilter: {colorLayout: 'horizontal', layoutSizes: {horizontal: {x: 44, y: 55, width: 740, height: 260}}, isOpen: true},
+  const settings = {windowMain: {x: 10, y: 20, isOpen: true, collapsed: true},
+    windowTemplates: {x: 30, y: 40, isOpen: false, collapsed: false},
+    windowSettings: {x: 50, y: 60, isOpen: true, collapsed: false},
+    windowFilter: {x: 44, y: 55, colorLayout: 'horizontal', layoutSizes: {horizontal: {x: 44, y: 55, width: 740, height: 260}},
+      isOpen: true, collapsed: true, sortPrimary: 'percent', sortSecondary: 'descending', showUnused: false},
     hotkeys: {paintArea: 'AltLeft', paintAllArea: 'ControlLeft'}, flags: ['ftr-oWin'], filter: [2, 4]};
   const contract = {source: 'blue-marble', blobID: '123', revision: 5, requestSequence: 7, automatedClicks: [], hotkeys: {}, paintArea: true};
   // Use unquoted object keys, exactly the form that used to rename persisted fields.

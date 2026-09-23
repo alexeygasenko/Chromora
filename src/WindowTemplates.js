@@ -13,7 +13,9 @@ export default class WindowTemplates extends Overlay {
     super(executor.name, executor.version);
     this.executor = executor;
     this.templateManager = executor.apiManager?.templateManager;
+    this.settingsManager = executor.settingsManager;
     this.windowID = 'bm-window-templates';
+    this.windowStateKey = 'windowTemplates';
     this.windowParent = document.body;
     this.windowElement = null;
     this.coordinateWindow = null;
@@ -122,6 +124,7 @@ export default class WindowTemplates extends Overlay {
     } else if (state == 'error') {
       this.#setMessage('Stored templates could not be loaded.', 'error');
     }
+    this.initializeWindowState(this.windowElement, {position: true});
   }
 
   /** Releases every timer, subscription, modal, and owned DOM element. */

@@ -90,6 +90,7 @@ export default class Overlay {
     this.parentStack = []; // Tracks the parent elements BEFORE the currentParent so we can nest elements
     this.windowResources = new Map();
     this.timerResources = new Map();
+    this.persistentWindows = new WeakMap();
   }
 
   /** Releases windows, timers and global listeners owned by this builder. */
@@ -155,6 +156,58 @@ export default class Overlay {
    * @since 0.91.11
    */
   setSettingsManager(settingsManager) {this.settingsManager = settingsManager;}
+
+  /** Restores an ordinary window's state after its content and layout are built.
+   * Geometry owned by specialized windows (such as Color Filter) stays with them.
+   */
+  initializeWindowState(windowElement, {position = false, visibility = true, restorePosition} = {}) {
+    const manager = this.settingsManager ?? (this.userSettings ? this : null);
+    if (!windowElement || !manager?.userSettings || !this.windowStateKey) {return;}
+    const state = manager.userSettings[this.windowStateKey] ??= {};
+    this.persistentWindows.set(windowElement, {manager, state, position, visibility});
+    if (visibility) {this.saveWindowState(windowElement, {isOpen: true});}
+
+    const frame = requestAnimationFrame(async () => {
+      if (!windowElement.isConnected || windowElement.classList.contains('bm-window-closing')) {return;}
+      const button = windowElement.querySelector('.bm-dragbar button[data-button-status]');
+      if (state.collapsed === true && button?.dataset['buttonStatus'] === 'expanded') {
+        await this.handleMinimization(button, {animate: false, persist: false});
+      }
+      if (!windowElement.isConnected || windowElement.classList.contains('bm-window-closing')) {return;}
+      restorePosition?.();
+      if (position && Number.isFinite(state.x) && Number.isFinite(state.y)) {
+        const clamped = this.clampWindowPosition(windowElement, state.x, state.y);
+        windowElement.style.left = '0px';
+        windowElement.style.top = '0px';
+        windowElement.style.right = '';
+        windowElement.style.transform = `translate3d(${clamped.x}px, ${clamped.y}px, 0)`;
+        this.saveWindowState(windowElement, {x: clamped.x, y: clamped.y});
+      }
+    });
+    this.addWindowCleanup(windowElement, () => cancelAnimationFrame(frame));
+  }
+
+  /** Saves user actions through the existing ordered storage queue. */
+  saveWindowState(windowElement, changes = {}, savePosition = false) {
+    const persistence = this.persistentWindows.get(windowElement);
+    if (!persistence) {return;}
+    const {manager, state, position} = persistence;
+    if (savePosition && position && windowElement.isConnected) {
+      const rect = windowElement.getBoundingClientRect();
+      // Coordinate selection temporarily hides the other windows.
+      if (rect.width && rect.height && !document.body.classList.contains('bm-template-coordinate-mode')) {
+        const clamped = this.clampWindowPosition(windowElement, rect.left, rect.top, rect);
+        changes = {...changes, x: clamped.x, y: clamped.y};
+      }
+    }
+    if (!Object.entries(changes).some(([key, value]) => state[key] !== value)) {return;}
+    Object.assign(state, changes);
+    void Promise.resolve(manager.saveUserStorageNow?.()).catch(error => {
+      console.error('Chromora: Could not save window state.', error);
+      const status = windowElement.querySelector('#bm-settings-status');
+      if (status) {status.textContent = error instanceof Error ? error.message : String(error);}
+    });
+  }
 
   /** Creates an element.
    * For **internal use** of the {@link Overlay} class.
@@ -1365,6 +1418,10 @@ export default class Overlay {
   async handleWindowClose(windowElement) {
     if (!windowElement?.isConnected) {return;}
 
+    if (this.persistentWindows.get(windowElement)?.visibility) {
+      this.saveWindowState(windowElement, {isOpen: false}, true);
+    }
+
     const content = windowElement.querySelector('.bm-window-content');
     const dragbar = windowElement.querySelector('.bm-dragbar');
     windowElement.classList.add('bm-window-motion', 'bm-window-closing');
@@ -1486,7 +1543,7 @@ export default class Overlay {
    * @param {HTMLButtonElement} button - The UI button that triggered this minimization event
    * @since 0.88.142
   */
-  async handleMinimization(button) {
+  async handleMinimization(button, {animate = true, persist = true} = {}) {
 
     if (button.disabled) {return;} // Don't minimize if the window is currently minimizing
 
@@ -1506,6 +1563,11 @@ export default class Overlay {
       return;
     }
 
+    const motion = animate ? startMotion : () => null;
+    if (persist) {
+      this.saveWindowState(window, {collapsed: button.dataset['buttonStatus'] === 'expanded'});
+    }
+
     const getCollapsedHeight = () => {
       const windowStyle = getComputedStyle(window);
       const toPixels = value => parseFloat(value) || 0;
@@ -1523,7 +1585,7 @@ export default class Overlay {
 
     const animateMinimizeIcon = () => {
       const icon = button.querySelector('svg');
-      const animation = startMotion(icon, [
+      const animation = motion(icon, [
         {opacity: 0.3, transform: 'rotate(-28deg) scale(.72)'},
         {opacity: 1, transform: 'rotate(0) scale(1)'}
       ], {duration: 240, easing: motionTiming.spring});
@@ -1568,11 +1630,11 @@ export default class Overlay {
 
       const clipBottom = Math.max(0, expandedRect.height - collapsedHeight);
       const animations = [
-        startMotion(window, [
+        motion(window, [
           {clipPath: 'inset(0 0 0 0 round 16px)'},
           {clipPath: `inset(0 0 ${clipBottom}px 0 round 16px)`}
         ], {duration: motionTiming.window, easing: motionTiming.spring}),
-        startMotion(windowContent, [
+        motion(windowContent, [
           {opacity: 1, transform: 'translateY(0) scaleY(1)'},
           {opacity: 0, transform: 'translateY(-10px) scaleY(.96)'}
         ], {duration: 220, easing: motionTiming.ease})
@@ -1624,11 +1686,11 @@ export default class Overlay {
 
       const clipBottom = Math.max(0, expandedRect.height - collapsedRect.height);
       const animations = [
-        startMotion(window, [
+        motion(window, [
           {clipPath: `inset(0 0 ${clipBottom}px 0 round 16px)`},
           {clipPath: 'inset(0 0 0 0 round 16px)'}
         ], {duration: motionTiming.window, easing: motionTiming.spring}),
-        startMotion(windowContent, [
+        motion(windowContent, [
           {opacity: 0, transform: 'translateY(-10px) scaleY(.96)'},
           {opacity: 1, transform: 'translateY(0) scaleY(1)'}
         ], {duration: 260, delay: 30, easing: motionTiming.spring})
@@ -1658,7 +1720,10 @@ export default class Overlay {
     // Retrieves the elements
     const moveMe = document.querySelector(moveMeSelector);
     const iMoveThings = document.querySelector(iMoveThingsSelector);
-    const onEnd = options?.onEnd ?? (() => {});
+    const onEnd = detail => {
+      this.saveWindowState(detail.element, {}, true);
+      options?.onEnd?.(detail);
+    };
     
     // What to do when one of the two elements are not found
     if (!moveMe || !iMoveThings) {

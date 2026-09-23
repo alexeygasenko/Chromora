@@ -1265,6 +1265,8 @@ async function initializeBlueMarble() {
 
   windowMain.buildWindow(); // Builds the main Blue Marble window
   windowMain.buildWindowFilter({'respectSavedVisibility': true}); // Restores the Color Filter window only if it was open before reload
+  windowMain.buildWindowTemplates({respectSavedVisibility: true});
+  settingsManager.buildWindow({respectSavedVisibility: true});
 
   if (templateImportError) {
     windowMain.handleDisplayError(`Stored templates could not be loaded: ${templateImportError instanceof Error ? templateImportError.message : String(templateImportError)}`);

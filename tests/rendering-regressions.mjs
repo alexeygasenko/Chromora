@@ -178,6 +178,61 @@ test('filtered render copies only modified buffers and closes its temporary bitm
   assert.equal(rt.metrics.closed, rt.metrics.created);
   assert.equal(value.chunked32[key][4], 0xff0000ff);
 });
+for (const {name, board, selectedColor, mode} of [
+  {name: 'general incorrect', board: 0xff00ff00, selectedColor: null},
+  {name: 'selected template color incorrect', board: 0xff00ff00, selectedColor: 1, mode: 'incorrect'},
+  {name: 'selected board color incorrect', board: 0xff00ff00, selectedColor: 2, mode: 'incorrect'},
+  {name: 'selected color missing', board: 0, selectedColor: 1, mode: 'missing'}
+]) {
+  test(`${name} highlighting respects hidden template colors and preserves visible markers`, async () => {
+    for (const hidden of [true, false]) {
+      const rt = runtime();
+      const value = template(rt, {side: 3});
+      const original = Array.from(value.chunked32[key]);
+      if (hidden) {rt.manager.shouldFilterColor.set(1, true);}
+      const renderPixels = async () => {
+        rt.metrics.draws.length = 0;
+        await rt.manager.drawTemplateOnTile({packed: board}, [0, 0]);
+        const bitmap = rt.metrics.draws.at(-1);
+        return Array.from(bitmap.data ? new Uint32Array(bitmap.data.buffer) : value.chunked32[key]);
+      };
+      const withoutHighlight = await renderPixels();
+      rt.manager.settingsManager.userSettings.highlight = [[1, 0, 0], [1, 0, -1]];
+      rt.manager.setIncorrectHighlightColor(selectedColor, mode);
+      const highlighted = await renderPixels();
+      if (hidden) {
+        assert.deepEqual(highlighted, withoutHighlight, 'a hidden template color must not create any marker');
+      } else {
+        assert.notDeepEqual(highlighted, withoutHighlight, 'visible mismatches must still create markers');
+      }
+      assert.deepEqual(Array.from(value.chunked32[key]), original, 'highlighting must not mutate stored template pixels');
+      assert.deepEqual(Array.from(value.pixelStateByChunk.get(key)), Array(9).fill(board ? 3 : 2),
+        'visibility must not change incorrect/missing pixel statistics');
+    }
+  });
+}
+
+test('filtering only the board color preserves selected-color markers on visible template colors', async () => {
+  const rt = runtime();
+  const value = template(rt, {side: 3});
+  rt.manager.shouldFilterColor.set(2, true);
+  rt.manager.setIncorrectHighlightColor(2, 'incorrect');
+  await rt.manager.drawTemplateOnTile({packed: 0xff00ff00}, [0, 0]);
+  const bitmap = rt.metrics.draws.at(-1);
+  assert.ok(bitmap.data, 'the selected wrong board color still produces a marker');
+  assert.notDeepEqual(Array.from(new Uint32Array(bitmap.data.buffer)), Array.from(value.chunked32[key]));
+});
+
+test('hidden matching template colors remain counted as correct', async () => {
+  const rt = runtime();
+  const value = template(rt);
+  rt.manager.shouldFilterColor.set(1, true);
+  rt.manager.settingsManager.userSettings.highlight = [[1, 0, 0]];
+  await rt.manager.drawTemplateOnTile({packed: 0xff0000ff}, [0, 0]);
+  assert.equal(value.pixelCount.correct['0000,0000'].get(1), 1);
+  assert.equal(value.pixelStateByChunk.get(key)[0], 1);
+});
+
 test('two-render bound holds and a queued cancellation completes without decoding', async () => {
   const rt = runtime();
   const delayed = gate();

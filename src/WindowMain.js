@@ -21,6 +21,7 @@ export default class WindowMain extends Overlay {
     super(name, version); // Executes the code in the Overlay constructor
     this.window = null; // Contains the *window* DOM tree
     this.windowID = 'bm-window-main'; // The ID attribute for this window
+    this.windowStateKey = 'windowMain';
     this.windowParent = document.body; // The parent of the window DOM tree
     this.windowFilter = null; // Single owner for Color Filter timers and DOM
     this.windowTemplates = null; // Lazily-created owner for the Templates window
@@ -108,12 +109,14 @@ export default class WindowMain extends Overlay {
 
     // Creates dragging capability on the drag bar for dragging the window
     this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
+    this.initializeWindowState(document.getElementById(this.windowID), {position: true, visibility: false});
   }
 
   /** Displays the Templates window, creating its owner on first use.
    * @since 1.3.0
    */
-  buildWindowTemplates() {
+  buildWindowTemplates({respectSavedVisibility = false} = {}) {
+    if (respectSavedVisibility && this.settingsManager?.userSettings.windowTemplates?.isOpen !== true) {return;}
     this.windowTemplates ??= new WindowTemplates(this);
     this.windowTemplates.buildWindow();
   }

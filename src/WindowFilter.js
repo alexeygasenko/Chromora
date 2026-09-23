@@ -14,6 +14,14 @@ import { calculateRelativeLuminance, colorpaletteForBlueMarble, localizeNumber, 
 
 const colorToggleAnimations = new WeakMap();
 
+function normalizeColorListPreferences({sortPrimary, sortSecondary, showUnused} = {}) {
+  return {
+    sortPrimary: ['id', 'name', 'premium', 'percent', 'correct', 'incorrect', 'total'].includes(sortPrimary) ? sortPrimary : 'total',
+    sortSecondary: ['ascending', 'descending'].includes(sortSecondary) ? sortSecondary : 'descending',
+    showUnused: showUnused === true
+  };
+}
+
 function localizeCompactDate(date) {
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -100,9 +108,16 @@ export default class WindowFilter extends Overlay {
     this.timeRemainingLocalized = ''; // The date & time the user will complete the templates in the date-time format of the user's device, as a string
 
     // Color list display settings
-    this.sortPrimary = 'total'; // The last used primary sort option
-    this.sortSecondary = 'descending'; // The last used secondary sort option
-    this.showUnused = false; // Were unused colors shown the last time the user sorted the color list?
+    Object.assign(this, normalizeColorListPreferences(this.#getWindowState() ?? {}));
+  }
+
+  /** Keeps the compact header consistent for clicks and restored minimization. */
+  async handleMinimization(button, options) {
+    if (!button.disabled) {
+      const totals = button.closest('.bm-window')?.querySelector('#bm-filter-windowed-color-totals-dragbar');
+      if (totals) {totals.style.display = button.dataset['buttonStatus'] === 'expanded' ? 'none' : '';}
+    }
+    await super.handleMinimization(button, options);
   }
 
   /** Releases timers and subscriptions owned by this Color Filter instance.
@@ -336,6 +351,7 @@ export default class WindowFilter extends Overlay {
     this.updateInnerHTML('#bm-filter-tot-remaining', `${localizeNumber((this.allPixelsTotal || 0) - (this.allPixelsCorrectTotal || 0))} (${localizePercent(((this.allPixelsTotal || 0) - (this.allPixelsCorrectTotal || 0)) / (this.allPixelsTotal || 1))})`);
     this.updateInnerHTML('#bm-filter-tot-completed', `<time datetime="${this.timeRemaining.toISOString().replace(/\.\d{3}Z$/, 'Z')}">${this.timeRemainingLocalized}</time>`);
     this.#startAutoRefresh();
+    this.initializeWindowState(document.getElementById(this.windowID), {visibility: false});
   }
 
   /** Spawns a windowed Color Filter window.
@@ -368,13 +384,7 @@ export default class WindowFilter extends Overlay {
     })
       .addDragbar()
         .addButton({'class': 'bm-button-circle', 'innerHTML': minimizeIconExpanded, 'title': 'Minimize window "Color Filter"', 'aria-label': 'Minimize window "Color Filter"', 'data-button-status': 'expanded'}, (instance, button) => {
-          button.onclick = () => {
-            const windowedColorTotals = document.querySelector('#bm-filter-windowed-color-totals-dragbar');
-            if (windowedColorTotals) {
-              windowedColorTotals.style.display = (button.dataset['buttonStatus'] == 'expanded') ? 'none' : '';
-            }
-            instance.handleMinimization(button);
-          };
+          button.onclick = () => instance.handleMinimization(button);
         }).buildElement()
         .addDiv()
           .addSpan({'id': 'bm-filter-windowed-color-totals-dragbar', 'class': 'bm-dragbar-text', 'style': 'font-weight: 700;'}).buildElement() // Contains correct / total pixel values
@@ -1049,9 +1059,7 @@ export default class WindowFilter extends Overlay {
       windowElement.style.height = `${nextHeight}px`;
     }
 
-    requestAnimationFrame(() => {
-      if (!windowElement.isConnected) {return;}
-
+    this.initializeWindowState(windowElement, {visibility: false, restorePosition: () => {
       const x = Number(layoutSize?.x ?? windowState.x);
       const y = Number(layoutSize?.y ?? windowState.y);
       if (!Number.isFinite(x) || !Number.isFinite(y)) {return;}
@@ -1067,7 +1075,7 @@ export default class WindowFilter extends Overlay {
         layoutSize.y = clampedPosition.y;
         void this.settingsManager?.saveUserStorageNow();
       }
-    });
+    }});
   }
 
   /** Saves the current size and position of the windowed filter.
@@ -1077,13 +1085,23 @@ export default class WindowFilter extends Overlay {
   #saveWindowState(windowElement) {
     const windowState = this.#getWindowState();
     if (!windowState || !windowElement?.isConnected || !windowElement.classList.contains('bm-windowed')) {return;}
-    if (windowElement.querySelector('.bm-dragbar button[data-button-status="collapsed"]')) {return;}
+    const collapsed = !!windowElement.querySelector('.bm-dragbar button[data-button-status="collapsed"]');
 
     const layout = this.#getActiveWindowedColorLayout(windowElement);
     const rect = windowElement.getBoundingClientRect();
     // Coordinate picking temporarily hides this mounted window with display:none.
     // A ResizeObserver notification for that state must never replace its geometry.
     if (!rect.width || !rect.height || document.body.classList.contains('bm-template-coordinate-mode')) {return;}
+    if (collapsed) {
+      const position = this.#clampWindowPosition(windowElement, rect.left, rect.top);
+      const layoutSize = this.#getWindowedLayoutSize(layout);
+      if (windowState.x === position.x && windowState.y === position.y
+        && layoutSize?.x === position.x && layoutSize?.y === position.y) {return;}
+      Object.assign(windowState, position);
+      if (layoutSize) {Object.assign(layoutSize, position);}
+      void this.settingsManager?.saveUserStorageNow();
+      return;
+    }
     const width = this.#clampWindowDimension(rect.width, this.windowMinWidth, this.#getWindowLayoutMaxWidth(layout));
     const height = layout == 'horizontal'
       ? this.#getWindowLayoutMaxHeight(layout)
@@ -1415,10 +1433,20 @@ export default class WindowFilter extends Overlay {
    */
   #sortColorList(sortPrimary, sortSecondary, showUnused) {
 
-    // Update memorised sort settings
-    this.sortPrimary = sortPrimary;
-    this.sortSecondary = sortSecondary;
-    this.showUnused = showUnused;
+    const preferences = normalizeColorListPreferences({sortPrimary, sortSecondary, showUnused});
+    const preferencesChanged = this.sortPrimary !== preferences.sortPrimary
+      || this.sortSecondary !== preferences.sortSecondary || this.showUnused !== preferences.showUnused;
+    ({sortPrimary, sortSecondary, showUnused} = preferences);
+    Object.assign(this, preferences);
+
+    // Refreshing statistics reuses the current sort; only an actual preference change needs a save.
+    const windowState = preferencesChanged ? this.#getWindowState() : null;
+    if (windowState) {
+      Object.assign(windowState, preferences);
+      void Promise.resolve(this.settingsManager?.saveUserStorageNow()).catch(error => {
+        console.error('Chromora: Could not save color sorting preferences.', error);
+      });
+    }
 
     const colorList = this.#getOwnedWindowElement()?.querySelector(`#${this.colorListID}`);
     if (!colorList) {return;}

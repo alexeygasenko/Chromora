@@ -35,11 +35,20 @@ export function normalizeUserSettings(value) {
     settings.hotkeys.paintAllArea = settings.hotkeys.paintArea === 'ControlLeft' ? 'AltLeft' : 'ControlLeft';
   }
   delete settings.hotkeys.clearPaintArea;
-  for (const key of ['windowFilter', 'windowSettings', 'windowTemplates']) {
+  const windowKeys = ['windowMain', 'windowFilter', 'windowSettings', 'windowTemplates'];
+  for (const key of windowKeys) {
     settings[key] = isRecord(settings[key]) ? settings[key] : {};
+    for (const flag of ['collapsed', 'isOpen']) {
+      if (typeof settings[key][flag] !== 'boolean') {delete settings[key][flag];}
+    }
   }
   // Versions 1.1–1.3 persisted two Terser-mangled keys. Migrate only this record.
   const filterWindow = settings.windowFilter;
+  if (!['id', 'name', 'premium', 'percent', 'correct', 'incorrect', 'total'].includes(filterWindow.sortPrimary)) {
+    filterWindow.sortPrimary = 'total';
+  }
+  filterWindow.sortSecondary = filterWindow.sortSecondary === 'ascending' ? 'ascending' : 'descending';
+  filterWindow.showUnused = filterWindow.showUnused === true;
   filterWindow.colorLayout ??= filterWindow.xi;
   filterWindow.layoutSizes ??= filterWindow.Ci;
   delete filterWindow.xi;
@@ -49,7 +58,7 @@ export function normalizeUserSettings(value) {
   for (const layout of ['horizontal', 'vertical']) {
     if (!isRecord(filterWindow.layoutSizes[layout])) {delete filterWindow.layoutSizes[layout];}
   }
-  const states = [settings.windowFilter, settings.windowSettings, settings.windowTemplates,
+  const states = [...windowKeys.map(key => settings[key]),
     ...['horizontal', 'vertical'].map(layout => filterWindow.layoutSizes[layout]).filter(isRecord)];
   for (const state of states) {
     for (const key of ['x', 'y', 'width', 'height']) {

@@ -47,3 +47,27 @@ test('legacy duplicate shortcuts become two usable distinct actions', () => {
   }
   assert.deepEqual(INTERFACE_THEMES.map(theme => theme.id), ['glass', 'light', 'dark', 'aero']);
 });
+
+test('window persistence validates new records while preserving legacy geometry', () => {
+  const original = {
+    windowMain: {x: 14, y: Infinity, collapsed: true},
+    windowTemplates: {x: 30, y: 42, isOpen: true, collapsed: false},
+    windowSettings: {x: 20, y: 50, isOpen: 'false', collapsed: 1},
+    windowFilter: {width: 650, height: 420, isOpen: false, collapsed: true,
+      sortPrimary: 'percent', sortSecondary: 'ascending', showUnused: true,
+      layoutSizes: {horizontal: {width: 800, height: 300, x: 40, y: 25}}}
+  };
+  const settings = normalizeUserSettings(original);
+  assert.deepEqual(settings.windowMain, {x: 14, collapsed: true});
+  assert.deepEqual(settings.windowTemplates, original.windowTemplates);
+  assert.deepEqual(settings.windowSettings, {x: 20, y: 50});
+  assert.deepEqual(settings.windowFilter, {...original.windowFilter, colorLayout: 'vertical'});
+  assert.equal(original.windowMain.y, Infinity, 'normalizing must not mutate the stored snapshot');
+
+  const invalid = normalizeUserSettings({windowMain: [], windowFilter: {
+    sortPrimary: '__proto__', sortSecondary: 'backwards', showUnused: 'true'}});
+  assert.deepEqual(invalid.windowMain, {});
+  assert.equal(invalid.windowFilter.sortPrimary, 'total');
+  assert.equal(invalid.windowFilter.sortSecondary, 'descending');
+  assert.equal(invalid.windowFilter.showUnused, false);
+});
